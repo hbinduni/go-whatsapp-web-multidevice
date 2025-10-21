@@ -281,13 +281,13 @@ mc anonymous get s3/bucket-name
 - Example: `https://your-s3-endpoint.com/id1/123456789/6281234567890_s_whatsapp_net/3EB0ABC123.jfif`
 
 **Log Messages**:
-```
+```text
 INFO Initialized MinIO storage with endpoint: your-s3-endpoint.com, bucket: id1, region: us-east-1, SSL: true
 INFO 🌐 Using direct public bucket URLs
 ```
 
 **Debug Log Messages** (only shown when `APP_DEBUG=true`):
-```
+```text
 DEBUG 📤 Attempting to save media to MinIO: filename=123456789/6281234567890_s_whatsapp_net/3EB0ABC123.jfif, size=85741 bytes
 DEBUG ✅ Successfully saved media to MinIO: bucket=id1, key=123456789/6281234567890_s_whatsapp_net/3EB0ABC123.jfif, etag=7cce285abed98e5c256f6f23a22510ce, size=85741
 DEBUG 🔗 Public URL: https://your-s3-endpoint.com/id1/123456789/6281234567890_s_whatsapp_net/3EB0ABC123.jfif
@@ -319,13 +319,13 @@ mc anonymous get s3/bucket-name
 - Example: `https://your-server.com/media/download/123456789/6281234567890_s_whatsapp_net/3EB0ABC123.jfif`
 
 **Log Messages**:
-```
+```text
 INFO Initialized MinIO storage with endpoint: your-s3-endpoint.com, bucket: id1, region: us-east-1, SSL: true
 INFO 🔐 Using server proxy for private bucket access
 ```
 
 **Debug Log Messages** (only shown when `APP_DEBUG=true`):
-```
+```text
 DEBUG 📤 Attempting to save media to MinIO: filename=123456789/6281234567890_s_whatsapp_net/3EB0ABC123.jfif, size=85741 bytes
 DEBUG ✅ Successfully saved media to MinIO: bucket=id1, key=123456789/6281234567890_s_whatsapp_net/3EB0ABC123.jfif, etag=7cce285abed98e5c256f6f23a22510ce, size=85741
 DEBUG 📥 Downloading media from storage: 123456789/6281234567890_s_whatsapp_net/3EB0ABC123.jfif
@@ -369,7 +369,7 @@ The MinIO SDK provides:
 
 This dependency is automatically installed via `go mod`.
 
-## Troubleshooting
+## Additional Resources
 
 If you encounter S3/MinIO connection issues, see the comprehensive troubleshooting guide:
 
