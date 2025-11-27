@@ -65,7 +65,8 @@ func (r *SQLiteRepository) GetMessageByID(id string) (*domainChatStorage.Message
 	query := `
 		SELECT id, chat_jid, sender, content, timestamp, is_from_me,
 			media_type, filename, url, media_key, file_sha256,
-			file_enc_sha256, file_length, created_at, updated_at
+			file_enc_sha256, file_length, status, delivered_at, read_at,
+			played_at, created_at, updated_at
 		FROM messages
 		WHERE id = ?
 		LIMIT 1
@@ -167,6 +168,11 @@ func (r *SQLiteRepository) StoreMessage(message *domainChatStorage.Message) erro
 	message.CreatedAt = now
 	message.UpdatedAt = now
 
+	// Set default status if not already set
+	if message.Status == "" {
+		message.Status = "sent"
+	}
+
 	// Skip empty messages
 	if message.Content == "" && message.MediaType == "" {
 		// This is not an error, just skip storing empty messages
@@ -175,10 +181,11 @@ func (r *SQLiteRepository) StoreMessage(message *domainChatStorage.Message) erro
 
 	query := `
 		INSERT INTO messages (
-			id, chat_jid, sender, content, timestamp, is_from_me, 
-			media_type, filename, url, media_key, file_sha256, 
-			file_enc_sha256, file_length, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			id, chat_jid, sender, content, timestamp, is_from_me,
+			media_type, filename, url, media_key, file_sha256,
+			file_enc_sha256, file_length, status, delivered_at, read_at,
+			played_at, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id, chat_jid) DO UPDATE SET
 			sender = excluded.sender,
 			content = excluded.content,
@@ -198,7 +205,8 @@ func (r *SQLiteRepository) StoreMessage(message *domainChatStorage.Message) erro
 		message.ID, message.ChatJID, message.Sender, message.Content,
 		message.Timestamp, message.IsFromMe, message.MediaType, message.Filename,
 		message.URL, message.MediaKey, message.FileSHA256, message.FileEncSHA256,
-		message.FileLength, message.CreatedAt, message.UpdatedAt,
+		message.FileLength, message.Status, message.DeliveredAt, message.ReadAt,
+		message.PlayedAt, message.CreatedAt, message.UpdatedAt,
 	)
 
 	return err
@@ -296,7 +304,8 @@ func (r *SQLiteRepository) GetMessages(filter *domainChatStorage.MessageFilter) 
 	query := `
 		SELECT id, chat_jid, sender, content, timestamp, is_from_me,
 			media_type, filename, url, media_key, file_sha256,
-			file_enc_sha256, file_length, created_at, updated_at
+			file_enc_sha256, file_length, status, delivered_at, read_at,
+			played_at, created_at, updated_at
 		FROM messages
 		WHERE ` + strings.Join(conditions, " AND ") + `
 		ORDER BY timestamp DESC
@@ -356,7 +365,8 @@ func (r *SQLiteRepository) SearchMessages(chatJID, searchText string, limit int)
 	query := `
 		SELECT id, chat_jid, sender, content, timestamp, is_from_me,
 			media_type, filename, url, media_key, file_sha256,
-			file_enc_sha256, file_length, created_at, updated_at
+			file_enc_sha256, file_length, status, delivered_at, read_at,
+			played_at, created_at, updated_at
 		FROM messages
 		WHERE ` + strings.Join(conditions, " AND ") + `
 		ORDER BY timestamp DESC
@@ -414,7 +424,8 @@ func (r *SQLiteRepository) scanMessage(scanner interface{ Scan(...any) error }) 
 		&message.ID, &message.ChatJID, &message.Sender, &message.Content,
 		&message.Timestamp, &message.IsFromMe, &message.MediaType, &message.Filename,
 		&message.URL, &message.MediaKey, &message.FileSHA256, &message.FileEncSHA256,
-		&message.FileLength, &message.CreatedAt, &message.UpdatedAt,
+		&message.FileLength, &message.Status, &message.DeliveredAt, &message.ReadAt,
+		&message.PlayedAt, &message.CreatedAt, &message.UpdatedAt,
 	)
 	return message, err
 }
@@ -696,6 +707,58 @@ func (r *SQLiteRepository) StoreSentMessageWithContext(ctx context.Context, mess
 	return r.StoreMessage(message)
 }
 
+// UpdateMessageStatus updates the status of a message and records the timestamp
+func (r *SQLiteRepository) UpdateMessageStatus(ctx context.Context, messageID string, status string, statusTime time.Time) error {
+	// Check if context is already cancelled
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	// Determine which timestamp column to update based on status
+	var query string
+	switch status {
+	case "delivered":
+		query = `
+			UPDATE messages
+			SET status = ?, delivered_at = ?, updated_at = ?
+			WHERE id = ? AND (status = 'sent' OR delivered_at IS NULL)
+		`
+	case "read":
+		query = `
+			UPDATE messages
+			SET status = ?, read_at = ?, updated_at = ?
+			WHERE id = ? AND (status IN ('sent', 'delivered') OR read_at IS NULL)
+		`
+	case "played":
+		query = `
+			UPDATE messages
+			SET status = ?, played_at = ?, updated_at = ?
+			WHERE id = ?
+		`
+	default:
+		return fmt.Errorf("invalid status: %s (valid: delivered, read, played)", status)
+	}
+
+	now := time.Now()
+	result, err := r.db.ExecContext(ctx, query, status, statusTime, now, messageID)
+	if err != nil {
+		return fmt.Errorf("failed to update message status: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		logrus.Debugf("No rows updated for message %s with status %s (message may not exist or status already set)", messageID, status)
+	}
+
+	return nil
+}
+
 // _____________________________________________________________________________________________________________________
 
 // initializeSchema creates or migrates the database schema
@@ -809,6 +872,20 @@ func (r *SQLiteRepository) getMigrations() []string {
 		// Migration 2: Add index for message ID lookups (performance optimization)
 		`
 		CREATE INDEX IF NOT EXISTS idx_messages_id ON messages(id);
+		`,
+
+		// Migration 3: Add message status tracking with timestamps
+		`
+		-- Add status column (sent, delivered, read, played)
+		ALTER TABLE messages ADD COLUMN status TEXT DEFAULT 'sent';
+
+		-- Add timestamp columns for status tracking
+		ALTER TABLE messages ADD COLUMN delivered_at TIMESTAMP;
+		ALTER TABLE messages ADD COLUMN read_at TIMESTAMP;
+		ALTER TABLE messages ADD COLUMN played_at TIMESTAMP;
+
+		-- Create index for status queries
+		CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(status);
 		`,
 	}
 }

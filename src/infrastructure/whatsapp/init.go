@@ -458,7 +458,7 @@ func handler(ctx context.Context, rawEvt any, chatStorageRepo domainChatStorage.
 	case *events.Message:
 		handleMessage(ctx, evt, chatStorageRepo)
 	case *events.Receipt:
-		handleReceipt(ctx, evt)
+		handleReceipt(ctx, evt, chatStorageRepo)
 	case *events.Presence:
 		handlePresence(ctx, evt)
 	case *events.HistorySync:
@@ -762,15 +762,34 @@ func handleWebhookForward(ctx context.Context, evt *events.Message) {
 	}
 }
 
-func handleReceipt(ctx context.Context, evt *events.Receipt) {
+func handleReceipt(ctx context.Context, evt *events.Receipt, chatStorageRepo domainChatStorage.IChatStorageRepository) {
 	sendReceipt := false
+	var status string
+
 	switch evt.Type {
 	case types.ReceiptTypeRead, types.ReceiptTypeReadSelf:
 		sendReceipt = true
+		status = "read"
 		log.Infof("%v was read by %s at %s: %+v", evt.MessageIDs, evt.SourceString(), evt.Timestamp, evt)
 	case types.ReceiptTypeDelivered:
 		sendReceipt = true
+		status = "delivered"
 		log.Infof("%s was delivered to %s at %s: %+v", evt.MessageIDs[0], evt.SourceString(), evt.Timestamp, evt)
+	case types.ReceiptTypePlayed:
+		sendReceipt = true
+		status = "played"
+		log.Infof("%v was played by %s at %s: %+v", evt.MessageIDs, evt.SourceString(), evt.Timestamp, evt)
+	}
+
+	// Update message status in database for each message ID in the receipt
+	if status != "" && chatStorageRepo != nil {
+		for _, messageID := range evt.MessageIDs {
+			if err := chatStorageRepo.UpdateMessageStatus(ctx, messageID, status, evt.Timestamp); err != nil {
+				logrus.Errorf("Failed to update status for message %s to %s: %v", messageID, status, err)
+			} else {
+				logrus.Debugf("Updated message %s status to %s", messageID, status)
+			}
+		}
 	}
 
 	// Forward receipt (ack) event to webhook if configured

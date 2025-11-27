@@ -71,6 +71,11 @@ Download:
   - `--auto-mark-read=true` (automatically marks incoming messages as read)
 - Auto download media from incoming messages
   - `--auto-download-media=false` (disable automatic media downloads, default: `true`)
+- **Message Status Tracking** - Track delivery and read status of messages
+  - Automatically updates message status: sent → delivered → read → played
+  - Records timestamps for each status change
+  - Enables analytics on message delivery and response times
+  - See [Message Status Documentation](./MESSAGE_STATUS.md) for details
 - Webhook for received message
   - `--webhook="http://yourwebhook.site/handler"`, or you can simplify
   - `-w="http://yourwebhook.site/handler"`
