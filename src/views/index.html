@@ -16,7 +16,7 @@
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://unpkg.com/axios@1.1.2/dist/axios.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
-    <title>WhatsApp API {{ .AppVersion }}</title>
+    <title>WhatsApp API {{ .AppVersion }} (Fork: {{ .AppForkVersion }})</title>
 </head>
 <body>
 <div id="splash-screen">
@@ -32,11 +32,16 @@
         <h1 class="ui header center aligned">
             <div class="title-container">
                 <img src="{{ .AppBasePath }}/assets/gowa.svg" alt="GoWA Logo">
-                
+
                 <span>WhatsApp API</span>
-                
-                <div class="version-label">
-                    {{ .AppVersion }}
+
+                <div class="version-container">
+                    <div class="version-label upstream-version">
+                        {{ .AppVersion }}
+                    </div>
+                    <div class="version-label fork-version">
+                        Fork: {{ .AppForkVersion }}
+                    </div>
                 </div>
             </div>
         </h1>

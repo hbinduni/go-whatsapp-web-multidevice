@@ -111,6 +111,7 @@ func restServer(_ *cobra.Command, _ []string) {
 		return c.Render("views/index", fiber.Map{
 			"AppHost":        fmt.Sprintf("%s://%s", c.Protocol(), c.Hostname()),
 			"AppVersion":     config.AppVersion,
+			"AppForkVersion": config.AppForkVersion,
 			"AppBasePath":    config.AppBasePath,
 			"BasicAuthToken": c.UserContext().Value(middleware.AuthorizationValue("BASIC_AUTH")),
 			"MaxFileSize":    humanize.Bytes(uint64(config.WhatsappSettingMaxFileSize)),
