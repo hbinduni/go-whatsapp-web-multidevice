@@ -166,9 +166,25 @@ func (service serviceChat) GetChatMessages(ctx context.Context, request domainCh
 			Filename:   message.Filename,
 			URL:        message.URL,
 			FileLength: message.FileLength,
+			Status:     message.Status,
 			CreatedAt:  message.CreatedAt.Format(time.RFC3339),
 			UpdatedAt:  message.UpdatedAt.Format(time.RFC3339),
 		}
+
+		// Format status timestamps if available
+		if message.DeliveredAt != nil {
+			deliveredAt := message.DeliveredAt.Format(time.RFC3339)
+			messageInfo.DeliveredAt = &deliveredAt
+		}
+		if message.ReadAt != nil {
+			readAt := message.ReadAt.Format(time.RFC3339)
+			messageInfo.ReadAt = &readAt
+		}
+		if message.PlayedAt != nil {
+			playedAt := message.PlayedAt.Format(time.RFC3339)
+			messageInfo.PlayedAt = &playedAt
+		}
+
 		messageInfos = append(messageInfos, messageInfo)
 	}
 

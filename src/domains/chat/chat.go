@@ -54,18 +54,22 @@ type ChatInfo struct {
 }
 
 type MessageInfo struct {
-	ID         string `json:"id"`
-	ChatJID    string `json:"chat_jid"`
-	SenderJID  string `json:"sender_jid"`
-	Content    string `json:"content"`
-	Timestamp  string `json:"timestamp"`
-	IsFromMe   bool   `json:"is_from_me"`
-	MediaType  string `json:"media_type"`
-	Filename   string `json:"filename"`
-	URL        string `json:"url"`
-	FileLength uint64 `json:"file_length"`
-	CreatedAt  string `json:"created_at"`
-	UpdatedAt  string `json:"updated_at"`
+	ID          string  `json:"id"`
+	ChatJID     string  `json:"chat_jid"`
+	SenderJID   string  `json:"sender_jid"`
+	Content     string  `json:"content"`
+	Timestamp   string  `json:"timestamp"`
+	IsFromMe    bool    `json:"is_from_me"`
+	MediaType   string  `json:"media_type"`
+	Filename    string  `json:"filename"`
+	URL         string  `json:"url"`
+	FileLength  uint64  `json:"file_length"`
+	Status      string  `json:"status"`                // Message status: sent, delivered, read, played
+	DeliveredAt *string `json:"delivered_at,omitempty"` // When message was delivered
+	ReadAt      *string `json:"read_at,omitempty"`      // When message was read
+	PlayedAt    *string `json:"played_at,omitempty"`    // When view-once message was played
+	CreatedAt   string  `json:"created_at"`
+	UpdatedAt   string  `json:"updated_at"`
 }
 
 type PaginationResponse struct {
