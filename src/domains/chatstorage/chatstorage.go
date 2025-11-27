@@ -27,6 +27,10 @@ type Message struct {
 	FileSHA256    []byte    `db:"file_sha256"`
 	FileEncSHA256 []byte    `db:"file_enc_sha256"`
 	FileLength    uint64    `db:"file_length"`
+	Status        string    `db:"status"`         // Message status: sent, delivered, read, played
+	DeliveredAt   *time.Time `db:"delivered_at"` // When message was delivered
+	ReadAt        *time.Time `db:"read_at"`      // When message was read
+	PlayedAt      *time.Time `db:"played_at"`    // When view-once message was played
 	CreatedAt     time.Time `db:"created_at"`
 	UpdatedAt     time.Time `db:"updated_at"`
 }
