@@ -2,6 +2,10 @@
 # Author: Claude Code
 # Description: Build, run, and manage the WhatsApp Web API application
 
+# Ensure Make uses bash and has proper PATH
+SHELL := /bin/bash
+export PATH := /usr/local/go/bin:$(PATH)
+
 .PHONY: help build run run-rest run-mcp test clean install update-deps fmt vet lint docker-build docker-up docker-down docker-logs docker-login-ghcr docker-build-image docker-push-ghcr docker-release docker-tag tidy check dev-rest dev-mcp
 
 # Variables
