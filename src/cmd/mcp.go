@@ -27,7 +27,7 @@ func init() {
 }
 
 func mcpServer(_ *cobra.Command, _ []string) {
-	logrus.Infof("🚀 Starting MCP server mode...")
+	logrus.Infof("🚀 Starting MCP server mode (Fork: %s)...", config.AppForkVersion)
 
 	// Set auto reconnect to whatsapp server after booting
 	go helpers.SetAutoConnectAfterBooting(appUsecase)
