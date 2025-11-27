@@ -130,6 +130,13 @@ body {
     transform: scale(1.1);
 }
 
+.main-header .version-container {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+}
+
 .main-header .version-label {
     margin-top: 4px !important;
     background: rgba(255,255,255,0.12);
@@ -142,11 +149,26 @@ body {
     transition: all 0.25s ease;
     letter-spacing: 0.5px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    white-space: nowrap;
 }
 
 .main-header .version-label:hover {
     background: rgba(255,255,255,0.2);
     transform: translateY(-2px);
+}
+
+.main-header .upstream-version {
+    font-weight: 600;
+}
+
+.main-header .fork-version {
+    font-size: 0.45em;
+    background: rgba(0, 125, 156, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.main-header .fork-version:hover {
+    background: rgba(0, 125, 156, 0.4);
 }
 
 @media (min-width: 768px) {

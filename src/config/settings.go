@@ -5,7 +5,8 @@ import (
 )
 
 var (
-	AppVersion             = "v7.9.0"
+	AppVersion             = "v7.9.0"       // Upstream version from aldinokemal
+	AppForkVersion         = "v1.0.0-fork" // Fork version (binduni's version)
 	AppPort                = "3000"
 	AppDebug               = false
 	AppOs                  = "AldinoKemal"
