@@ -18,7 +18,11 @@ DOCKER_FILE=docker/golang.Dockerfile
 GITHUB_USER?=$(shell git remote get-url origin 2>/dev/null | sed -n 's/.*github.com[:/]\([^/]*\)\/.*/\1/p' | tr '[:upper:]' '[:lower:]' || echo "$(shell git config user.name | tr '[:upper:]' '[:lower:]' | tr -d ' ')")
 IMAGE_NAME=go-whatsapp-web-multidevice
 # Auto-detect version from config/settings.go, fallback to 'latest' if not found
-APP_VERSION?=$(shell grep 'AppVersion.*=' src/config/settings.go 2>/dev/null | sed -n 's/.*"\(.*\)"/\1/p' || echo "latest")
+# Extract both upstream version and fork version, then combine them
+UPSTREAM_VERSION?=$(shell grep 'AppVersion[[:space:]]*=' src/config/settings.go 2>/dev/null | head -1 | sed -n 's/.*"\(.*\)".*/\1/p' || echo "v0.0.0")
+FORK_VERSION?=$(shell grep 'AppForkVersion[[:space:]]*=' src/config/settings.go 2>/dev/null | sed -n 's/.*"\(.*\)".*/\1/p' || echo "fork")
+# Combined version format: {upstream}-{fork} (e.g., v7.9.0-v1.0.0-fork)
+APP_VERSION?=$(UPSTREAM_VERSION)-$(FORK_VERSION)
 VERSION?=$(APP_VERSION)
 GHCR_REGISTRY=ghcr.io
 GHCR_IMAGE=$(GHCR_REGISTRY)/$(GITHUB_USER)/$(IMAGE_NAME)
@@ -74,7 +78,7 @@ help:
 	@echo "  docker-login-ghcr   Login to GitHub Container Registry (using gh CLI)"
 	@echo "  docker-build-image  Build image with version & latest tags"
 	@echo "  docker-push-ghcr    Push both version & latest tags to GHCR"
-	@echo "  docker-release      Build and push (auto-versioned from config)"
+	@echo "  docker-release      Build and push (combined upstream+fork version)"
 	@echo "  docker-tag          Tag image with custom version (VERSION=v1.0.0)"
 	@echo ""
 	@echo "Utility Commands:"
@@ -356,6 +360,11 @@ info:
 	@echo "  Binary: $(BINARY_NAME)"
 	@echo "  Source Directory: $(SRC_DIR)"
 	@echo "  Build Directory: $(BUILD_DIR)"
+	@echo ""
+	@echo "Version Information:"
+	@echo "  Upstream Version: $(UPSTREAM_VERSION)"
+	@echo "  Fork Version: $(FORK_VERSION)"
+	@echo "  Combined Version: $(APP_VERSION)"
 	@echo ""
 	@echo "Go Environment:"
 	@$(GO) version
