@@ -17,6 +17,7 @@ import (
 	domainChatStorage "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/chatstorage"
 	pkgError "github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/error"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/utils"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/ui/sse"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/ui/websocket"
 	"github.com/sirupsen/logrus"
 	"go.mau.fi/whatsmeow"
@@ -549,6 +550,14 @@ func handlePairSuccess(ctx context.Context, evt *events.PairSuccess) {
 		Code:    "LOGIN_SUCCESS",
 		Message: fmt.Sprintf("Successfully pair with %s", evt.ID.String()),
 	}
+
+	// Broadcast via SSE
+	sse.BroadcastMessage(sse.EventLoginSuccess, "LOGIN_SUCCESS",
+		fmt.Sprintf("Successfully paired with %s", evt.ID.String()),
+		map[string]any{
+			"device_id": evt.ID.String(),
+		})
+
 	primaryDB, secondaryDB := getStoreContainers()
 	syncKeysDevice(ctx, primaryDB, secondaryDB)
 }
@@ -565,6 +574,10 @@ func handleLoggedOut(ctx context.Context, chatStorageRepo domainChatStorage.ICha
 		Message: "Remote logout cleanup completed - ready for new login",
 		Result:  nil,
 	}
+
+	// Broadcast via SSE
+	sse.BroadcastMessage(sse.EventLogoutComplete, "LOGOUT_COMPLETE",
+		"Remote logout cleanup completed - ready for new login", nil)
 }
 
 func handleConnectionEvents(_ context.Context) {
@@ -603,6 +616,19 @@ func handleMessage(ctx context.Context, evt *events.Message, chatStorageRepo dom
 		// Log storage errors to avoid silent failures that could lead to data loss
 		log.Errorf("Failed to store incoming message %s: %v", evt.Info.ID, err)
 	}
+
+	// Broadcast via SSE for real-time updates
+	messageContent := utils.ExtractMessageTextFromEvent(evt)
+	mediaType, _, _, _, _, _, _ := utils.ExtractMediaInfo(evt.Message)
+	sse.BroadcastMessageReceived(
+		evt.Info.ID,
+		evt.Info.Chat.String(),
+		evt.Info.Sender.String(),
+		messageContent,
+		evt.Info.Timestamp,
+		evt.Info.IsFromMe,
+		mediaType,
+	)
 
 	// Handle image message if present
 	handleImageMessage(ctx, evt)
@@ -839,6 +865,9 @@ func handleReceipt(ctx context.Context, evt *events.Receipt, chatStorageRepo dom
 				logrus.Debugf("Updated message %s status to %s", messageID, status)
 			}
 		}
+
+		// Broadcast via SSE for real-time status updates
+		sse.BroadcastReceipt(evt.MessageIDs, evt.Chat.String(), status, evt.Timestamp)
 	}
 
 	// Forward receipt (ack) event to webhook if configured
@@ -862,6 +891,9 @@ func handlePresence(_ context.Context, evt *events.Presence) {
 	} else {
 		log.Infof("%s is now online", evt.From)
 	}
+
+	// Broadcast via SSE for real-time presence updates
+	sse.BroadcastPresenceUpdate(evt.From.String(), !evt.Unavailable, evt.LastSeen)
 }
 
 func handleHistorySync(ctx context.Context, evt *events.HistorySync, chatStorageRepo domainChatStorage.IChatStorageRepository) {
