@@ -124,7 +124,9 @@ func restServer(_ *cobra.Command, _ []string) {
 
 	// Set auto reconnect to whatsapp server after booting
 	go helpers.SetAutoConnectAfterBooting(appUsecase)
-	// Note: Removed SetAutoReconnectChecking as whatsmeow has built-in auto-reconnect (EnableAutoReconnect = true)
+
+	// Set auto reconnect checking with a guaranteed client instance
+	startAutoReconnectCheckerIfClientAvailable()
 
 	if err := app.Listen(":" + config.AppPort); err != nil {
 		logrus.Fatalln("Failed to start: ", err.Error())

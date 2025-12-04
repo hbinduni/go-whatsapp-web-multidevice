@@ -31,7 +31,9 @@ func mcpServer(_ *cobra.Command, _ []string) {
 
 	// Set auto reconnect to whatsapp server after booting
 	go helpers.SetAutoConnectAfterBooting(appUsecase)
-	// Note: Removed SetAutoReconnectChecking as whatsmeow has built-in auto-reconnect (EnableAutoReconnect = true)
+
+	// Set auto reconnect checking with a valid client reference
+	startAutoReconnectCheckerIfClientAvailable()
 
 	// Create MCP server with capabilities
 	mcpServer := server.NewMCPServer(
