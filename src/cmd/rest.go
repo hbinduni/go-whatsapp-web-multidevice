@@ -9,6 +9,7 @@ import (
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/ui/rest"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/ui/rest/helpers"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/ui/rest/middleware"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/ui/sse"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/ui/websocket"
 	"github.com/dustin/go-humanize"
 	"github.com/gofiber/fiber/v2"
@@ -121,6 +122,11 @@ func restServer(_ *cobra.Command, _ []string) {
 
 	websocket.RegisterRoutes(apiGroup, appUsecase)
 	go websocket.RunHub()
+
+	// SSE (Server-Sent Events) for real-time updates
+	sse.RegisterRoutes(apiGroup)
+	go sse.GetHub().Run()
+	logrus.Info("SSE hub started - endpoint: /events")
 
 	// Set auto reconnect to whatsapp server after booting
 	go helpers.SetAutoConnectAfterBooting(appUsecase)
