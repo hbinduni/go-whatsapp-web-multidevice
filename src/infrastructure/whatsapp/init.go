@@ -36,6 +36,7 @@ type ExtractedMedia struct {
 	MediaPath string `json:"media_path"`
 	MimeType  string `json:"mime_type"`
 	Caption   string `json:"caption"`
+	FileSize  int64  `json:"file_size"`
 }
 
 // Global variables
@@ -593,21 +594,42 @@ func handleMessage(ctx context.Context, evt *events.Message, chatStorageRepo dom
 		log.Errorf("Failed to store incoming message %s: %v", evt.Info.ID, err)
 	}
 
-	// Broadcast via SSE for real-time updates
+	// Normalize JIDs from @lid to @s.whatsapp.net to match database format
+	client := GetClient()
+	normalizedChatJID := NormalizeJIDFromLID(ctx, evt.Info.Chat, client)
+	normalizedSenderJID := NormalizeJIDFromLID(ctx, evt.Info.Sender, client)
+
 	messageContent := utils.ExtractMessageTextFromEvent(evt)
 	mediaType, _, _, _, _, _, _ := utils.ExtractMediaInfo(evt.Message)
+
+	// Download media BEFORE broadcasting SSE so we can include the media URL
+	var mediaPath string
+	if config.WhatsappAutoDownloadMedia && client != nil {
+		if img := evt.Message.GetImageMessage(); img != nil {
+			deviceID := client.Store.ID.User
+			chatJID := normalizedChatJID.String()
+			messageID := evt.Info.ID
+
+			if extractedMedia, err := utils.ExtractMediaWithInfo(ctx, client, img, chatJID, messageID, deviceID); err != nil {
+				log.Errorf("Failed to download image: %v", err)
+			} else {
+				mediaPath = extractedMedia.MediaPath
+				log.Debugf("📸 Media downloaded for SSE broadcast: %s", mediaPath)
+			}
+		}
+	}
+
+	// Broadcast via SSE for real-time updates (now includes media_path)
 	sse.BroadcastMessageReceived(
 		evt.Info.ID,
-		evt.Info.Chat.String(),
-		evt.Info.Sender.String(),
+		normalizedChatJID.String(),
+		normalizedSenderJID.String(),
 		messageContent,
 		evt.Info.Timestamp,
 		evt.Info.IsFromMe,
 		mediaType,
+		mediaPath,
 	)
-
-	// Handle image message if present
-	handleImageMessage(ctx, evt)
 
 	// Auto-mark message as read if configured
 	handleAutoMarkRead(ctx, evt)
@@ -629,7 +651,9 @@ func handleImageMessage(ctx context.Context, evt *events.Message) {
 	}
 	if img := evt.Message.GetImageMessage(); img != nil {
 		deviceID := client.Store.ID.User
-		chatJID := evt.Info.Chat.String()
+		// Normalize JID to ensure consistent file paths (convert @lid to @s.whatsapp.net)
+		normalizedChatJID := NormalizeJIDFromLID(ctx, evt.Info.Chat, client)
+		chatJID := normalizedChatJID.String()
 		messageID := evt.Info.ID
 
 		if _, err := utils.ExtractMediaWithInfo(ctx, client, img, chatJID, messageID, deviceID); err != nil {
@@ -821,7 +845,10 @@ func handleReceipt(ctx context.Context, evt *events.Receipt, chatStorageRepo dom
 		}
 
 		// Broadcast via SSE for real-time status updates
-		sse.BroadcastReceipt(evt.MessageIDs, evt.Chat.String(), status, evt.Timestamp)
+		// Normalize chat JID from @lid to @s.whatsapp.net to match database format
+		client := GetClient()
+		normalizedChatJID := NormalizeJIDFromLID(ctx, evt.Chat, client)
+		sse.BroadcastReceipt(evt.MessageIDs, normalizedChatJID.String(), status, evt.Timestamp)
 	}
 
 	// Forward receipt (ack) event to webhook if configured
@@ -835,9 +862,12 @@ func handleReceipt(ctx context.Context, evt *events.Receipt, chatStorageRepo dom
 	}
 }
 
-func handlePresence(_ context.Context, evt *events.Presence) {
+func handlePresence(ctx context.Context, evt *events.Presence) {
 	// Broadcast via SSE for real-time presence updates
-	sse.BroadcastPresenceUpdate(evt.From.String(), !evt.Unavailable, evt.LastSeen)
+	// Normalize JID from @lid to @s.whatsapp.net to match database format
+	client := GetClient()
+	normalizedJID := NormalizeJIDFromLID(ctx, evt.From, client)
+	sse.BroadcastPresenceUpdate(normalizedJID.String(), !evt.Unavailable, evt.LastSeen)
 }
 
 func handleHistorySync(ctx context.Context, evt *events.HistorySync, chatStorageRepo domainChatStorage.IChatStorageRepository) {

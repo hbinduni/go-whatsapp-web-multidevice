@@ -178,7 +178,7 @@ func BroadcastMessage(eventType EventType, code, message string, data any) {
 }
 
 // BroadcastMessageReceived broadcasts a new incoming message event
-func BroadcastMessageReceived(messageID, chatJID, sender, content string, timestamp time.Time, isFromMe bool, mediaType string) {
+func BroadcastMessageReceived(messageID, chatJID, sender, content string, timestamp time.Time, isFromMe bool, mediaType, mediaPath string) {
 	BroadcastMessage(EventMessageReceived, "MESSAGE_RECEIVED", "New message received", map[string]any{
 		"message_id": messageID,
 		"chat_jid":   chatJID,
@@ -187,6 +187,7 @@ func BroadcastMessageReceived(messageID, chatJID, sender, content string, timest
 		"timestamp":  timestamp,
 		"is_from_me": isFromMe,
 		"media_type": mediaType,
+		"media_path": mediaPath,
 	})
 }
 

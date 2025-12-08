@@ -135,7 +135,9 @@ func createMessagePayload(ctx context.Context, evt *events.Message) (map[string]
 
 	// Get device ID for path organization
 	deviceID := cli.Store.ID.User
-	chatJID := evt.Info.Chat.String()
+	// Normalize JID to ensure consistent file paths (convert @lid to @s.whatsapp.net)
+	normalizedChatJID := NormalizeJIDFromLID(ctx, evt.Info.Chat, cli)
+	chatJID := normalizedChatJID.String()
 	messageID := evt.Info.ID
 
 	if audioMedia := evt.Message.GetAudioMessage(); audioMedia != nil {
