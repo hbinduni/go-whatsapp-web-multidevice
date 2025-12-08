@@ -6,7 +6,7 @@
 SHELL := /bin/bash
 export PATH := /usr/local/go/bin:$(PATH)
 
-.PHONY: help build run run-rest run-mcp test clean install update-deps fmt vet lint docker-build docker-up docker-down docker-logs docker-login-ghcr docker-build-image docker-push-ghcr docker-release docker-tag tidy check dev-rest dev-mcp
+.PHONY: help build run run-rest run-mcp run-debug run-rest-debug run-mcp-debug test clean install update-deps fmt vet lint docker-build docker-up docker-down docker-logs docker-login-ghcr docker-build-image docker-push-ghcr docker-release docker-tag tidy check dev-rest dev-mcp
 
 # Variables
 BINARY_NAME=whatsapp
@@ -53,6 +53,9 @@ help:
 	@echo "  run            Run the application in REST mode (default)"
 	@echo "  run-rest       Run the application in REST API mode"
 	@echo "  run-mcp        Run the application in MCP server mode"
+	@echo "  run-debug      Run in REST mode with debug logging"
+	@echo "  run-rest-debug Run in REST mode with debug logging"
+	@echo "  run-mcp-debug  Run in MCP mode with debug logging"
 	@echo "  dev-rest       Run with hot reload in REST mode (requires air)"
 	@echo "  dev-mcp        Run with hot reload in MCP mode (requires air)"
 	@echo ""
@@ -137,6 +140,19 @@ run-rest: build
 run-mcp: build
 	@echo "Starting WhatsApp Web API in MCP mode..."
 	cd $(SRC_DIR) && ../$(BUILD_DIR)/$(BINARY_NAME) mcp
+
+## run-debug: Run in REST mode with debug logging (alias for run-rest-debug)
+run-debug: run-rest-debug
+
+## run-rest-debug: Run the application in REST API mode with debug logging
+run-rest-debug: build
+	@echo "Starting WhatsApp Web API in REST mode with DEBUG logging..."
+	cd $(SRC_DIR) && ../$(BUILD_DIR)/$(BINARY_NAME) rest --debug=true
+
+## run-mcp-debug: Run the application in MCP server mode with debug logging
+run-mcp-debug: build
+	@echo "Starting WhatsApp Web API in MCP mode with DEBUG logging..."
+	cd $(SRC_DIR) && ../$(BUILD_DIR)/$(BINARY_NAME) mcp --debug=true
 
 ## dev-rest: Run with hot reload in REST mode (requires air)
 dev-rest:

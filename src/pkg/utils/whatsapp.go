@@ -490,6 +490,7 @@ type ExtractedMedia struct {
 	MediaPath string `json:"media_path"`
 	MimeType  string `json:"mime_type"`
 	Caption   string `json:"caption"`
+	FileSize  int64  `json:"file_size"`
 }
 
 // ExtractMedia is a helper function to extract media from whatsapp
@@ -562,12 +563,17 @@ func ExtractMediaWithInfo(ctx context.Context, client *whatsmeow.Client, mediaFi
 		return extractedMedia, fmt.Errorf("media storage not initialized")
 	}
 
+	logrus.Debugf("📤 Attempting to save media: filename=%s, size=%d bytes", filename, len(data))
 	path, err := mediaStorage.Save(ctx, data, filename)
 	if err != nil {
+		logrus.Errorf("❌ Failed to save media: %v", err)
 		return extractedMedia, fmt.Errorf("failed to save media: %w", err)
 	}
+	logrus.Debugf("✅ Successfully saved media: path=%s", path)
 
 	extractedMedia.MediaPath = mediaStorage.GetURL(path)
+	extractedMedia.FileSize = int64(len(data)) // Set file size from downloaded data
+	logrus.Debugf("🔗 Media URL: %s", extractedMedia.MediaPath)
 	return extractedMedia, nil
 }
 

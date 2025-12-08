@@ -3,7 +3,6 @@ package usecase
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -274,21 +273,13 @@ func (service serviceMessage) DownloadMedia(ctx context.Context, request domainM
 		return response, fmt.Errorf("failed to download media: %v", err)
 	}
 
-	// Get file size
-	fileInfo, err := os.Stat(extractedMedia.MediaPath)
-	if err != nil {
-		logrus.Warnf("Could not get file size for %s: %v", extractedMedia.MediaPath, err)
-	}
-
-	// Build response
+	// Build response - use file size from ExtractedMedia (works for both local and S3 storage)
 	response.MessageID = request.MessageID
 	response.Status = fmt.Sprintf("Media downloaded successfully to %s", extractedMedia.MediaPath)
 	response.MediaType = message.MediaType
 	response.Filename = filepath.Base(extractedMedia.MediaPath)
 	response.FilePath = extractedMedia.MediaPath
-	if fileInfo != nil {
-		response.FileSize = fileInfo.Size()
-	}
+	response.FileSize = extractedMedia.FileSize
 
 	logrus.Info(map[string]any{
 		"message_id": request.MessageID,
