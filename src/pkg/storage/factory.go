@@ -24,7 +24,7 @@ func InitStorage(storageType StorageType, localBasePath string, s3Config *S3Conf
 		if err != nil {
 			return fmt.Errorf("failed to initialize local storage: %w", err)
 		}
-		logrus.Info("Initialized local file storage")
+		logrus.Debug("Initialized local file storage")
 
 	case StorageTypeS3:
 		if s3Config == nil {
@@ -37,7 +37,7 @@ func InitStorage(storageType StorageType, localBasePath string, s3Config *S3Conf
 			return fmt.Errorf("failed to initialize MinIO storage: %w", err)
 		}
 
-		logrus.Infof("Initialized S3-compatible storage (endpoint: %s, bucket: %s)", s3Config.Endpoint, s3Config.Bucket)
+		logrus.Debugf("Initialized S3-compatible storage (endpoint: %s, bucket: %s)", s3Config.Endpoint, s3Config.Bucket)
 
 	default:
 		return fmt.Errorf("unsupported storage type: %s", storageType)

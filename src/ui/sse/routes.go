@@ -33,7 +33,7 @@ func handleSSE(c *fiber.Ctx) error {
 	// Register client with hub
 	hub.Register(client)
 
-	logrus.Infof("[SSE] New client connected: %s from %s", client.ID, c.IP())
+	logrus.Debugf("[SSE] New client connected: %s from %s", client.ID, c.IP())
 
 	// Send initial connection event
 	initialEvent := Event{
@@ -61,7 +61,6 @@ func handleSSE(c *fiber.Ctx) error {
 			case event, ok := <-client.Channel:
 				if !ok {
 					// Channel closed, client disconnected
-					logrus.Infof("[SSE] Client channel closed: %s", client.ID)
 					return
 				}
 				// Send event to client

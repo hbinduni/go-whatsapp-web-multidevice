@@ -88,36 +88,32 @@ func GetHub() *Hub {
 
 // Run starts the SSE hub event loop
 func (h *Hub) Run() {
-	logrus.Info("[SSE] Hub started")
+	logrus.Debug("[SSE] Hub started")
 	for {
 		select {
 		case client := <-h.register:
 			h.mu.Lock()
 			h.clients[client.ID] = client
+			count := len(h.clients)
 			h.mu.Unlock()
-			logrus.Infof("[SSE] Client registered: %s (total: %d)", client.ID, len(h.clients))
+			logrus.Debugf("[SSE] Client registered: %s (total: %d)", client.ID, count)
 
 		case clientID := <-h.unregister:
 			h.mu.Lock()
 			if client, ok := h.clients[clientID]; ok {
 				close(client.Channel)
 				delete(h.clients, clientID)
-				logrus.Infof("[SSE] Client unregistered: %s (total: %d)", clientID, len(h.clients))
+				logrus.Debugf("[SSE] Client unregistered: %s (total: %d)", clientID, len(h.clients))
 			}
 			h.mu.Unlock()
 
 		case event := <-h.broadcast:
 			h.mu.RLock()
-			clientCount := len(h.clients)
-			if clientCount > 0 {
-				logrus.Debugf("[SSE] Broadcasting event %s to %d clients", event.Type, clientCount)
-				for _, client := range h.clients {
-					select {
-					case client.Channel <- event:
-					default:
-						// Channel is full, skip this client
-						logrus.Warnf("[SSE] Client %s channel full, skipping event", client.ID)
-					}
+			for _, client := range h.clients {
+				select {
+				case client.Channel <- event:
+				default:
+					// Channel is full, skip this client (non-blocking)
 				}
 			}
 			h.mu.RUnlock()

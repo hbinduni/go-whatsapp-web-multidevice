@@ -210,7 +210,7 @@ func UpdateGlobalClient(newCli *whatsmeow.Client, newDB *sqlstore.Container) {
 	cli = newCli
 	db = newDB
 	globalStateMu.Unlock()
-	log.Infof("Global WhatsApp client updated successfully")
+	log.Debugf("Global WhatsApp client updated")
 }
 
 // GetClient returns the current global client instance (alias for GetGlobalClient)
@@ -261,30 +261,20 @@ func CleanupDatabase() error {
 
 	// Check if using PostgreSQL
 	if strings.HasPrefix(config.DBURI, "postgres:") {
-		logrus.Info("[CLEANUP] PostgreSQL detected - deleting all devices from database")
-
-		// Check if database is initialized
 		if currentDB == nil {
-			logrus.Warn("[CLEANUP] Database is nil, skipping device deletion")
 			return nil
 		}
 
 		ctx := context.Background()
 
-		// Get all devices
+		// Get and delete all devices
 		devices, err := currentDB.GetAllDevices(ctx)
 		if err != nil {
-			logrus.Errorf("[CLEANUP] Error getting devices: %v", err)
 			return fmt.Errorf("failed to get devices: %v", err)
 		}
 
-		logrus.Infof("[CLEANUP] Found %d devices to delete", len(devices))
-
-		// Delete each device (this will cascade delete related records like identity keys, sessions, etc.)
 		for _, device := range devices {
-			logrus.Infof("[CLEANUP] Deleting device: %s", device.ID)
 			if err := currentDB.DeleteDevice(ctx, device); err != nil {
-				logrus.Errorf("[CLEANUP] Error deleting device %s: %v", device.ID, err)
 				return fmt.Errorf("failed to delete device %s: %v", device.ID, err)
 			}
 		}
@@ -293,46 +283,31 @@ func CleanupDatabase() error {
 		if currentKeysDB != nil && currentKeysDB != currentDB {
 			keysDevices, err := currentKeysDB.GetAllDevices(ctx)
 			if err != nil {
-				logrus.Errorf("[CLEANUP] Error getting devices from keysDB: %v", err)
 				return fmt.Errorf("failed to get devices from keysDB: %v", err)
 			}
 
-			logrus.Infof("[CLEANUP] Found %d devices in keysDB to delete", len(keysDevices))
-
 			for _, device := range keysDevices {
-				logrus.Infof("[CLEANUP] Deleting device from keysDB: %s", device.ID)
 				if err := currentKeysDB.DeleteDevice(ctx, device); err != nil {
-					logrus.Errorf("[CLEANUP] Error deleting device %s from keysDB: %v", device.ID, err)
 					return fmt.Errorf("failed to delete device %s from keysDB: %v", device.ID, err)
 				}
 			}
 		}
 
-		logrus.Info("[CLEANUP] All devices deleted successfully from PostgreSQL")
 		return nil
 	}
 
 	// SQLite: Close database connections before removing the file
-	logrus.Info("[CLEANUP] SQLite detected - closing database connections before file removal")
-
-	// Close the main database connection
 	if db != nil {
-		logrus.Info("[CLEANUP] Closing main database connection")
 		if err := db.Close(); err != nil {
-			logrus.Errorf("[CLEANUP] Error closing main database: %v", err)
 			return fmt.Errorf("failed to close main database: %v", err)
 		}
-		logrus.Info("[CLEANUP] Main database connection closed successfully")
 	}
 
 	// Close keysDB if it exists and is separate from main db
 	if keysDB != nil && keysDB != db {
-		logrus.Info("[CLEANUP] Closing keysDB database connection")
 		if err := keysDB.Close(); err != nil {
-			logrus.Errorf("[CLEANUP] Error closing keysDB: %v", err)
 			return fmt.Errorf("failed to close keysDB: %v", err)
 		}
-		logrus.Info("[CLEANUP] KeysDB connection closed successfully")
 
 		// Remove keysDB file if it's also SQLite
 		if config.DBKeysURI != "" && strings.HasPrefix(config.DBKeysURI, "file:") {
@@ -341,16 +316,8 @@ func CleanupDatabase() error {
 				keysDBPath = strings.Split(keysDBPath, "?")[0]
 			}
 
-			logrus.Infof("[CLEANUP] Removing keysDB file: %s", keysDBPath)
-			if err := os.Remove(keysDBPath); err != nil {
-				if !os.IsNotExist(err) {
-					logrus.Errorf("[CLEANUP] Error removing keysDB file: %v", err)
-					return fmt.Errorf("failed to remove keysDB file: %v", err)
-				} else {
-					logrus.Info("[CLEANUP] KeysDB file already removed")
-				}
-			} else {
-				logrus.Info("[CLEANUP] KeysDB file removed successfully")
+			if err := os.Remove(keysDBPath); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("failed to remove keysDB file: %v", err)
 			}
 		}
 	}
@@ -362,33 +329,14 @@ func CleanupDatabase() error {
 	}
 
 	// Remove SQLite WAL and SHM files first (they can hold locks)
-	// These files are created when SQLite is in WAL mode and can prevent
-	// the main database file from being properly released
 	walPath := dbPath + "-wal"
 	shmPath := dbPath + "-shm"
 
-	if err := os.Remove(walPath); err != nil && !os.IsNotExist(err) {
-		logrus.Warnf("[CLEANUP] Error removing WAL file %s: %v", walPath, err)
-	} else if err == nil {
-		logrus.Info("[CLEANUP] WAL file removed successfully")
-	}
+	_ = os.Remove(walPath) // Ignore errors - file may not exist
+	_ = os.Remove(shmPath) // Ignore errors - file may not exist
 
-	if err := os.Remove(shmPath); err != nil && !os.IsNotExist(err) {
-		logrus.Warnf("[CLEANUP] Error removing SHM file %s: %v", shmPath, err)
-	} else if err == nil {
-		logrus.Info("[CLEANUP] SHM file removed successfully")
-	}
-
-	logrus.Infof("[CLEANUP] Removing main database file: %s", dbPath)
-	if err := os.Remove(dbPath); err != nil {
-		if !os.IsNotExist(err) {
-			logrus.Errorf("[CLEANUP] Error removing database file: %v", err)
-			return err
-		} else {
-			logrus.Info("[CLEANUP] Database file already removed")
-		}
-	} else {
-		logrus.Info("[CLEANUP] Database file removed successfully")
+	if err := os.Remove(dbPath); err != nil && !os.IsNotExist(err) {
+		return err
 	}
 	return nil
 }
@@ -398,36 +346,24 @@ func CleanupTemporaryFiles() error {
 	// Clean up history files
 	if files, err := filepath.Glob(fmt.Sprintf("./%s/history-*", config.PathStorages)); err == nil {
 		for _, f := range files {
-			if err := os.Remove(f); err != nil {
-				logrus.Errorf("[CLEANUP] Error removing history file %s: %v", f, err)
-				return err
-			}
+			_ = os.Remove(f)
 		}
-		logrus.Info("[CLEANUP] History files cleaned up")
 	}
 
 	// Clean up QR images
 	if qrImages, err := filepath.Glob(fmt.Sprintf("./%s/scan-*", config.PathQrCode)); err == nil {
 		for _, f := range qrImages {
-			if err := os.Remove(f); err != nil {
-				logrus.Errorf("[CLEANUP] Error removing QR image %s: %v", f, err)
-				return err
-			}
+			_ = os.Remove(f)
 		}
-		logrus.Info("[CLEANUP] QR images cleaned up")
 	}
 
 	// Clean up send items
 	if qrItems, err := filepath.Glob(fmt.Sprintf("./%s/*", config.PathSendItems)); err == nil {
 		for _, f := range qrItems {
 			if !strings.Contains(f, ".gitignore") {
-				if err := os.Remove(f); err != nil {
-					logrus.Errorf("[CLEANUP] Error removing send item %s: %v", f, err)
-					return err
-				}
+				_ = os.Remove(f)
 			}
 		}
-		logrus.Info("[CLEANUP] Send items cleaned up")
 	}
 
 	return nil
@@ -435,8 +371,6 @@ func CleanupTemporaryFiles() error {
 
 // ReinitializeWhatsAppComponents reinitializes database and client components
 func ReinitializeWhatsAppComponents(ctx context.Context, chatStorageRepo domainChatStorage.IChatStorageRepository) (*sqlstore.Container, *whatsmeow.Client, error) {
-	logrus.Info("[CLEANUP] Reinitializing database and client...")
-
 	newDB := InitWaDB(ctx, config.DBURI)
 	var newKeysDB *sqlstore.Container
 	if config.DBKeysURI != "" {
@@ -444,34 +378,24 @@ func ReinitializeWhatsAppComponents(ctx context.Context, chatStorageRepo domainC
 	}
 	newCli := InitWaCLI(ctx, newDB, newKeysDB, chatStorageRepo)
 
-	logrus.Info("[CLEANUP] Database and client reinitialized successfully")
-
 	return newDB, newCli, nil
 }
 
 // PerformCompleteCleanup performs all cleanup operations in the correct order
 func PerformCompleteCleanup(ctx context.Context, logPrefix string, chatStorageRepo domainChatStorage.IChatStorageRepository) (*sqlstore.Container, *whatsmeow.Client, error) {
-	logrus.Infof("[%s] Starting complete cleanup process...", logPrefix)
+	logrus.Debugf("[%s] Starting cleanup...", logPrefix)
 
 	// Disconnect current client if it exists
 	if current := GetClient(); current != nil {
 		current.Disconnect()
-		logrus.Infof("[%s] Client disconnected", logPrefix)
-
-		// CRITICAL: Wait for background goroutines to finish
-		// The whatsmeow client has background goroutines that may still be
-		// processing events and writing to the database after Disconnect().
-		// Without this wait, we get "database is locked" and "sql: database is closed" errors.
-		logrus.Infof("[%s] Waiting for background operations to complete...", logPrefix)
+		// Wait for background goroutines to finish before cleanup
 		time.Sleep(2 * time.Second)
 	}
 
 	// Truncate all chatstorage data before other cleanup
 	if chatStorageRepo != nil {
-		logrus.Infof("[%s] Truncating chatstorage data...", logPrefix)
 		if err := chatStorageRepo.TruncateAllDataWithLogging(logPrefix); err != nil {
-			logrus.Errorf("[%s] Failed to truncate chatstorage data: %v", logPrefix, err)
-			// Continue with cleanup even if chatstorage truncation fails
+			logrus.Errorf("[%s] Failed to truncate chatstorage: %v", logPrefix, err)
 		}
 	}
 
@@ -500,14 +424,10 @@ func PerformCompleteCleanup(ctx context.Context, logPrefix string, chatStorageRe
 		return nil, nil, fmt.Errorf("reinitialization failed after %d attempts: %v", maxRetries, err)
 	}
 
-	// Clean up temporary files
-	if err := CleanupTemporaryFiles(); err != nil {
-		logrus.Errorf("[%s] Temporary file cleanup failed (non-critical): %v", logPrefix, err)
-		// Don't return error for file cleanup as it's non-critical
-	}
+	// Clean up temporary files (non-critical)
+	_ = CleanupTemporaryFiles()
 
-	logrus.Infof("[%s] Complete cleanup process finished successfully", logPrefix)
-	logrus.Infof("[%s] Application is ready for next login without restart", logPrefix)
+	logrus.Debugf("[%s] Cleanup completed, ready for new login", logPrefix)
 
 	return newDB, newCli, nil
 }
@@ -528,27 +448,13 @@ func PerformCleanupAndUpdateGlobals(ctx context.Context, logPrefix string, chatS
 
 // handleRemoteLogout performs cleanup when user logs out from their phone
 func handleRemoteLogout(ctx context.Context, chatStorageRepo domainChatStorage.IChatStorageRepository) {
-	logrus.Info("[REMOTE_LOGOUT] User logged out from phone - starting cleanup...")
-	logrus.Info("[REMOTE_LOGOUT] This will clear all WhatsApp session data and chat storage")
-
-	// Log database state before cleanup
-	if database := GetDB(); database != nil {
-		devices, dbErr := database.GetAllDevices(ctx)
-		if dbErr != nil {
-			logrus.Errorf("[REMOTE_LOGOUT] Error getting devices before cleanup: %v", dbErr)
-		} else {
-			logrus.Infof("[REMOTE_LOGOUT] Devices before cleanup: %d found", len(devices))
-		}
-	}
+	logrus.Warn("[REMOTE_LOGOUT] User logged out from phone")
 
 	// Perform complete cleanup with global client synchronization
 	_, _, err := PerformCleanupAndUpdateGlobals(ctx, "REMOTE_LOGOUT", chatStorageRepo)
 	if err != nil {
 		logrus.Errorf("[REMOTE_LOGOUT] Cleanup failed: %v", err)
-		return
 	}
-
-	logrus.Info("[REMOTE_LOGOUT] Remote logout cleanup completed successfully")
 }
 
 // handler is the main event handler for WhatsApp events
@@ -584,7 +490,7 @@ func handler(ctx context.Context, rawEvt any, chatStorageRepo domainChatStorage.
 // Event handler functions
 
 func handleDeleteForMe(ctx context.Context, evt *events.DeleteForMe, chatStorageRepo domainChatStorage.IChatStorageRepository) {
-	log.Infof("Deleted message %s for %s", evt.MessageID, evt.SenderJID.String())
+	log.Debugf("DeleteForMe event: message %s for %s", evt.MessageID, evt.SenderJID.String())
 
 	// Find the message to get its chat JID
 	message, err := chatStorageRepo.GetMessageByID(evt.MessageID)
@@ -601,8 +507,6 @@ func handleDeleteForMe(ctx context.Context, evt *events.DeleteForMe, chatStorage
 	// Delete the message from database
 	if err := chatStorageRepo.DeleteMessage(evt.MessageID, message.ChatJID); err != nil {
 		log.Errorf("Failed to delete message %s from database: %v", evt.MessageID, err)
-	} else {
-		log.Infof("Successfully deleted message %s from database", evt.MessageID)
 	}
 
 	// Send webhook notification for delete event
@@ -623,8 +527,6 @@ func handleAppStateSyncComplete(_ context.Context, evt *events.AppStateSyncCompl
 	if len(client.Store.PushName) > 0 && evt.Name == appstate.WAPatchCriticalBlock {
 		if err := client.SendPresence(context.Background(), types.PresenceAvailable); err != nil {
 			log.Warnf("Failed to send available presence: %v", err)
-		} else {
-			log.Infof("Marked self as available")
 		}
 	}
 }
@@ -647,8 +549,6 @@ func handlePairSuccess(ctx context.Context, evt *events.PairSuccess) {
 }
 
 func handleLoggedOut(ctx context.Context, chatStorageRepo domainChatStorage.IChatStorageRepository) {
-	logrus.Warn("[REMOTE_LOGOUT] Received LoggedOut event - user logged out from phone")
-
 	// Perform comprehensive cleanup
 	handleRemoteLogout(ctx, chatStorageRepo)
 
@@ -677,8 +577,6 @@ func handleConnectionEvents(_ context.Context) {
 	// This makes sure that outgoing messages always have the right pushname.
 	if err := client.SendPresence(context.Background(), types.PresenceAvailable); err != nil {
 		log.Warnf("Failed to send available presence: %v", err)
-	} else {
-		log.Infof("Marked self as available")
 	}
 }
 
@@ -687,14 +585,8 @@ func handleStreamReplaced(_ context.Context) {
 }
 
 func handleMessage(ctx context.Context, evt *events.Message, chatStorageRepo domainChatStorage.IChatStorageRepository) {
-	// Log message metadata
-	metaParts := buildMessageMetaParts(evt)
-	log.Infof("Received message %s from %s (%s): %+v",
-		evt.Info.ID,
-		evt.Info.SourceString(),
-		strings.Join(metaParts, ", "),
-		evt.Message,
-	)
+	// Log message metadata (debug level to reduce verbosity)
+	log.Debugf("Received message %s from %s", evt.Info.ID, evt.Info.SourceString())
 
 	if err := chatStorageRepo.CreateMessage(ctx, evt); err != nil {
 		// Log storage errors to avoid silent failures that could lead to data loss
@@ -727,23 +619,6 @@ func handleMessage(ctx context.Context, evt *events.Message, chatStorageRepo dom
 	handleWebhookForward(ctx, evt)
 }
 
-func buildMessageMetaParts(evt *events.Message) []string {
-	metaParts := []string{
-		fmt.Sprintf("pushname: %s", evt.Info.PushName),
-		fmt.Sprintf("timestamp: %s", evt.Info.Timestamp),
-	}
-	if evt.Info.Type != "" {
-		metaParts = append(metaParts, fmt.Sprintf("type: %s", evt.Info.Type))
-	}
-	if evt.Info.Category != "" {
-		metaParts = append(metaParts, fmt.Sprintf("category: %s", evt.Info.Category))
-	}
-	if evt.IsViewOnce {
-		metaParts = append(metaParts, "view once")
-	}
-	return metaParts
-}
-
 func handleImageMessage(ctx context.Context, evt *events.Message) {
 	if !config.WhatsappAutoDownloadMedia {
 		return
@@ -757,10 +632,8 @@ func handleImageMessage(ctx context.Context, evt *events.Message) {
 		chatJID := evt.Info.Chat.String()
 		messageID := evt.Info.ID
 
-		if path, err := utils.ExtractMediaWithInfo(ctx, client, img, chatJID, messageID, deviceID); err != nil {
+		if _, err := utils.ExtractMediaWithInfo(ctx, client, img, chatJID, messageID, deviceID); err != nil {
 			log.Errorf("Failed to download image: %v", err)
-		} else {
-			log.Infof("Image downloaded to %s", path)
 		}
 	}
 }
@@ -929,15 +802,12 @@ func handleReceipt(ctx context.Context, evt *events.Receipt, chatStorageRepo dom
 	case types.ReceiptTypeRead, types.ReceiptTypeReadSelf:
 		sendReceipt = true
 		status = "read"
-		log.Infof("%v was read by %s at %s: %+v", evt.MessageIDs, evt.SourceString(), evt.Timestamp, evt)
 	case types.ReceiptTypeDelivered:
 		sendReceipt = true
 		status = "delivered"
-		log.Infof("%s was delivered to %s at %s: %+v", evt.MessageIDs[0], evt.SourceString(), evt.Timestamp, evt)
 	case types.ReceiptTypePlayed:
 		sendReceipt = true
 		status = "played"
-		log.Infof("%v was played by %s at %s: %+v", evt.MessageIDs, evt.SourceString(), evt.Timestamp, evt)
 	}
 
 	// Update message status in database for each message ID in the receipt
@@ -966,16 +836,6 @@ func handleReceipt(ctx context.Context, evt *events.Receipt, chatStorageRepo dom
 }
 
 func handlePresence(_ context.Context, evt *events.Presence) {
-	if evt.Unavailable {
-		if evt.LastSeen.IsZero() {
-			log.Infof("%s is now offline", evt.From)
-		} else {
-			log.Infof("%s is now offline (last seen: %s)", evt.From, evt.LastSeen)
-		}
-	} else {
-		log.Infof("%s is now online", evt.From)
-	}
-
 	// Broadcast via SSE for real-time presence updates
 	sse.BroadcastPresenceUpdate(evt.From.String(), !evt.Unavailable, evt.LastSeen)
 }
@@ -1009,7 +869,7 @@ func handleHistorySync(ctx context.Context, evt *events.HistorySync, chatStorage
 		return
 	}
 
-	log.Infof("Wrote history sync to %s", fileName)
+	log.Debugf("Wrote history sync to %s", fileName)
 
 	// Process history sync data to database
 	if chatStorageRepo != nil {
@@ -1030,7 +890,7 @@ func processHistorySync(ctx context.Context, data *waHistorySync.HistorySync, ch
 	}
 
 	syncType := data.GetSyncType()
-	log.Infof("Processing history sync type: %s", syncType.String())
+	log.Debugf("Processing history sync type: %s", syncType.String())
 
 	switch syncType {
 	case waHistorySync.HistorySync_INITIAL_BOOTSTRAP, waHistorySync.HistorySync_RECENT:
@@ -1049,7 +909,7 @@ func processHistorySync(ctx context.Context, data *waHistorySync.HistorySync, ch
 // processConversationMessages processes and stores conversation messages from history sync
 func processConversationMessages(ctx context.Context, data *waHistorySync.HistorySync, chatStorageRepo domainChatStorage.IChatStorageRepository) error {
 	conversations := data.GetConversations()
-	log.Infof("Processing %d conversations from history sync", len(conversations))
+	log.Debugf("Processing %d conversations from history sync", len(conversations))
 
 	client := GetClient()
 
@@ -1206,7 +1066,7 @@ func processConversationMessages(ctx context.Context, data *waHistorySync.Histor
 // processPushNames processes push names from history sync to update chat names
 func processPushNames(ctx context.Context, data *waHistorySync.HistorySync, chatStorageRepo domainChatStorage.IChatStorageRepository) error {
 	pushnames := data.GetPushnames()
-	log.Infof("Processing %d push names from history sync", len(pushnames))
+	log.Debugf("Processing %d push names from history sync", len(pushnames))
 
 	client := GetClient()
 
@@ -1259,16 +1119,16 @@ func handleGroupInfo(ctx context.Context, evt *events.GroupInfo) {
 
 	// Log group events for debugging
 	if len(evt.Join) > 0 {
-		log.Infof("Group %s: %d users joined at %s", evt.JID, len(evt.Join), evt.Timestamp)
+		log.Debugf("Group %s: %d users joined at %s", evt.JID, len(evt.Join), evt.Timestamp)
 	}
 	if len(evt.Leave) > 0 {
-		log.Infof("Group %s: %d users left at %s", evt.JID, len(evt.Leave), evt.Timestamp)
+		log.Debugf("Group %s: %d users left at %s", evt.JID, len(evt.Leave), evt.Timestamp)
 	}
 	if len(evt.Promote) > 0 {
-		log.Infof("Group %s: %d users promoted at %s", evt.JID, len(evt.Promote), evt.Timestamp)
+		log.Debugf("Group %s: %d users promoted at %s", evt.JID, len(evt.Promote), evt.Timestamp)
 	}
 	if len(evt.Demote) > 0 {
-		log.Infof("Group %s: %d users demoted at %s", evt.JID, len(evt.Demote), evt.Timestamp)
+		log.Debugf("Group %s: %d users demoted at %s", evt.JID, len(evt.Demote), evt.Timestamp)
 	}
 
 	// Forward group info event to webhook if configured
