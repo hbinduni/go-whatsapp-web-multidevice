@@ -69,13 +69,15 @@ func handleSSE(c *fiber.Ctx) error {
 				if sseData != "" {
 					_, err := fmt.Fprint(w, sseData)
 					if err != nil {
-						logrus.Errorf("[SSE] Error writing to client %s: %v", client.ID, err)
+						// Debug level: client disconnect is normal (tab close, navigation, refresh)
+						logrus.Debugf("[SSE] Client %s disconnected during write: %v", client.ID, err)
 						hub.Unregister(client.ID)
 						return
 					}
 					err = w.Flush()
 					if err != nil {
-						logrus.Errorf("[SSE] Error flushing to client %s: %v", client.ID, err)
+						// Debug level: client disconnect is normal (tab close, navigation, refresh)
+						logrus.Debugf("[SSE] Client %s disconnected during flush: %v", client.ID, err)
 						hub.Unregister(client.ID)
 						return
 					}
