@@ -171,42 +171,61 @@ func (service *serviceApp) LoginWithCode(ctx context.Context, phoneNumber string
 func (service *serviceApp) Logout(ctx context.Context) (err error) {
 	// [DEBUG] Log database state before logout
 	logrus.Info("[DEBUG] Starting logout process...")
-	devices, dbErr := whatsapp.GetDB().GetAllDevices(ctx)
-	if dbErr != nil {
-		logrus.Errorf("[DEBUG] Error getting devices before logout: %v", dbErr)
-	} else {
-		logrus.Infof("[DEBUG] Devices before logout: %d found", len(devices))
-		for _, device := range devices {
-			logrus.Infof("[DEBUG] Device ID: %s, PushName: %s", device.ID.String(), device.PushName)
+
+	client := whatsapp.GetClient()
+	if client == nil {
+		logrus.Warn("[DEBUG] No client available for logout")
+		return pkgError.ErrWaCLI
+	}
+
+	db := whatsapp.GetDB()
+	if db != nil {
+		devices, dbErr := db.GetAllDevices(ctx)
+		if dbErr != nil {
+			logrus.Errorf("[DEBUG] Error getting devices before logout: %v", dbErr)
+		} else {
+			logrus.Infof("[DEBUG] Devices before logout: %d found", len(devices))
+			for _, device := range devices {
+				logrus.Infof("[DEBUG] Device ID: %s, PushName: %s", device.ID.String(), device.PushName)
+			}
 		}
 	}
 
 	// [DEBUG] Call WhatsApp client logout first to disconnect from server
+	// This notifies WhatsApp servers and marks the device as logged out
 	logrus.Info("[DEBUG] Calling WhatsApp client logout...")
-	err = whatsapp.GetClient().Logout(ctx)
+	err = client.Logout(ctx)
 	if err != nil {
 		logrus.Errorf("[DEBUG] WhatsApp logout failed: %v", err)
-		// Continue with cleanup even if logout fails
+		// Continue with cleanup even if logout fails - the client may already be disconnected
 	} else {
 		logrus.Info("[DEBUG] WhatsApp logout completed successfully")
 	}
 
+	// Wait for logout to fully propagate before checking device state
+	// This gives time for the whatsmeow library to process the logout response
+	time.Sleep(500 * time.Millisecond)
+
 	// [DEBUG] Verify devices after logout
-	devices, dbErr = whatsapp.GetDB().GetAllDevices(ctx)
-	if dbErr != nil {
-		logrus.Errorf("[DEBUG] Error getting devices after logout: %v", dbErr)
-	} else {
-		logrus.Infof("[DEBUG] Devices after logout: %d found", len(devices))
+	db = whatsapp.GetDB() // Re-fetch in case it changed
+	if db != nil {
+		devices, dbErr := db.GetAllDevices(ctx)
+		if dbErr != nil {
+			logrus.Errorf("[DEBUG] Error getting devices after logout: %v", dbErr)
+		} else {
+			logrus.Infof("[DEBUG] Devices after logout: %d found", len(devices))
+		}
 	}
 
 	// Perform complete cleanup with global client synchronization
+	// This includes disconnecting the client, waiting for goroutines, and reinitializing
 	newDB, newCli, err := whatsapp.PerformCleanupAndUpdateGlobals(ctx, "MANUAL_LOGOUT", service.chatStorageRepo)
 	if err != nil {
 		logrus.Errorf("[DEBUG] Cleanup failed: %v", err)
 		return err
 	}
 
-	// Update service references
+	// Update service references (already done by PerformCleanupAndUpdateGlobals, but explicit for clarity)
 	whatsapp.UpdateGlobalClient(newCli, newDB)
 
 	logrus.Info("[DEBUG] Logout process completed successfully")

@@ -81,24 +81,38 @@ func syncKeysDevice(ctx context.Context, db, keysDB *sqlstore.Container) {
 
 	dev, err := db.GetFirstDevice(ctx)
 	if err != nil {
-		log.Errorf("Failed to get all devices: %v", err)
-	} else {
-		found := false
-		if devs, err := keysDB.GetAllDevices(ctx); err != nil {
-			log.Errorf("Failed to get all devices: %v", err)
-		} else {
-			for _, d := range devs {
-				if d.ID == dev.ID {
-					found = true
-					break
-				} else {
-					keysDB.DeleteDevice(ctx, d)
-				}
-			}
+		log.Errorf("Failed to get first device: %v", err)
+		return
+	}
 
-			if !found {
-				keysDB.PutDevice(ctx, dev)
+	if dev == nil || dev.ID == nil {
+		log.Warnf("No device found in primary DB, skipping keysDB sync")
+		return
+	}
+
+	devs, err := keysDB.GetAllDevices(ctx)
+	if err != nil {
+		log.Errorf("Failed to get all devices from keysDB: %v", err)
+		return
+	}
+
+	found := false
+	for _, d := range devs {
+		if d.ID != nil && dev.ID != nil && *d.ID == *dev.ID {
+			found = true
+		} else if d != nil {
+			// Delete old devices from keysDB with error handling
+			// This can fail with FOREIGN KEY constraint if there are pending PreKey operations
+			if err := keysDB.DeleteDevice(ctx, d); err != nil {
+				// Log but don't fail - the device will be cleaned up on next sync
+				log.Warnf("Failed to delete old device %v from keysDB (will retry later): %v", d.ID, err)
 			}
+		}
+	}
+
+	if !found && dev.ID != nil {
+		if err := keysDB.PutDevice(ctx, dev); err != nil {
+			log.Errorf("Failed to put device in keysDB: %v", err)
 		}
 	}
 }
@@ -310,10 +324,28 @@ func CleanupDatabase() error {
 		}
 	}
 
-	// Now remove the main database file
+	// Now remove the main database file and its WAL/SHM files
 	dbPath := strings.TrimPrefix(config.DBURI, "file:")
 	if strings.Contains(dbPath, "?") {
 		dbPath = strings.Split(dbPath, "?")[0]
+	}
+
+	// Remove SQLite WAL and SHM files first (they can hold locks)
+	// These files are created when SQLite is in WAL mode and can prevent
+	// the main database file from being properly released
+	walPath := dbPath + "-wal"
+	shmPath := dbPath + "-shm"
+
+	if err := os.Remove(walPath); err != nil && !os.IsNotExist(err) {
+		logrus.Warnf("[CLEANUP] Error removing WAL file %s: %v", walPath, err)
+	} else if err == nil {
+		logrus.Info("[CLEANUP] WAL file removed successfully")
+	}
+
+	if err := os.Remove(shmPath); err != nil && !os.IsNotExist(err) {
+		logrus.Warnf("[CLEANUP] Error removing SHM file %s: %v", shmPath, err)
+	} else if err == nil {
+		logrus.Info("[CLEANUP] SHM file removed successfully")
 	}
 
 	logrus.Infof("[CLEANUP] Removing main database file: %s", dbPath)
@@ -394,6 +426,13 @@ func PerformCompleteCleanup(ctx context.Context, logPrefix string, chatStorageRe
 	if current := GetClient(); current != nil {
 		current.Disconnect()
 		logrus.Infof("[%s] Client disconnected", logPrefix)
+
+		// CRITICAL: Wait for background goroutines to finish
+		// The whatsmeow client has background goroutines that may still be
+		// processing events and writing to the database after Disconnect().
+		// Without this wait, we get "database is locked" and "sql: database is closed" errors.
+		logrus.Infof("[%s] Waiting for background operations to complete...", logPrefix)
+		time.Sleep(2 * time.Second)
 	}
 
 	// Truncate all chatstorage data before other cleanup
@@ -410,10 +449,24 @@ func PerformCompleteCleanup(ctx context.Context, logPrefix string, chatStorageRe
 		return nil, nil, fmt.Errorf("database cleanup failed: %v", err)
 	}
 
-	// Reinitialize components
-	newDB, newCli, err := ReinitializeWhatsAppComponents(ctx, chatStorageRepo)
+	// Reinitialize components with retry logic for file lock issues
+	var newDB *sqlstore.Container
+	var newCli *whatsmeow.Client
+	var err error
+
+	maxRetries := 3
+	for i := 0; i < maxRetries; i++ {
+		newDB, newCli, err = ReinitializeWhatsAppComponents(ctx, chatStorageRepo)
+		if err == nil {
+			break
+		}
+		logrus.Warnf("[%s] Reinitialization attempt %d/%d failed: %v", logPrefix, i+1, maxRetries, err)
+		if i < maxRetries-1 {
+			time.Sleep(500 * time.Millisecond) // Wait before retry
+		}
+	}
 	if err != nil {
-		return nil, nil, fmt.Errorf("reinitialization failed: %v", err)
+		return nil, nil, fmt.Errorf("reinitialization failed after %d attempts: %v", maxRetries, err)
 	}
 
 	// Clean up temporary files
