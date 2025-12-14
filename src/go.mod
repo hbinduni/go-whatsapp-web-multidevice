@@ -23,7 +23,7 @@ require (
 	github.com/valyala/fasthttp v1.68.0
 	go.mau.fi/whatsmeow v0.0.0-20251205211405-fd6170ac96e5
 	golang.org/x/image v0.34.0
-	google.golang.org/protobuf v1.36.10
+	google.golang.org/protobuf v1.36.11
 )
 
 require (
