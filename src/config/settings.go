@@ -45,6 +45,12 @@ var (
 	ChatStorageEnableForeignKeys = true
 	ChatStorageEnableWAL         = true
 
+	// History Sync Configuration
+	HistorySyncEnabled          = true   // Enable or disable history sync processing
+	HistorySyncOnLogin          = true   // Automatically process history sync on login
+	HistorySyncMaxDays    int32 = 90     // Maximum days of history to process (default 90 days = 3 months)
+	                                      // Options: 90 (3 months), 365 (1 year), 730 (2 years), 1095 (3 years), -1 (all available)
+
 	// Media Storage Configuration
 	MediaStorageType = "local" // "local" or "s3"
 

@@ -871,6 +871,12 @@ func handlePresence(ctx context.Context, evt *events.Presence) {
 }
 
 func handleHistorySync(ctx context.Context, evt *events.HistorySync, chatStorageRepo domainChatStorage.IChatStorageRepository) {
+	// Check if history sync is enabled
+	if !config.HistorySyncEnabled {
+		log.Debugf("History sync is disabled, skipping sync type: %s", evt.Data.SyncType.String())
+		return
+	}
+
 	client := GetClient()
 	if client == nil || client.Store == nil || client.Store.ID == nil {
 		log.Warnf("Skipping history sync handling: WhatsApp client not initialized")
@@ -899,7 +905,7 @@ func handleHistorySync(ctx context.Context, evt *events.HistorySync, chatStorage
 		return
 	}
 
-	log.Debugf("Wrote history sync to %s", fileName)
+	log.Infof("Wrote history sync to %s (type: %s)", fileName, evt.Data.SyncType.String())
 
 	// Process history sync data to database
 	if chatStorageRepo != nil {
@@ -939,7 +945,17 @@ func processHistorySync(ctx context.Context, data *waHistorySync.HistorySync, ch
 // processConversationMessages processes and stores conversation messages from history sync
 func processConversationMessages(ctx context.Context, data *waHistorySync.HistorySync, chatStorageRepo domainChatStorage.IChatStorageRepository) error {
 	conversations := data.GetConversations()
-	log.Debugf("Processing %d conversations from history sync", len(conversations))
+	log.Infof("Processing %d conversations from history sync", len(conversations))
+
+	// Calculate cutoff time based on configuration
+	var cutoffTime time.Time
+	if config.HistorySyncMaxDays > 0 {
+		cutoffTime = time.Now().AddDate(0, 0, -int(config.HistorySyncMaxDays))
+		log.Infof("History sync filtering: only messages after %s will be processed (max %d days)",
+			cutoffTime.Format("2006-01-02"), config.HistorySyncMaxDays)
+	} else if config.HistorySyncMaxDays == -1 {
+		log.Infof("History sync filtering: processing all available messages (no time limit)")
+	}
 
 	client := GetClient()
 
@@ -1040,6 +1056,11 @@ func processConversationMessages(ctx context.Context, data *waHistorySync.Histor
 			// Convert timestamp from Unix seconds to time.Time
 			// WhatsApp history sync timestamps are in seconds, not milliseconds
 			timestamp := time.Unix(int64(msg.GetMessageTimestamp()), 0)
+
+			// Skip messages outside configured time range
+			if config.HistorySyncMaxDays > 0 && timestamp.Before(cutoffTime) {
+				continue
+			}
 
 			// Track latest timestamp
 			if timestamp.After(latestTimestamp) {

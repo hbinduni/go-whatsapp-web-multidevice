@@ -106,6 +106,7 @@ func restServer(_ *cobra.Command, _ []string) {
 	rest.InitRestMessage(apiGroup, messageUsecase)
 	rest.InitRestGroup(apiGroup, groupUsecase)
 	rest.InitRestNewsletter(apiGroup, newsletterUsecase)
+	rest.InitRestHistory(apiGroup, historyUsecase)
 	rest.InitRestMedia(apiGroup) // Media download endpoint for private S3 buckets
 
 	apiGroup.Get("/", func(c *fiber.Ctx) error {
