@@ -170,10 +170,10 @@ github.com/yosida95/uritemplate/v3 v3.0.2/go.mod h1:ILOh0sOhIJR3+L/8afwt/kE++YT0
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
 go.mau.fi/libsignal v0.2.1 h1:vRZG4EzTn70XY6Oh/pVKrQGuMHBkAWlGRC22/85m9L0=
 go.mau.fi/libsignal v0.2.1/go.mod h1:iVvjrHyfQqWajOUaMEsIfo3IqgVMrhWcPiiEzk7NgoU=
-go.mau.fi/util v0.9.3 h1:aqNF8KDIN8bFpFbybSk+mEBil7IHeBwlujfyTnvP0uU=
-go.mau.fi/util v0.9.3/go.mod h1:krWWfBM1jWTb5f8NCa2TLqWMQuM81X7TGQjhMjBeXmQ=
-go.mau.fi/whatsmeow v0.0.0-20251205211405-fd6170ac96e5 h1:ld9iMjQ2PxZtsrbq2vFsFPf6qDhiON3DiEipQEPI8hA=
-go.mau.fi/whatsmeow v0.0.0-20251205211405-fd6170ac96e5/go.mod h1:5aYaEa3FF5e5XWsA8Xa80ttUXZvb6HyaBGgo2SfzUkE=
+go.mau.fi/util v0.9.4 h1:gWdUff+K2rCynRPysXalqqQyr2ahkSWaestH6YhSpso=
+go.mau.fi/util v0.9.4/go.mod h1:647nVfwUvuhlZFOnro3aRNPmRd2y3iDha9USb8aKSmM=
+go.mau.fi/whatsmeow v0.0.0-20251216102424-56a8e44b0cec h1:pNU+bpMGDodCJt6ufF1ImhuuBgzut4kaHklU7tey2g0=
+go.mau.fi/whatsmeow v0.0.0-20251216102424-56a8e44b0cec/go.mod h1:S4OWR9+hTx+54+jRzl+NfRBXnGpPm5IRPyhXB7haSd0=
 go.yaml.in/yaml/v3 v3.0.4 h1:tfq32ie2Jv2UxXFdLJdh3jXuOzWiL1fo0bu/FbuKpbc=
 go.yaml.in/yaml/v3 v3.0.4/go.mod h1:DhzuOOF2ATzADvBadXxruRBLzYTpT36CKvDb3+aBEFg=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=

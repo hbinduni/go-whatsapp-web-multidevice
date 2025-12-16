@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"fmt"
 
 	domainHistory "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/history"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -56,19 +57,20 @@ func (h *HistoryHandler) handleGetHistoryStatus(ctx context.Context, request mcp
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	return mcp.NewToolResultText(formatJSON(status)), nil
+	fallback := fmt.Sprintf("History sync enabled: %v, max days: %d", status.Enabled, status.MaxDays)
+	return mcp.NewToolResultStructured(status, fallback), nil
 }
 
 func (h *HistoryHandler) handleRequestHistorySync(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var req domainHistory.HistorySyncRequest
 
 	// Parse optional chat_jid
-	if chatJID, ok := request.Params.Arguments["chat_jid"].(string); ok {
+	if chatJID, ok := request.GetArguments()["chat_jid"].(string); ok {
 		req.ChatJID = chatJID
 	}
 
 	// Parse optional max_days
-	if maxDays, ok := request.Params.Arguments["max_days"].(float64); ok {
+	if maxDays, ok := request.GetArguments()["max_days"].(float64); ok {
 		req.MaxDays = int32(maxDays)
 	}
 
@@ -77,5 +79,6 @@ func (h *HistoryHandler) handleRequestHistorySync(ctx context.Context, request m
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	return mcp.NewToolResultText(formatJSON(response)), nil
+	fallback := fmt.Sprintf("History sync request: %s", response.Status)
+	return mcp.NewToolResultStructured(response, fallback), nil
 }

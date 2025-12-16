@@ -21,7 +21,7 @@ require (
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
 	github.com/valyala/fasthttp v1.68.0
-	go.mau.fi/whatsmeow v0.0.0-20251205211405-fd6170ac96e5
+	go.mau.fi/whatsmeow v0.0.0-20251216102424-56a8e44b0cec
 	golang.org/x/image v0.34.0
 	google.golang.org/protobuf v1.36.11
 )
@@ -77,7 +77,7 @@ require (
 	github.com/xyproto/randomstring v1.2.0 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	go.mau.fi/libsignal v0.2.1 // indirect
-	go.mau.fi/util v0.9.3 // indirect
+	go.mau.fi/util v0.9.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.46.0 // indirect
 	golang.org/x/exp v0.0.0-20251209150349-8475f28825e9 // indirect
