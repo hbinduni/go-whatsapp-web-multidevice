@@ -15,6 +15,7 @@ import (
 	domainChat "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/chat"
 	domainChatStorage "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/chatstorage"
 	domainGroup "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/group"
+	domainHistory "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/history"
 	domainMessage "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/message"
 	domainNewsletter "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/newsletter"
 	domainSend "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/send"
@@ -51,6 +52,7 @@ var (
 	messageUsecase    domainMessage.IMessageUsecase
 	groupUsecase      domainGroup.IGroupUsecase
 	newsletterUsecase domainNewsletter.INewsletterUsecase
+	historyUsecase    domainHistory.IHistoryUsecase
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -143,6 +145,17 @@ func initEnvConfig() {
 	}
 	if viper.IsSet("whatsapp_account_validation") {
 		config.WhatsappAccountValidation = viper.GetBool("whatsapp_account_validation")
+	}
+
+	// History Sync settings
+	if viper.IsSet("whatsapp_history_sync_enabled") {
+		config.HistorySyncEnabled = viper.GetBool("whatsapp_history_sync_enabled")
+	}
+	if viper.IsSet("whatsapp_history_sync_on_login") {
+		config.HistorySyncOnLogin = viper.GetBool("whatsapp_history_sync_on_login")
+	}
+	if viper.IsSet("whatsapp_history_sync_max_days") {
+		config.HistorySyncMaxDays = viper.GetInt32("whatsapp_history_sync_max_days")
 	}
 
 	// Media Storage settings
@@ -369,6 +382,7 @@ func initApp() {
 	messageUsecase = usecase.NewMessageService(chatStorageRepo)
 	groupUsecase = usecase.NewGroupService()
 	newsletterUsecase = usecase.NewNewsletterService()
+	historyUsecase = usecase.NewHistoryService()
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
