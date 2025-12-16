@@ -106,6 +106,34 @@ func NormalizeJIDFromLID(ctx context.Context, jid types.JID, client *whatsmeow.C
 	return jid
 }
 
+// NormalizeJIDString converts a JID string from @lid format to @s.whatsapp.net format
+// Uses the global WhatsApp client for LID resolution
+// Returns the original string if conversion fails or JID is not an @lid
+func NormalizeJIDString(ctx context.Context, jidStr string) string {
+	// Quick check - if not @lid, return as-is
+	if !strings.HasSuffix(jidStr, "@lid") {
+		return jidStr
+	}
+
+	// Parse the JID string
+	jid, err := types.ParseJID(jidStr)
+	if err != nil {
+		log.Debugf("Failed to parse JID string %s: %v", jidStr, err)
+		return jidStr
+	}
+
+	// Get the global client
+	client := GetClient()
+	if client == nil {
+		log.Debugf("Cannot normalize JID %s: no WhatsApp client available", jidStr)
+		return jidStr
+	}
+
+	// Normalize and return
+	normalizedJID := NormalizeJIDFromLID(ctx, jid, client)
+	return normalizedJID.String()
+}
+
 func syncKeysDevice(ctx context.Context, db, keysDB *sqlstore.Container) {
 	if keysDB == nil {
 		return

@@ -90,6 +90,17 @@ func (service serviceChat) GetChatMessages(ctx context.Context, request domainCh
 		return response, err
 	}
 
+	// Normalize JID from @lid to @s.whatsapp.net if needed
+	// This ensures queries match messages stored with normalized JIDs
+	normalizedJID := whatsapp.NormalizeJIDString(ctx, request.ChatJID)
+	if normalizedJID != request.ChatJID {
+		logrus.WithFields(logrus.Fields{
+			"original_jid":   request.ChatJID,
+			"normalized_jid": normalizedJID,
+		}).Debug("Normalized LID to phone number JID for chat query")
+		request.ChatJID = normalizedJID
+	}
+
 	// Get chat info first
 	chat, err := service.chatStorageRepo.GetChat(request.ChatJID)
 	if err != nil {
