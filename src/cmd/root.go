@@ -77,8 +77,8 @@ you can send whatsapp over http api but your whatsapp account have to be multi d
 }
 
 func init() {
-	// Load environment variables first
-	utils.LoadConfig(".")
+	// Load environment variables first (ignore error as .env is optional)
+	_ = utils.LoadConfig(".")
 
 	time.Local = time.UTC
 
@@ -340,7 +340,9 @@ func initApp() {
 	}
 
 	chatStorageRepo = chatstorage.NewStorageRepository(chatStorageDB)
-	chatStorageRepo.InitializeSchema()
+	if err := chatStorageRepo.InitializeSchema(); err != nil {
+		logrus.Fatalf("failed to initialize chat storage schema: %v", err)
+	}
 
 	whatsappDB := whatsapp.InitWaDB(ctx, config.DBURI)
 	var keysDB *sqlstore.Container

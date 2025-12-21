@@ -14,25 +14,25 @@ type Chat struct {
 
 // Message represents a WhatsApp message
 type Message struct {
-	ID            string    `db:"id"`
-	ChatJID       string    `db:"chat_jid"`
-	Sender        string    `db:"sender"`
-	Content       string    `db:"content"`
-	Timestamp     time.Time `db:"timestamp"`
-	IsFromMe      bool      `db:"is_from_me"`
-	MediaType     string    `db:"media_type"`
-	Filename      string    `db:"filename"`
-	URL           string    `db:"url"`
-	MediaKey      []byte    `db:"media_key"`
-	FileSHA256    []byte    `db:"file_sha256"`
-	FileEncSHA256 []byte    `db:"file_enc_sha256"`
-	FileLength    uint64    `db:"file_length"`
-	Status        string    `db:"status"`         // Message status: sent, delivered, read, played
+	ID            string     `db:"id"`
+	ChatJID       string     `db:"chat_jid"`
+	Sender        string     `db:"sender"`
+	Content       string     `db:"content"`
+	Timestamp     time.Time  `db:"timestamp"`
+	IsFromMe      bool       `db:"is_from_me"`
+	MediaType     string     `db:"media_type"`
+	Filename      string     `db:"filename"`
+	URL           string     `db:"url"`
+	MediaKey      []byte     `db:"media_key"`
+	FileSHA256    []byte     `db:"file_sha256"`
+	FileEncSHA256 []byte     `db:"file_enc_sha256"`
+	FileLength    uint64     `db:"file_length"`
+	Status        string     `db:"status"`       // Message status: sent, delivered, read, played
 	DeliveredAt   *time.Time `db:"delivered_at"` // When message was delivered
 	ReadAt        *time.Time `db:"read_at"`      // When message was read
 	PlayedAt      *time.Time `db:"played_at"`    // When view-once message was played
-	CreatedAt     time.Time `db:"created_at"`
-	UpdatedAt     time.Time `db:"updated_at"`
+	CreatedAt     time.Time  `db:"created_at"`
+	UpdatedAt     time.Time  `db:"updated_at"`
 }
 
 // MediaInfo represents downloadable media information

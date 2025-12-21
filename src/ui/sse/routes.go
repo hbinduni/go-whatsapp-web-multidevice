@@ -107,8 +107,8 @@ func handleSSE(c *fiber.Ctx) error {
 func handleSSEStatus(c *fiber.Ctx) error {
 	hub := GetHub()
 	return c.JSON(fiber.Map{
-		"status":        "ok",
-		"client_count":  hub.ClientCount(),
-		"server_time":   time.Now(),
+		"status":       "ok",
+		"client_count": hub.ClientCount(),
+		"server_time":  time.Now(),
 	})
 }

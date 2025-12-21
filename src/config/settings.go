@@ -5,8 +5,8 @@ import (
 )
 
 var (
-	AppVersion             = "v7.11.0"      // Upstream version from aldinokemal
-	AppForkVersion         = "v1.2.3-sse"   // Fork version (binduni's version)
+	AppVersion             = "v7.11.0"    // Upstream version from aldinokemal
+	AppForkVersion         = "v1.2.4-sse" // Fork version (binduni's version)
 	AppPort                = "3000"
 	AppDebug               = false
 	AppOs                  = "AldinoKemal"
@@ -46,10 +46,10 @@ var (
 	ChatStorageEnableWAL         = true
 
 	// History Sync Configuration
-	HistorySyncEnabled          = true   // Enable or disable history sync processing
-	HistorySyncOnLogin          = true   // Automatically process history sync on login
-	HistorySyncMaxDays    int32 = 90     // Maximum days of history to process (default 90 days = 3 months)
-	                                      // Options: 90 (3 months), 365 (1 year), 730 (2 years), 1095 (3 years), -1 (all available)
+	HistorySyncEnabled       = true // Enable or disable history sync processing
+	HistorySyncOnLogin       = true // Automatically process history sync on login
+	HistorySyncMaxDays int32 = 90   // Maximum days of history to process (default 90 days = 3 months)
+	// Options: 90 (3 months), 365 (1 year), 730 (2 years), 1095 (3 years), -1 (all available)
 
 	// Media Storage Configuration
 	MediaStorageType = "local" // "local" or "s3"

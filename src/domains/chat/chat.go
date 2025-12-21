@@ -64,7 +64,7 @@ type MessageInfo struct {
 	Filename    string  `json:"filename"`
 	URL         string  `json:"url"`
 	FileLength  uint64  `json:"file_length"`
-	Status      string  `json:"status"`                // Message status: sent, delivered, read, played
+	Status      string  `json:"status"`                 // Message status: sent, delivered, read, played
 	DeliveredAt *string `json:"delivered_at,omitempty"` // When message was delivered
 	ReadAt      *string `json:"read_at,omitempty"`      // When message was read
 	PlayedAt    *string `json:"played_at,omitempty"`    // When view-once message was played

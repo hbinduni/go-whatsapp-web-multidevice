@@ -52,11 +52,26 @@ func (service serviceChat) ListChats(ctx context.Context, request domainChat.Lis
 		totalCount = 0
 	}
 
-	// Convert entities to domain objects
+	// Convert entities to domain objects with JID normalization and deduplication
+	// Use a map to deduplicate chats after normalization (same contact may have @lid and @s.whatsapp.net entries)
+	seenJIDs := make(map[string]bool)
 	chatInfos := make([]domainChat.ChatInfo, 0, len(chats))
 	for _, chat := range chats {
+		// Normalize JID from @lid to @s.whatsapp.net if possible
+		normalizedJID := whatsapp.NormalizeJIDString(ctx, chat.JID)
+
+		// Skip duplicates (keep the first one which has most recent last_message_time due to ORDER BY)
+		if seenJIDs[normalizedJID] {
+			logrus.WithFields(logrus.Fields{
+				"original_jid":   chat.JID,
+				"normalized_jid": normalizedJID,
+			}).Debug("Skipping duplicate chat after JID normalization")
+			continue
+		}
+		seenJIDs[normalizedJID] = true
+
 		chatInfo := domainChat.ChatInfo{
-			JID:                 chat.JID,
+			JID:                 normalizedJID,
 			Name:                chat.Name,
 			LastMessageTime:     chat.LastMessageTime.Format(time.RFC3339),
 			EphemeralExpiration: chat.EphemeralExpiration,

@@ -11,14 +11,14 @@ type HistorySyncRequest struct {
 
 // HistorySyncResponse represents the response from a history sync operation
 type HistorySyncResponse struct {
-	Status           string    `json:"status"`
-	Message          string    `json:"message"`
-	ChatJID          string    `json:"chat_jid,omitempty"`
-	RequestedAt      time.Time `json:"requested_at"`
-	MaxDays          int32     `json:"max_days"`
-	MessageCount     int       `json:"message_count,omitempty"`
-	SyncType         string    `json:"sync_type,omitempty"`
-	EstimatedCutoff  time.Time `json:"estimated_cutoff,omitempty"`
+	Status          string    `json:"status"`
+	Message         string    `json:"message"`
+	ChatJID         string    `json:"chat_jid,omitempty"`
+	RequestedAt     time.Time `json:"requested_at"`
+	MaxDays         int32     `json:"max_days"`
+	MessageCount    int       `json:"message_count,omitempty"`
+	SyncType        string    `json:"sync_type,omitempty"`
+	EstimatedCutoff time.Time `json:"estimated_cutoff,omitempty"`
 }
 
 // HistorySyncStatusResponse represents the status of history sync configuration

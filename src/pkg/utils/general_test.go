@@ -94,7 +94,7 @@ func (suite *UtilsTestSuite) TestStrToFloat64() {
 func (suite *UtilsTestSuite) TestGetMetaDataFromURL() {
 	// Use httptest.NewServer to mock HTTP server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`<!DOCTYPE html><html><head><title>Test Title</title><meta name='description' content='Test Description'><meta property='og:image' content='http://example.com/image.jpg'></head><body></body></html>`))
+		_, _ = w.Write([]byte(`<!DOCTYPE html><html><head><title>Test Title</title><meta name='description' content='Test Description'><meta property='og:image' content='http://example.com/image.jpg'></head><body></body></html>`))
 	}))
 	defer server.Close() // Ensure the server is closed when the test ends
 
@@ -108,7 +108,7 @@ func (suite *UtilsTestSuite) TestGetMetaDataFromURL() {
 func (suite *UtilsTestSuite) TestGetMetaDataFromURLEdgeCases() {
 	// Test with OG title and Twitter image
 	server1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`<!DOCTYPE html><html><head><meta property='og:title' content='OG Title'><meta name='twitter:image' content='relative-image.jpg'></head><body></body></html>`))
+		_, _ = w.Write([]byte(`<!DOCTYPE html><html><head><meta property='og:title' content='OG Title'><meta name='twitter:image' content='relative-image.jpg'></head><body></body></html>`))
 	}))
 	defer server1.Close()
 
@@ -119,7 +119,7 @@ func (suite *UtilsTestSuite) TestGetMetaDataFromURLEdgeCases() {
 
 	// Test with empty title falling back to title tag
 	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`<!DOCTYPE html><html><head><title>Fallback Title</title><meta property='og:title' content=''></head><body></body></html>`))
+		_, _ = w.Write([]byte(`<!DOCTYPE html><html><head><title>Fallback Title</title><meta property='og:title' content=''></head><body></body></html>`))
 	}))
 	defer server2.Close()
 
@@ -144,7 +144,7 @@ func (suite *UtilsTestSuite) TestGetMetaDataFromURLEdgeCases() {
 
 	// Test malformed HTML
 	malformedServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`<html><head><title>Test</title></head><invalid-html>`))
+		_, _ = w.Write([]byte(`<html><head><title>Test</title></head><invalid-html>`))
 	}))
 	defer malformedServer.Close()
 
@@ -155,7 +155,7 @@ func (suite *UtilsTestSuite) TestGetMetaDataFromURLEdgeCases() {
 	// Test timeout with slow server
 	slowServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(20 * time.Second) // Longer than client timeout
-		w.Write([]byte("slow response"))
+		_, _ = w.Write([]byte("slow response"))
 	}))
 	defer slowServer.Close()
 
@@ -179,9 +179,9 @@ func (suite *UtilsTestSuite) TestGetMetaDataFromURLEdgeCases() {
 		if r.URL.Path == "/invalid.jpg" {
 			// Serve content with image content type but invalid image data
 			w.Header().Set("Content-Type", "image/jpeg")
-			w.Write([]byte("invalid image data"))
+			_, _ = w.Write([]byte("invalid image data"))
 		} else {
-			w.Write([]byte(`<!DOCTYPE html><html><head><title>Image Test</title><meta property='og:image' content='` + imageServerURL + `/invalid.jpg'></head><body></body></html>`))
+			_, _ = w.Write([]byte(`<!DOCTYPE html><html><head><title>Image Test</title><meta property='og:image' content='` + imageServerURL + `/invalid.jpg'></head><body></body></html>`))
 		}
 	}))
 	imageServerURL = imageServer.URL
@@ -199,7 +199,7 @@ func (suite *UtilsTestSuite) TestDownloadImageFromURL() {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/image.jpg" {
 			w.Header().Set("Content-Type", "image/jpeg") // Set content type to image
-			w.Write([]byte("image data"))
+			_, _ = w.Write([]byte("image data"))
 		} else {
 			http.NotFound(w, r)
 		}
@@ -336,7 +336,7 @@ func (suite *UtilsTestSuite) TestDownloadImageFromURLEdgeCases() {
 	// Test non-image content type
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte("not an image"))
+		_, _ = w.Write([]byte("not an image"))
 	}))
 	defer server.Close()
 
@@ -358,7 +358,7 @@ func (suite *UtilsTestSuite) TestDownloadImageFromURLEdgeCases() {
 	extServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/image.gif" {
 			w.Header().Set("Content-Type", "image/gif")
-			w.Write([]byte("gif data"))
+			_, _ = w.Write([]byte("gif data"))
 		}
 	}))
 	defer extServer.Close()
@@ -377,7 +377,7 @@ func (suite *UtilsTestSuite) TestDownloadImageFromURLEdgeCases() {
 		} else if strings.HasSuffix(path, ".webp") {
 			w.Header().Set("Content-Type", "image/webp")
 		}
-		w.Write([]byte("valid image data"))
+		_, _ = w.Write([]byte("valid image data"))
 	}))
 	defer validExtServer.Close()
 
@@ -388,17 +388,17 @@ func (suite *UtilsTestSuite) TestDownloadImageFromURLEdgeCases() {
 	assert.Equal(suite.T(), []byte("valid image data"), data)
 
 	// Test .png
-	data, filename, err = utils.DownloadImageFromURL(validExtServer.URL + "/test.png")
+	_, filename, err = utils.DownloadImageFromURL(validExtServer.URL + "/test.png")
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "test.png", filename)
 
 	// Test .webp
-	data, filename, err = utils.DownloadImageFromURL(validExtServer.URL + "/test.webp")
+	_, filename, err = utils.DownloadImageFromURL(validExtServer.URL + "/test.webp")
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "test.webp", filename)
 
 	// Test filename extraction with query parameters
-	data, filename, err = utils.DownloadImageFromURL(validExtServer.URL + "/test.jpg?v=1&size=large")
+	_, filename, err = utils.DownloadImageFromURL(validExtServer.URL + "/test.jpg?v=1&size=large")
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "test.jpg", filename)
 }
@@ -416,26 +416,26 @@ func (suite *UtilsTestSuite) TestDownloadAudioFromURL() {
 		path := r.URL.Path
 		if path == "/test.mp3" {
 			w.Header().Set("Content-Type", "audio/mpeg")
-			w.Write([]byte("audio data"))
+			_, _ = w.Write([]byte("audio data"))
 		} else if path == "/test.wav" {
 			w.Header().Set("Content-Type", "audio/wav")
-			w.Write([]byte("wav audio data"))
+			_, _ = w.Write([]byte("wav audio data"))
 		} else if path == "/test.ogg" {
 			w.Header().Set("Content-Type", "audio/ogg")
-			w.Write([]byte("ogg audio data"))
+			_, _ = w.Write([]byte("ogg audio data"))
 		} else if path == "/test.m4a" {
 			w.Header().Set("Content-Type", "audio/m4a")
-			w.Write([]byte("m4a audio data"))
+			_, _ = w.Write([]byte("m4a audio data"))
 		} else if path == "/large.mp3" {
 			w.Header().Set("Content-Type", "audio/mpeg")
 			w.Header().Set("Content-Length", "2097152") // 2MB
-			w.Write([]byte("large audio"))
+			_, _ = w.Write([]byte("large audio"))
 		} else if path == "/invalid.mp3" {
 			w.Header().Set("Content-Type", "text/html")
-			w.Write([]byte("not audio"))
+			_, _ = w.Write([]byte("not audio"))
 		} else if path == "/no-filename/" {
 			w.Header().Set("Content-Type", "audio/mpeg")
-			w.Write([]byte("audio without filename"))
+			_, _ = w.Write([]byte("audio without filename"))
 		}
 	}))
 	defer server.Close()
@@ -447,17 +447,17 @@ func (suite *UtilsTestSuite) TestDownloadAudioFromURL() {
 	assert.Equal(suite.T(), []byte("audio data"), data)
 
 	// Test valid WAV download
-	data, filename, err = utils.DownloadAudioFromURL(server.URL + "/test.wav")
+	_, filename, err = utils.DownloadAudioFromURL(server.URL + "/test.wav")
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "test.wav", filename)
 
 	// Test valid OGG download
-	data, filename, err = utils.DownloadAudioFromURL(server.URL + "/test.ogg")
+	_, filename, err = utils.DownloadAudioFromURL(server.URL + "/test.ogg")
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "test.ogg", filename)
 
 	// Test valid M4A download
-	data, filename, err = utils.DownloadAudioFromURL(server.URL + "/test.m4a")
+	_, filename, err = utils.DownloadAudioFromURL(server.URL + "/test.m4a")
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "test.m4a", filename)
 
@@ -488,7 +488,7 @@ func (suite *UtilsTestSuite) TestDownloadAudioFromURL() {
 	assert.Equal(suite.T(), []byte("audio without filename"), data)
 
 	// Test URL with query parameters
-	data, filename, err = utils.DownloadAudioFromURL(server.URL + "/test.mp3?v=1&quality=high")
+	_, filename, err = utils.DownloadAudioFromURL(server.URL + "/test.mp3?v=1&quality=high")
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "test.mp3", filename)
 
@@ -520,23 +520,23 @@ func (suite *UtilsTestSuite) TestDownloadVideoFromURL() {
 		path := r.URL.Path
 		if path == "/test.mp4" {
 			w.Header().Set("Content-Type", "video/mp4")
-			w.Write([]byte("video data"))
+			_, _ = w.Write([]byte("video data"))
 		} else if path == "/test.mkv" {
 			w.Header().Set("Content-Type", "video/x-matroska")
-			w.Write([]byte("mkv video data"))
+			_, _ = w.Write([]byte("mkv video data"))
 		} else if path == "/test.avi" {
 			w.Header().Set("Content-Type", "video/avi")
-			w.Write([]byte("avi video data"))
+			_, _ = w.Write([]byte("avi video data"))
 		} else if path == "/large.mp4" {
 			w.Header().Set("Content-Type", "video/mp4")
 			w.Header().Set("Content-Length", "2097152") // 2MB
-			w.Write([]byte("large video"))
+			_, _ = w.Write([]byte("large video"))
 		} else if path == "/invalid.mp4" {
 			w.Header().Set("Content-Type", "text/html")
-			w.Write([]byte("not video"))
+			_, _ = w.Write([]byte("not video"))
 		} else if path == "/no-filename/" {
 			w.Header().Set("Content-Type", "video/mp4")
-			w.Write([]byte("video without filename"))
+			_, _ = w.Write([]byte("video without filename"))
 		}
 	}))
 	defer server.Close()
@@ -548,12 +548,12 @@ func (suite *UtilsTestSuite) TestDownloadVideoFromURL() {
 	assert.Equal(suite.T(), []byte("video data"), data)
 
 	// Test valid MKV download
-	data, filename, err = utils.DownloadVideoFromURL(server.URL + "/test.mkv")
+	_, filename, err = utils.DownloadVideoFromURL(server.URL + "/test.mkv")
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "test.mkv", filename)
 
 	// Test valid AVI download
-	data, filename, err = utils.DownloadVideoFromURL(server.URL + "/test.avi")
+	_, filename, err = utils.DownloadVideoFromURL(server.URL + "/test.avi")
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "test.avi", filename)
 
@@ -585,7 +585,7 @@ func (suite *UtilsTestSuite) TestDownloadVideoFromURL() {
 	assert.Equal(suite.T(), []byte("video without filename"), data)
 
 	// Test URL with query parameters
-	data, filename, err = utils.DownloadVideoFromURL(server.URL + "/test.mp4?v=1&quality=hd")
+	_, filename, err = utils.DownloadVideoFromURL(server.URL + "/test.mp4?v=1&quality=hd")
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "test.mp4", filename)
 

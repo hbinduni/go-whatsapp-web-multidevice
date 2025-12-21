@@ -669,27 +669,6 @@ func handleMessage(ctx context.Context, evt *events.Message, chatStorageRepo dom
 	handleWebhookForward(ctx, evt)
 }
 
-func handleImageMessage(ctx context.Context, evt *events.Message) {
-	if !config.WhatsappAutoDownloadMedia {
-		return
-	}
-	client := GetClient()
-	if client == nil {
-		return
-	}
-	if img := evt.Message.GetImageMessage(); img != nil {
-		deviceID := client.Store.ID.User
-		// Normalize JID to ensure consistent file paths (convert @lid to @s.whatsapp.net)
-		normalizedChatJID := NormalizeJIDFromLID(ctx, evt.Info.Chat, client)
-		chatJID := normalizedChatJID.String()
-		messageID := evt.Info.ID
-
-		if _, err := utils.ExtractMediaWithInfo(ctx, client, img, chatJID, messageID, deviceID); err != nil {
-			log.Errorf("Failed to download image: %v", err)
-		}
-	}
-}
-
 func handleAutoMarkRead(_ context.Context, evt *events.Message) {
 	// Only mark read if auto-mark read is enabled and message is incoming
 	if !config.WhatsappAutoMarkRead || evt.Info.IsFromMe {

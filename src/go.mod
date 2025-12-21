@@ -21,7 +21,7 @@ require (
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
 	github.com/valyala/fasthttp v1.68.0
-	go.mau.fi/whatsmeow v0.0.0-20251216102424-56a8e44b0cec
+	go.mau.fi/whatsmeow v0.0.0-20251217143725-11cf47c62d32
 	golang.org/x/image v0.34.0
 	google.golang.org/protobuf v1.36.11
 )
@@ -80,7 +80,7 @@ require (
 	go.mau.fi/util v0.9.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.46.0 // indirect
-	golang.org/x/exp v0.0.0-20251209150349-8475f28825e9 // indirect
+	golang.org/x/exp v0.0.0-20251219203646-944ab1f22d93 // indirect
 	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
 	golang.org/x/text v0.32.0 // indirect

@@ -15,16 +15,16 @@ type EventType string
 
 const (
 	// Message events
-	EventMessageReceived    EventType = "message_received"
-	EventMessageSent        EventType = "message_sent"
+	EventMessageReceived     EventType = "message_received"
+	EventMessageSent         EventType = "message_sent"
 	EventMessageStatusUpdate EventType = "message_status_update"
-	EventMessageDeleted     EventType = "message_deleted"
-	EventMessageRevoked     EventType = "message_revoked"
+	EventMessageDeleted      EventType = "message_deleted"
+	EventMessageRevoked      EventType = "message_revoked"
 
 	// Chat events
-	EventChatUpdated   EventType = "chat_updated"
-	EventChatCreated   EventType = "chat_created"
-	EventHistorySync   EventType = "history_sync"
+	EventChatUpdated EventType = "chat_updated"
+	EventChatCreated EventType = "chat_created"
+	EventHistorySync EventType = "history_sync"
 
 	// Connection events
 	EventConnectionStatus EventType = "connection_status"

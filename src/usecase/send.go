@@ -427,7 +427,9 @@ func (service serviceSend) SendVideo(ctx context.Context, request domainSend.Vid
 	defer func() {
 		if len(deletedItems) > 0 {
 			// Run cleanup in background with slight delay to avoid race with open handles
-			go utils.RemoveFile(1, deletedItems...)
+			go func() {
+				_ = utils.RemoveFile(1, deletedItems...)
+			}()
 		}
 	}()
 

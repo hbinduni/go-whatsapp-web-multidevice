@@ -146,7 +146,7 @@ func (r *SQLiteRepository) DeleteChat(jid string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Delete messages first (foreign key constraint)
 	_, err = tx.Exec("DELETE FROM messages WHERE chat_jid = ?", jid)
@@ -223,7 +223,7 @@ func (r *SQLiteRepository) StoreMessagesBatch(messages []*domainChatStorage.Mess
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Prepare the statement once for better performance
 	stmt, err := tx.Prepare(`
@@ -463,7 +463,7 @@ func (r *SQLiteRepository) TruncateAllChats() error {
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Delete messages first (foreign key constraint)
 	_, err = tx.Exec("DELETE FROM messages")
@@ -821,7 +821,7 @@ func (r *SQLiteRepository) runMigration(migration string, version int) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Execute migration
 	if _, err := tx.Exec(migration); err != nil {

@@ -6,7 +6,7 @@
 SHELL := /bin/bash
 export PATH := /usr/local/go/bin:$(PATH)
 
-.PHONY: help build run run-rest run-mcp run-debug run-rest-debug run-mcp-debug test clean install update-deps fmt vet lint docker-build docker-up docker-down docker-logs docker-login-ghcr docker-build-image docker-push-ghcr docker-release docker-tag tidy check dev-rest dev-mcp docker-build-backup docker-push-backup docker-release-backup
+.PHONY: help build run run-rest run-mcp run-debug run-rest-debug run-mcp-debug test clean install update-deps fmt vet lint lint-fix docker-build docker-up docker-down docker-logs docker-login-ghcr docker-build-image docker-push-ghcr docker-release docker-tag tidy check check-fix check-all dev-rest dev-mcp docker-build-backup docker-push-backup docker-release-backup
 
 # Variables
 BINARY_NAME=whatsapp
@@ -74,7 +74,10 @@ help:
 	@echo "  fmt            Format Go code"
 	@echo "  vet            Run go vet"
 	@echo "  lint           Run golangci-lint (requires golangci-lint)"
+	@echo "  lint-fix       Run golangci-lint with auto-fix"
 	@echo "  check          Run fmt, vet, and test"
+	@echo "  check-fix      Run fmt, vet, and lint with auto-fix"
+	@echo "  check-all      Run fmt, vet, lint-fix, and test (comprehensive)"
 	@echo ""
 	@echo "Dependency Commands:"
 	@echo "  install        Install dependencies"
@@ -225,9 +228,27 @@ lint:
 		echo "Skipping linting..."; \
 	fi
 
+## lint-fix: Run golangci-lint with auto-fix (requires golangci-lint)
+lint-fix:
+	@echo "Running golangci-lint with auto-fix..."
+	@if command -v golangci-lint > /dev/null; then \
+		cd $(SRC_DIR) && golangci-lint run --fix; \
+	else \
+		echo "Warning: 'golangci-lint' is not installed. Install it from: https://golangci-lint.run/usage/install/"; \
+		echo "Skipping linting..."; \
+	fi
+
 ## check: Run fmt, vet, and test
 check: fmt vet test
 	@echo "All checks passed!"
+
+## check-fix: Run fmt (auto-fix), vet, and lint with auto-fix
+check-fix: fmt vet lint-fix
+	@echo "Format, vet, and lint-fix completed!"
+
+## check-all: Run fmt, vet, lint (with auto-fix), and test (comprehensive check)
+check-all: fmt vet lint-fix test
+	@echo "All comprehensive checks passed!"
 
 ## install: Install dependencies
 install:
