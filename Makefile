@@ -6,7 +6,7 @@
 SHELL := /bin/bash
 export PATH := /usr/local/go/bin:$(PATH)
 
-.PHONY: help build run run-rest run-mcp run-debug run-rest-debug run-mcp-debug test clean install update-deps fmt vet lint docker-build docker-up docker-down docker-logs docker-login-ghcr docker-build-image docker-push-ghcr docker-release docker-tag tidy check dev-rest dev-mcp
+.PHONY: help build run run-rest run-mcp run-debug run-rest-debug run-mcp-debug test clean install update-deps fmt vet lint docker-build docker-up docker-down docker-logs docker-login-ghcr docker-build-image docker-push-ghcr docker-release docker-tag tidy check dev-rest dev-mcp docker-build-backup docker-push-backup docker-release-backup
 
 # Variables
 BINARY_NAME=whatsapp
@@ -18,6 +18,7 @@ GOFLAGS=-v
 
 # Docker image variables
 DOCKER_FILE=docker/golang.Dockerfile
+BACKUP_DOCKER_FILE=docker/backup.Dockerfile
 # Get GitHub username from remote URL, fallback to git user.name without spaces
 GITHUB_USER?=$(shell git remote get-url origin 2>/dev/null | sed -n 's/.*github.com[:/]\([^/]*\)\/.*/\1/p' | tr '[:upper:]' '[:lower:]' || echo "$(shell git config user.name | tr '[:upper:]' '[:lower:]' | tr -d ' ')")
 IMAGE_NAME=go-whatsapp-web-multidevice
@@ -32,6 +33,13 @@ GHCR_REGISTRY=ghcr.io
 GHCR_IMAGE=$(GHCR_REGISTRY)/$(GITHUB_USER)/$(IMAGE_NAME)
 GHCR_IMAGE_VERSIONED=$(GHCR_IMAGE):$(VERSION)
 GHCR_IMAGE_LATEST=$(GHCR_IMAGE):latest
+
+# Backup sidecar image variables
+BACKUP_IMAGE_NAME=wa-backup-sidecar
+BACKUP_VERSION?=1.0.0
+GHCR_BACKUP_IMAGE=$(GHCR_REGISTRY)/$(GITHUB_USER)/$(BACKUP_IMAGE_NAME)
+GHCR_BACKUP_IMAGE_VERSIONED=$(GHCR_BACKUP_IMAGE):$(BACKUP_VERSION)
+GHCR_BACKUP_IMAGE_LATEST=$(GHCR_BACKUP_IMAGE):latest
 
 # Default target
 .DEFAULT_GOAL := help
@@ -87,6 +95,11 @@ help:
 	@echo "  docker-push-ghcr    Push both version & latest tags to GHCR"
 	@echo "  docker-release      Build and push (combined upstream+fork version)"
 	@echo "  docker-tag          Tag image with custom version (VERSION=v1.0.0)"
+	@echo ""
+	@echo "Backup Sidecar Commands:"
+	@echo "  docker-build-backup   Build backup sidecar image"
+	@echo "  docker-push-backup    Push backup sidecar to GHCR"
+	@echo "  docker-release-backup Build and push backup sidecar"
 	@echo ""
 	@echo "Utility Commands:"
 	@echo "  clean          Remove build artifacts and cache"
@@ -353,6 +366,39 @@ docker-tag:
 	docker tag $(GHCR_IMAGE) $(GHCR_REGISTRY)/$(GITHUB_USER)/$(IMAGE_NAME):$(TAG)
 	docker push $(GHCR_REGISTRY)/$(GITHUB_USER)/$(IMAGE_NAME):$(TAG)
 	@echo "Tagged and pushed: $(GHCR_REGISTRY)/$(GITHUB_USER)/$(IMAGE_NAME):$(TAG)"
+
+## docker-build-backup: Build backup sidecar image
+docker-build-backup:
+	@echo "Building backup sidecar image..."
+	@echo "  GitHub User: $(GITHUB_USER)"
+	@echo "  Image Name: $(BACKUP_IMAGE_NAME)"
+	@echo "  Version: $(BACKUP_VERSION)"
+	@echo ""
+	docker build -f $(BACKUP_DOCKER_FILE) -t $(GHCR_BACKUP_IMAGE_VERSIONED) -t $(GHCR_BACKUP_IMAGE_LATEST) .
+	@echo ""
+	@echo "Backup sidecar images built:"
+	@echo "  - $(GHCR_BACKUP_IMAGE_VERSIONED)"
+	@echo "  - $(GHCR_BACKUP_IMAGE_LATEST)"
+
+## docker-push-backup: Push backup sidecar to GHCR
+docker-push-backup:
+	@echo "Pushing backup sidecar to GHCR..."
+	docker push $(GHCR_BACKUP_IMAGE_VERSIONED)
+	docker push $(GHCR_BACKUP_IMAGE_LATEST)
+	@echo ""
+	@echo "Backup sidecar pushed:"
+	@echo "  docker pull $(GHCR_BACKUP_IMAGE_VERSIONED)"
+	@echo "  docker pull $(GHCR_BACKUP_IMAGE_LATEST)"
+
+## docker-release-backup: Build and push backup sidecar
+docker-release-backup: docker-build-backup docker-push-backup
+	@echo ""
+	@echo "========================================="
+	@echo "Backup sidecar released successfully!"
+	@echo "========================================="
+	@echo "  - $(GHCR_BACKUP_IMAGE_VERSIONED)"
+	@echo "  - $(GHCR_BACKUP_IMAGE_LATEST)"
+	@echo "========================================="
 
 ## clean: Remove build artifacts and cache
 clean:
