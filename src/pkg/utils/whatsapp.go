@@ -505,19 +505,9 @@ func ExtractMediaWithInfo(ctx context.Context, client *whatsmeow.Client, mediaFi
 		return extractedMedia, nil
 	}
 
-	data, err := client.Download(ctx, mediaFile)
-	if err != nil {
-		return extractedMedia, err
-	}
-
-	// Validate file size before writing to disk
-	maxFileSize := config.WhatsappSettingMaxDownloadSize
-	if int64(len(data)) > maxFileSize {
-		return extractedMedia, fmt.Errorf("file size exceeds the maximum limit of %d bytes", maxFileSize)
-	}
-
 	var originalFilename string
 
+	// Extract media metadata first (before downloading)
 	switch media := mediaFile.(type) {
 	case *waE2E.ImageMessage:
 		extractedMedia.MimeType = media.GetMimetype()
@@ -537,8 +527,15 @@ func ExtractMediaWithInfo(ctx context.Context, client *whatsmeow.Client, mediaFi
 
 	extension := determineMediaExtension(originalFilename, extractedMedia.MimeType)
 
+	// Use the storage interface
+	mediaStorage := storage.GetStorage()
+	if mediaStorage == nil {
+		return extractedMedia, fmt.Errorf("media storage not initialized")
+	}
+
 	// Build path with device ID, chat JID, and message ID if provided
 	var filename string
+	var canCheckExistence bool
 	if deviceID != "" && chatJID != "" && messageID != "" {
 		// Whitelist-only sanitize: keep [A-Za-z0-9_-]
 		dev := pathSegmentSanitizer.ReplaceAllString(deviceID, "_")
@@ -550,17 +547,40 @@ func ExtractMediaWithInfo(ctx context.Context, client *whatsmeow.Client, mediaFi
 		// deviceID/jid/messageID + ext
 		key := filepath.ToSlash(filepath.Join(dev, jid, msg)) + extension
 		filename = key
+		canCheckExistence = true
 		logrus.Debugf("Organized path: %s", filename)
 	} else {
 		// Fallback to timestamp + random ID if no message info provided (for backward compatibility)
 		shortID := uuid.NewString()[:8]
 		filename = fmt.Sprintf("%d-%s%s", time.Now().Unix(), shortID, extension)
+		canCheckExistence = false
 	}
 
-	// Use the storage interface to save the media
-	mediaStorage := storage.GetStorage()
-	if mediaStorage == nil {
-		return extractedMedia, fmt.Errorf("media storage not initialized")
+	// Check if media already exists in storage (skip re-download/re-upload)
+	// This is useful when reprocessing messages (e.g., after relogin, history sync)
+	if canCheckExistence {
+		exists, err := mediaStorage.Exists(ctx, filename)
+		if err != nil {
+			logrus.WithError(err).Warnf("Failed to check if media exists: %s", filename)
+			// Continue with download if existence check fails
+		} else if exists {
+			logrus.Debugf("⏭️ Media already exists, skipping download: %s", filename)
+			extractedMedia.MediaPath = mediaStorage.GetURL(filename)
+			// Note: FileSize won't be set since we didn't download, but that's acceptable
+			return extractedMedia, nil
+		}
+	}
+
+	// Download media from WhatsApp CDN
+	data, err := client.Download(ctx, mediaFile)
+	if err != nil {
+		return extractedMedia, err
+	}
+
+	// Validate file size before writing to disk
+	maxFileSize := config.WhatsappSettingMaxDownloadSize
+	if int64(len(data)) > maxFileSize {
+		return extractedMedia, fmt.Errorf("file size exceeds the maximum limit of %d bytes", maxFileSize)
 	}
 
 	logrus.Debugf("📤 Attempting to save media: filename=%s, size=%d bytes", filename, len(data))

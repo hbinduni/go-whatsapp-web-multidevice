@@ -122,6 +122,20 @@ func (s *MinIOStorage) Delete(ctx context.Context, path string) error {
 	return nil
 }
 
+// Exists checks if a file exists in MinIO storage
+func (s *MinIOStorage) Exists(ctx context.Context, path string) (bool, error) {
+	_, err := s.client.StatObject(ctx, s.bucket, path, minio.StatObjectOptions{})
+	if err != nil {
+		// Check if error indicates the object doesn't exist
+		errResponse := minio.ToErrorResponse(err)
+		if errResponse.Code == "NoSuchKey" || errResponse.Code == "NotFound" {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to check object existence: %w", err)
+	}
+	return true, nil
+}
+
 // GetURL returns a publicly accessible URL for the media
 func (s *MinIOStorage) GetURL(path string) string {
 	// If using server proxy for private bucket, return server download endpoint

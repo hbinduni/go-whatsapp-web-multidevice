@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
 	domainChat "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/chat"
 	domainChatStorage "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/chatstorage"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/whatsapp"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/storage"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/utils"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/validations"
 	"github.com/sirupsen/logrus"
@@ -183,9 +185,24 @@ func (service serviceChat) GetChatMessages(ctx context.Context, request domainCh
 		totalCount = 0
 	}
 
+	// Get device ID for constructing S3 media URLs
+	var deviceID string
+	if client := whatsapp.GetClient(); client != nil && client.Store != nil && client.Store.ID != nil {
+		deviceID = client.Store.ID.User
+	}
+
 	// Convert entities to domain objects
 	messageInfos := make([]domainChat.MessageInfo, 0, len(messages))
 	for _, message := range messages {
+		// Determine URL: use constructed S3 URL for media messages if S3 storage is enabled
+		// and auto-download is enabled (media should exist in S3 only if auto-download was on)
+		url := message.URL
+		if message.MediaType != "" && storage.IsS3StorageEnabled() && config.WhatsappAutoDownloadMedia && deviceID != "" {
+			if s3URL := storage.ConstructMediaURL(deviceID, message.ChatJID, message.ID, message.MediaType); s3URL != "" {
+				url = s3URL
+			}
+		}
+
 		messageInfo := domainChat.MessageInfo{
 			ID:         message.ID,
 			ChatJID:    message.ChatJID,
@@ -195,7 +212,7 @@ func (service serviceChat) GetChatMessages(ctx context.Context, request domainCh
 			IsFromMe:   message.IsFromMe,
 			MediaType:  message.MediaType,
 			Filename:   message.Filename,
-			URL:        message.URL,
+			URL:        url,
 			FileLength: message.FileLength,
 			Status:     message.Status,
 			CreatedAt:  message.CreatedAt.Format(time.RFC3339),

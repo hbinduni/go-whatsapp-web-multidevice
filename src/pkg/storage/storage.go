@@ -23,6 +23,10 @@ type MediaStorage interface {
 
 	// SaveStream saves media from a reader stream to storage
 	SaveStream(ctx context.Context, reader io.Reader, filename string) (path string, err error)
+
+	// Exists checks if a file exists in storage
+	// Returns true if the file exists, false otherwise
+	Exists(ctx context.Context, path string) (bool, error)
 }
 
 // StorageType represents the type of storage backend

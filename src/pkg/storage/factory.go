@@ -2,11 +2,17 @@ package storage
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
 	"github.com/sirupsen/logrus"
 )
+
+// pathSegmentSanitizer matches any character that is NOT alphanumeric, underscore, or hyphen
+// Used to sanitize path segments for consistent URL construction
+var pathSegmentSanitizer = regexp.MustCompile(`[^A-Za-z0-9_\-]`)
 
 var (
 	globalStorage MediaStorage
@@ -83,4 +89,110 @@ func ParseStorageType(s string) (StorageType, error) {
 	default:
 		return "", fmt.Errorf("invalid storage type: %s (valid options: local, s3)", s)
 	}
+}
+
+// ConstructMediaURL constructs a direct media URL for S3 storage
+// This allows clients to access media directly without calling the download endpoint
+// Returns empty string if storage type is not S3 or if required parameters are missing
+//
+// Parameters:
+//   - deviceID: The WhatsApp device ID (phone number)
+//   - chatJID: The chat JID (e.g., "6281911770011@s.whatsapp.net")
+//   - messageID: The message ID
+//   - mediaType: The media type (e.g., "image", "video", "audio", "document")
+//
+// URL Pattern: {S3PublicURL or S3Endpoint}/{S3Bucket}/{deviceID}/{chatJID_sanitized}/{messageID}{extension}
+func ConstructMediaURL(deviceID, chatJID, messageID, mediaType string) string {
+	// Only construct URL for S3 storage
+	if config.MediaStorageType != "s3" {
+		return ""
+	}
+
+	// Validate required parameters
+	if deviceID == "" || chatJID == "" || messageID == "" {
+		return ""
+	}
+
+	// Sanitize path segments (same logic as used when saving media)
+	dev := pathSegmentSanitizer.ReplaceAllString(deviceID, "_")
+	jid := pathSegmentSanitizer.ReplaceAllString(chatJID, "_")
+	msg := pathSegmentSanitizer.ReplaceAllString(messageID, "_")
+
+	if dev == "" || jid == "" || msg == "" {
+		return ""
+	}
+
+	// Determine file extension from media type
+	extension := getExtensionFromMediaType(mediaType)
+
+	// Construct path: deviceID/chatJID/messageID{extension}
+	path := fmt.Sprintf("%s/%s/%s%s", dev, jid, msg, extension)
+
+	// Determine base URL (prefer PublicURL, fallback to Endpoint)
+	baseURL := config.S3PublicURL
+	if baseURL == "" {
+		baseURL = config.S3Endpoint
+	}
+
+	// Remove trailing slash from base URL
+	baseURL = strings.TrimRight(baseURL, "/")
+
+	// Construct full URL: {baseURL}/{bucket}/{path}
+	return fmt.Sprintf("%s/%s/%s", baseURL, config.S3Bucket, path)
+}
+
+// getExtensionFromMediaType returns file extension based on media type
+// Returns empty string if media type is unknown or empty
+func getExtensionFromMediaType(mediaType string) string {
+	if mediaType == "" {
+		return ""
+	}
+
+	// Normalize media type to lowercase
+	mediaType = strings.ToLower(mediaType)
+
+	// Handle common media types
+	switch {
+	case strings.HasPrefix(mediaType, "image/jpeg"), mediaType == "image":
+		return ".jpg"
+	case strings.HasPrefix(mediaType, "image/png"):
+		return ".png"
+	case strings.HasPrefix(mediaType, "image/gif"):
+		return ".gif"
+	case strings.HasPrefix(mediaType, "image/webp"):
+		return ".webp"
+	case strings.HasPrefix(mediaType, "video/mp4"), mediaType == "video":
+		return ".mp4"
+	case strings.HasPrefix(mediaType, "video/3gpp"):
+		return ".3gp"
+	case strings.HasPrefix(mediaType, "audio/ogg"), mediaType == "audio":
+		return ".ogg"
+	case strings.HasPrefix(mediaType, "audio/mpeg"):
+		return ".mp3"
+	case strings.HasPrefix(mediaType, "audio/mp4"):
+		return ".m4a"
+	case strings.HasPrefix(mediaType, "application/pdf"):
+		return ".pdf"
+	case mediaType == "document":
+		return "" // Documents may have various extensions, skip
+	case mediaType == "sticker":
+		return ".webp"
+	case mediaType == "video_note":
+		return ".mp4"
+	}
+
+	// For MIME types with format "type/subtype", use subtype as extension
+	if strings.Contains(mediaType, "/") {
+		parts := strings.Split(mediaType, "/")
+		if len(parts) == 2 {
+			return "." + parts[1]
+		}
+	}
+
+	return ""
+}
+
+// IsS3StorageEnabled returns true if S3 storage is configured and enabled
+func IsS3StorageEnabled() bool {
+	return config.MediaStorageType == "s3" && config.S3Bucket != "" && config.S3Endpoint != ""
 }

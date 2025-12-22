@@ -132,6 +132,29 @@ func (s *LocalStorage) Delete(ctx context.Context, path string) error {
 	return nil
 }
 
+// Exists checks if a file exists in local storage
+func (s *LocalStorage) Exists(ctx context.Context, path string) (bool, error) {
+	key := filepath.Clean(path)
+	if key == "." || key == "" || filepath.IsAbs(key) || strings.Contains(key, ".."+string(os.PathSeparator)) {
+		return false, fmt.Errorf("invalid path")
+	}
+	fullPath := filepath.Join(s.basePath, key)
+	absBase, _ := filepath.Abs(s.basePath)
+	absFull, _ := filepath.Abs(fullPath)
+	if !strings.HasPrefix(absFull, absBase+string(os.PathSeparator)) && absFull != absBase {
+		return false, fmt.Errorf("path escapes base directory")
+	}
+
+	_, err := os.Stat(absFull)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to check file existence: %w", err)
+	}
+	return true, nil
+}
+
 // GetURL returns a web-friendly URL for the local file
 func (s *LocalStorage) GetURL(path string) string {
 	// Return relative URL for static file serving
