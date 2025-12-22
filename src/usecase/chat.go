@@ -77,6 +77,11 @@ func (service serviceChat) ListChats(ctx context.Context, request domainChat.Lis
 			EphemeralExpiration: chat.EphemeralExpiration,
 			CreatedAt:           chat.CreatedAt.Format(time.RFC3339),
 			UpdatedAt:           chat.UpdatedAt.Format(time.RFC3339),
+			// Last message preview fields
+			LastMessage:       chat.LastMessage,
+			LastMessageFromMe: chat.LastMessageFromMe,
+			LastMessageType:   chat.LastMessageType,
+			UnreadCount:       chat.UnreadCount,
 		}
 		chatInfos = append(chatInfos, chatInfo)
 	}

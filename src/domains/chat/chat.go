@@ -51,6 +51,11 @@ type ChatInfo struct {
 	EphemeralExpiration uint32 `json:"ephemeral_expiration"`
 	CreatedAt           string `json:"created_at"`
 	UpdatedAt           string `json:"updated_at"`
+	// Last message preview fields
+	LastMessage       *string `json:"last_message,omitempty"`
+	LastMessageFromMe *bool   `json:"last_message_from_me,omitempty"`
+	LastMessageType   *string `json:"last_message_type,omitempty"`
+	UnreadCount       *int    `json:"unread_count,omitempty"`
 }
 
 type MessageInfo struct {

@@ -81,14 +81,29 @@ func (r *SQLiteRepository) GetMessageByID(id string) (*domainChatStorage.Message
 	return message, err
 }
 
-// GetChats retrieves chats with filtering
+// GetChats retrieves chats with filtering and includes last message preview
 func (r *SQLiteRepository) GetChats(filter *domainChatStorage.ChatFilter) ([]*domainChatStorage.Chat, error) {
 	var conditions []string
 	var args []any
 
+	// Query with LEFT JOIN to get last message for each chat using a subquery
+	// This efficiently fetches the most recent message per chat
 	query := `
-		SELECT c.jid, c.name, c.last_message_time, c.ephemeral_expiration, c.created_at, c.updated_at
+		SELECT
+			c.jid, c.name, c.last_message_time, c.ephemeral_expiration, c.created_at, c.updated_at,
+			lm.content AS last_message,
+			lm.is_from_me AS last_message_from_me,
+			lm.media_type AS last_message_type
 		FROM chats c
+		LEFT JOIN (
+			SELECT m1.chat_jid, m1.content, m1.is_from_me, m1.media_type
+			FROM messages m1
+			INNER JOIN (
+				SELECT chat_jid, MAX(timestamp) as max_ts
+				FROM messages
+				GROUP BY chat_jid
+			) m2 ON m1.chat_jid = m2.chat_jid AND m1.timestamp = m2.max_ts
+		) lm ON c.jid = lm.chat_jid
 	`
 
 	if filter.SearchName != "" {
@@ -97,7 +112,24 @@ func (r *SQLiteRepository) GetChats(filter *domainChatStorage.ChatFilter) ([]*do
 	}
 
 	if filter.HasMedia {
-		query += " INNER JOIN messages m ON c.jid = m.chat_jid"
+		query = `
+			SELECT
+				c.jid, c.name, c.last_message_time, c.ephemeral_expiration, c.created_at, c.updated_at,
+				lm.content AS last_message,
+				lm.is_from_me AS last_message_from_me,
+				lm.media_type AS last_message_type
+			FROM chats c
+			INNER JOIN messages m ON c.jid = m.chat_jid
+			LEFT JOIN (
+				SELECT m1.chat_jid, m1.content, m1.is_from_me, m1.media_type
+				FROM messages m1
+				INNER JOIN (
+					SELECT chat_jid, MAX(timestamp) as max_ts
+					FROM messages
+					GROUP BY chat_jid
+				) m2 ON m1.chat_jid = m2.chat_jid AND m1.timestamp = m2.max_ts
+			) lm ON c.jid = lm.chat_jid
+		`
 		conditions = append(conditions, "m.media_type != ''")
 	}
 
@@ -130,7 +162,7 @@ func (r *SQLiteRepository) GetChats(filter *domainChatStorage.ChatFilter) ([]*do
 
 	var chats []*domainChatStorage.Chat
 	for rows.Next() {
-		chat, err := r.scanChat(rows)
+		chat, err := r.scanChatWithLastMessage(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -437,6 +469,17 @@ func (r *SQLiteRepository) scanChat(scanner interface{ Scan(...any) error }) (*d
 	err := scanner.Scan(
 		&chat.JID, &chat.Name, &chat.LastMessageTime, &chat.EphemeralExpiration,
 		&chat.CreatedAt, &chat.UpdatedAt,
+	)
+	return chat, err
+}
+
+// scanChatWithLastMessage scans a chat row that includes last message preview fields
+func (r *SQLiteRepository) scanChatWithLastMessage(scanner interface{ Scan(...any) error }) (*domainChatStorage.Chat, error) {
+	chat := &domainChatStorage.Chat{}
+	err := scanner.Scan(
+		&chat.JID, &chat.Name, &chat.LastMessageTime, &chat.EphemeralExpiration,
+		&chat.CreatedAt, &chat.UpdatedAt,
+		&chat.LastMessage, &chat.LastMessageFromMe, &chat.LastMessageType,
 	)
 	return chat, err
 }

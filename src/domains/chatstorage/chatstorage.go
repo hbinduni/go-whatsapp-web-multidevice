@@ -10,6 +10,11 @@ type Chat struct {
 	EphemeralExpiration uint32    `db:"ephemeral_expiration"`
 	CreatedAt           time.Time `db:"created_at"`
 	UpdatedAt           time.Time `db:"updated_at"`
+	// Last message preview fields (populated by GetChats query)
+	LastMessage       *string `db:"last_message"`
+	LastMessageFromMe *bool   `db:"last_message_from_me"`
+	LastMessageType   *string `db:"last_message_type"`
+	UnreadCount       *int    `db:"unread_count"`
 }
 
 // Message represents a WhatsApp message
