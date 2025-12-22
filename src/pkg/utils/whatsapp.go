@@ -525,8 +525,6 @@ func ExtractMediaWithInfo(ctx context.Context, client *whatsmeow.Client, mediaFi
 		originalFilename = media.GetFileName()
 	}
 
-	extension := determineMediaExtension(originalFilename, extractedMedia.MimeType)
-
 	// Use the storage interface
 	mediaStorage := storage.GetStorage()
 	if mediaStorage == nil {
@@ -534,6 +532,7 @@ func ExtractMediaWithInfo(ctx context.Context, client *whatsmeow.Client, mediaFi
 	}
 
 	// Build path with device ID, chat JID, and message ID if provided
+	// Note: We don't use file extensions for organized paths - S3 handles content-type via metadata
 	var filename string
 	var canCheckExistence bool
 	if deviceID != "" && chatJID != "" && messageID != "" {
@@ -544,13 +543,13 @@ func ExtractMediaWithInfo(ctx context.Context, client *whatsmeow.Client, mediaFi
 		if dev == "" || jid == "" || msg == "" {
 			return ExtractedMedia{}, fmt.Errorf("invalid media path segments")
 		}
-		// deviceID/jid/messageID + ext
-		key := filepath.ToSlash(filepath.Join(dev, jid, msg)) + extension
-		filename = key
+		// deviceID/jid/messageID (no extension - S3 uses Content-Type header)
+		filename = filepath.ToSlash(filepath.Join(dev, jid, msg))
 		canCheckExistence = true
 		logrus.Debugf("Organized path: %s", filename)
 	} else {
 		// Fallback to timestamp + random ID if no message info provided (for backward compatibility)
+		extension := determineMediaExtension(originalFilename, extractedMedia.MimeType)
 		shortID := uuid.NewString()[:8]
 		filename = fmt.Sprintf("%d-%s%s", time.Now().Unix(), shortID, extension)
 		canCheckExistence = false
