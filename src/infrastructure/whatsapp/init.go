@@ -633,16 +633,40 @@ func handleMessage(ctx context.Context, evt *events.Message, chatStorageRepo dom
 	// Download media BEFORE broadcasting SSE so we can include the media URL
 	var mediaPath string
 	if config.WhatsappAutoDownloadMedia && client != nil {
-		if img := evt.Message.GetImageMessage(); img != nil {
-			deviceID := client.Store.ID.User
-			chatJID := normalizedChatJID.String()
-			messageID := evt.Info.ID
+		deviceID := client.Store.ID.User
+		chatJID := normalizedChatJID.String()
+		messageID := evt.Info.ID
 
-			if extractedMedia, err := utils.ExtractMediaWithInfo(ctx, client, img, chatJID, messageID, deviceID); err != nil {
-				log.Errorf("Failed to download image: %v", err)
+		// Try to extract and download media based on message type
+		var mediaFile whatsmeow.DownloadableMessage
+		var mediaLabel string
+
+		if img := evt.Message.GetImageMessage(); img != nil {
+			mediaFile = img
+			mediaLabel = "image"
+		} else if vid := evt.Message.GetVideoMessage(); vid != nil {
+			mediaFile = vid
+			mediaLabel = "video"
+		} else if aud := evt.Message.GetAudioMessage(); aud != nil {
+			mediaFile = aud
+			mediaLabel = "audio"
+		} else if doc := evt.Message.GetDocumentMessage(); doc != nil {
+			mediaFile = doc
+			mediaLabel = "document"
+		} else if sticker := evt.Message.GetStickerMessage(); sticker != nil {
+			mediaFile = sticker
+			mediaLabel = "sticker"
+		} else if ptv := evt.Message.GetPtvMessage(); ptv != nil {
+			mediaFile = ptv
+			mediaLabel = "video_note"
+		}
+
+		if mediaFile != nil {
+			if extractedMedia, err := utils.ExtractMediaWithInfo(ctx, client, mediaFile, chatJID, messageID, deviceID); err != nil {
+				log.Errorf("Failed to download %s: %v", mediaLabel, err)
 			} else {
 				mediaPath = extractedMedia.MediaPath
-				log.Debugf("📸 Media downloaded for SSE broadcast: %s", mediaPath)
+				log.Debugf("📸 Media (%s) downloaded for SSE broadcast: %s", mediaLabel, mediaPath)
 			}
 		}
 	}
