@@ -308,21 +308,21 @@ docker-logs:
 ## docker-login-ghcr: Login to GitHub Container Registry
 docker-login-ghcr:
 	@echo "Logging in to GitHub Container Registry..."
-	@if command -v gh > /dev/null 2>&1; then \
+	@if [ -n "$$GITHUB_TOKEN" ]; then \
+		echo "Using GITHUB_TOKEN environment variable..."; \
+		echo "$$GITHUB_TOKEN" | docker login ghcr.io -u $(GITHUB_USER) --password-stdin; \
+	elif command -v gh > /dev/null 2>&1; then \
 		echo "Using GitHub CLI (gh) for authentication..."; \
 		gh auth token | docker login ghcr.io -u $(GITHUB_USER) --password-stdin; \
-	elif [ -n "$(GITHUB_TOKEN)" ]; then \
-		echo "Using GITHUB_TOKEN environment variable..."; \
-		echo "$(GITHUB_TOKEN)" | docker login ghcr.io -u $(GITHUB_USER) --password-stdin; \
 	else \
-		echo "Error: Neither 'gh' CLI nor GITHUB_TOKEN is available"; \
+		echo "Error: Neither GITHUB_TOKEN nor 'gh' CLI is available"; \
 		echo ""; \
-		echo "Option 1 (Recommended): Install and login with GitHub CLI:"; \
-		echo "  gh auth login"; \
-		echo ""; \
-		echo "Option 2: Set GITHUB_TOKEN:"; \
+		echo "Option 1 (Recommended): Set GITHUB_TOKEN:"; \
 		echo "  export GITHUB_TOKEN=\"your-github-token\""; \
 		echo "  Create token at: https://github.com/settings/tokens/new?scopes=write:packages"; \
+		echo ""; \
+		echo "Option 2: Install and login with GitHub CLI:"; \
+		echo "  gh auth login"; \
 		exit 1; \
 	fi
 	@echo "✅ Login successful!"
