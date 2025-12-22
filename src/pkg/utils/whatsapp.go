@@ -491,6 +491,7 @@ type ExtractedMedia struct {
 	MimeType  string `json:"mime_type"`
 	Caption   string `json:"caption"`
 	FileSize  int64  `json:"file_size"`
+	Filename  string `json:"filename"`
 }
 
 // ExtractMedia is a helper function to extract media from whatsapp
@@ -523,6 +524,7 @@ func ExtractMediaWithInfo(ctx context.Context, client *whatsmeow.Client, mediaFi
 		extractedMedia.MimeType = media.GetMimetype()
 		extractedMedia.Caption = media.GetCaption()
 		originalFilename = media.GetFileName()
+		extractedMedia.Filename = originalFilename
 	}
 
 	// Use the storage interface

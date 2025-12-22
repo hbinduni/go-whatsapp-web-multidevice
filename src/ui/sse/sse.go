@@ -178,7 +178,7 @@ func BroadcastMessage(eventType EventType, code, message string, data any) {
 }
 
 // BroadcastMessageReceived broadcasts a new incoming message event
-func BroadcastMessageReceived(messageID, chatJID, sender, content string, timestamp time.Time, isFromMe bool, mediaType, mediaPath string) {
+func BroadcastMessageReceived(messageID, chatJID, sender, content string, timestamp time.Time, isFromMe bool, mediaType, mediaPath, mimeType, filename string, fileSize int64) {
 	BroadcastMessage(EventMessageReceived, "MESSAGE_RECEIVED", "New message received", map[string]any{
 		"message_id": messageID,
 		"chat_jid":   chatJID,
@@ -188,6 +188,9 @@ func BroadcastMessageReceived(messageID, chatJID, sender, content string, timest
 		"is_from_me": isFromMe,
 		"media_type": mediaType,
 		"media_path": mediaPath,
+		"mimetype":   mimeType,
+		"filename":   filename,
+		"file_size":  fileSize,
 	})
 }
 

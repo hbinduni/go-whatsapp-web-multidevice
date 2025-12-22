@@ -632,6 +632,9 @@ func handleMessage(ctx context.Context, evt *events.Message, chatStorageRepo dom
 
 	// Download media BEFORE broadcasting SSE so we can include the media URL
 	var mediaPath string
+	var mediaMimeType string
+	var mediaFilename string
+	var mediaFileSize int64
 	if config.WhatsappAutoDownloadMedia && client != nil {
 		deviceID := client.Store.ID.User
 		chatJID := normalizedChatJID.String()
@@ -666,12 +669,15 @@ func handleMessage(ctx context.Context, evt *events.Message, chatStorageRepo dom
 				log.Errorf("Failed to download %s: %v", mediaLabel, err)
 			} else {
 				mediaPath = extractedMedia.MediaPath
+				mediaMimeType = extractedMedia.MimeType
+				mediaFilename = extractedMedia.Filename
+				mediaFileSize = extractedMedia.FileSize
 				log.Debugf("📸 Media (%s) downloaded for SSE broadcast: %s", mediaLabel, mediaPath)
 			}
 		}
 	}
 
-	// Broadcast via SSE for real-time updates (now includes media_path)
+	// Broadcast via SSE for real-time updates (includes media metadata)
 	sse.BroadcastMessageReceived(
 		evt.Info.ID,
 		normalizedChatJID.String(),
@@ -681,6 +687,9 @@ func handleMessage(ctx context.Context, evt *events.Message, chatStorageRepo dom
 		evt.Info.IsFromMe,
 		mediaType,
 		mediaPath,
+		mediaMimeType,
+		mediaFilename,
+		mediaFileSize,
 	)
 
 	// Auto-mark message as read if configured
