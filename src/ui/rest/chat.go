@@ -27,6 +27,7 @@ func InitRestChat(app fiber.Router, service domainChat.IChatUsecase) Chat {
 	// Storage export/import endpoints
 	app.Get("/chat/export", rest.ExportStorage)
 	app.Post("/chat/import", rest.ImportStorage)
+	app.Post("/chat/analyze", rest.AnalyzeStorage)
 
 	return rest
 }
@@ -211,6 +212,63 @@ func (controller *Chat) ImportStorage(c *fiber.Ctx) error {
 		Status:  200,
 		Code:    "SUCCESS",
 		Message: response.Message,
+		Results: response,
+	})
+}
+
+func (controller *Chat) AnalyzeStorage(c *fiber.Ctx) error {
+	// Get uploaded file
+	file, err := c.FormFile("file")
+	if err != nil {
+		return c.Status(400).JSON(utils.ResponseData{
+			Status:  400,
+			Code:    "BAD_REQUEST",
+			Message: "No file uploaded. Please upload a SQLite backup file.",
+			Results: nil,
+		})
+	}
+
+	// Validate file extension
+	ext := filepath.Ext(file.Filename)
+	if ext != ".db" && ext != ".sqlite" && ext != ".sqlite3" {
+		return c.Status(400).JSON(utils.ResponseData{
+			Status:  400,
+			Code:    "BAD_REQUEST",
+			Message: "Invalid file type. Please upload a SQLite database file (.db, .sqlite, .sqlite3)",
+			Results: nil,
+		})
+	}
+
+	// Save to temp file
+	tempPath := filepath.Join(os.TempDir(), fmt.Sprintf("wa-analyze-%d%s", time.Now().UnixNano(), ext))
+	if err := c.SaveFile(file, tempPath); err != nil {
+		return c.Status(500).JSON(utils.ResponseData{
+			Status:  500,
+			Code:    "UPLOAD_ERROR",
+			Message: "Failed to save uploaded file",
+			Results: nil,
+		})
+	}
+	defer os.Remove(tempPath) // Cleanup temp file after analysis
+
+	// Perform analysis
+	response, err := controller.Service.AnalyzeStorage(c.UserContext(), tempPath)
+	if err != nil {
+		return c.Status(500).JSON(utils.ResponseData{
+			Status:  500,
+			Code:    "ANALYZE_ERROR",
+			Message: err.Error(),
+			Results: nil,
+		})
+	}
+
+	// Use original filename in response
+	response.Filename = file.Filename
+
+	return c.JSON(utils.ResponseData{
+		Status:  200,
+		Code:    "SUCCESS",
+		Message: "Analysis completed successfully",
 		Results: response,
 	})
 }

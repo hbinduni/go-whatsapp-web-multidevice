@@ -575,3 +575,93 @@ func (service serviceChat) importMessages(ctx context.Context, backupDB *sql.DB)
 
 	return imported, skipped, rows.Err()
 }
+
+func (service serviceChat) AnalyzeStorage(ctx context.Context, filePath string) (response domainChat.AnalyzeStorageResponse, err error) {
+	// Get file info
+	fileInfo, err := os.Stat(filePath)
+	if err != nil {
+		return response, fmt.Errorf("failed to stat file: %w", err)
+	}
+
+	response.Filename = fileInfo.Name()
+	response.SizeBytes = fileInfo.Size()
+	response.Size = formatFileSize(fileInfo.Size())
+
+	// Open the database
+	db, err := sql.Open("sqlite3", filePath+"?mode=ro")
+	if err != nil {
+		return response, fmt.Errorf("failed to open database: %w", err)
+	}
+	defer db.Close()
+
+	// Get all tables
+	tableRows, err := db.Query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+	if err != nil {
+		return response, fmt.Errorf("failed to query tables: %w", err)
+	}
+	defer tableRows.Close()
+
+	var tables []domainChat.TableInfo
+	for tableRows.Next() {
+		var tableName string
+		if err := tableRows.Scan(&tableName); err != nil {
+			continue
+		}
+
+		// Get row count for this table
+		var rowCount int64
+		countRow := db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s", tableName))
+		if err := countRow.Scan(&rowCount); err != nil {
+			rowCount = 0
+		}
+
+		tables = append(tables, domainChat.TableInfo{
+			Name:     tableName,
+			RowCount: rowCount,
+		})
+	}
+	response.Tables = tables
+
+	// Add schema descriptions
+	response.Schema = []domainChat.SchemaDescription{
+		{
+			Table:       "chats",
+			Description: "Stores chat/conversation info (JID, name, last message time, ephemeral settings)",
+		},
+		{
+			Table:       "messages",
+			Description: "Stores message content, sender, timestamps, media info, delivery status",
+		},
+		{
+			Table:       "schema_info",
+			Description: "Database version tracking",
+		},
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"filename":    response.Filename,
+		"size":        response.Size,
+		"table_count": len(tables),
+	}).Info("Analyzed storage database")
+
+	return response, nil
+}
+
+func formatFileSize(bytes int64) string {
+	const (
+		KB = 1024
+		MB = KB * 1024
+		GB = MB * 1024
+	)
+
+	switch {
+	case bytes >= GB:
+		return fmt.Sprintf("%.2f GiB", float64(bytes)/float64(GB))
+	case bytes >= MB:
+		return fmt.Sprintf("%.2f MiB", float64(bytes)/float64(MB))
+	case bytes >= KB:
+		return fmt.Sprintf("%.2f KiB", float64(bytes)/float64(KB))
+	default:
+		return fmt.Sprintf("%d B", bytes)
+	}
+}

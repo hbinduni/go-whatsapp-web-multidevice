@@ -118,3 +118,23 @@ type ImportStorageStats struct {
 type ExportStorageResponse struct {
 	Filename string `json:"filename"`
 }
+
+// Storage Analyze operations
+
+type AnalyzeStorageResponse struct {
+	Filename    string              `json:"filename"`
+	Size        string              `json:"size"`
+	SizeBytes   int64               `json:"size_bytes"`
+	Tables      []TableInfo         `json:"tables"`
+	Schema      []SchemaDescription `json:"schema"`
+}
+
+type TableInfo struct {
+	Name     string `json:"name"`
+	RowCount int64  `json:"row_count"`
+}
+
+type SchemaDescription struct {
+	Table       string `json:"table"`
+	Description string `json:"description"`
+}
