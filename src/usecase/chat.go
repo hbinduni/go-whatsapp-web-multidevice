@@ -442,9 +442,10 @@ func (service serviceChat) ImportStorage(ctx context.Context, backupFilePath str
 }
 
 func (service serviceChat) importChats(ctx context.Context, backupDB *sql.DB) (imported, skipped int64, err error) {
+	// Query only the actual columns in the chats table
+	// Note: last_message, last_message_from_me, last_message_type are computed via JOIN, not stored
 	rows, err := backupDB.Query(`
-		SELECT jid, name, last_message_time, ephemeral_expiration, created_at, updated_at,
-		       last_message, last_message_from_me, last_message_type, unread_count
+		SELECT jid, name, last_message_time, ephemeral_expiration, created_at, updated_at
 		FROM chats
 	`)
 	if err != nil {
@@ -455,9 +456,6 @@ func (service serviceChat) importChats(ctx context.Context, backupDB *sql.DB) (i
 	for rows.Next() {
 		var chat domainChatStorage.Chat
 		var lastMessageTime, createdAt, updatedAt string
-		var lastMessage, lastMessageType sql.NullString
-		var lastMessageFromMe sql.NullBool
-		var unreadCount sql.NullInt32
 
 		err := rows.Scan(
 			&chat.JID,
@@ -466,10 +464,6 @@ func (service serviceChat) importChats(ctx context.Context, backupDB *sql.DB) (i
 			&chat.EphemeralExpiration,
 			&createdAt,
 			&updatedAt,
-			&lastMessage,
-			&lastMessageFromMe,
-			&lastMessageType,
-			&unreadCount,
 		)
 		if err != nil {
 			logrus.WithError(err).Warn("Failed to scan chat row, skipping")
@@ -481,21 +475,6 @@ func (service serviceChat) importChats(ctx context.Context, backupDB *sql.DB) (i
 		chat.LastMessageTime, _ = time.Parse(time.RFC3339, lastMessageTime)
 		chat.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 		chat.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
-
-		// Handle nullable fields
-		if lastMessage.Valid {
-			chat.LastMessage = &lastMessage.String
-		}
-		if lastMessageFromMe.Valid {
-			chat.LastMessageFromMe = &lastMessageFromMe.Bool
-		}
-		if lastMessageType.Valid {
-			chat.LastMessageType = &lastMessageType.String
-		}
-		if unreadCount.Valid {
-			count := int(unreadCount.Int32)
-			chat.UnreadCount = &count
-		}
 
 		// Check if chat already exists
 		existing, _ := service.chatStorageRepo.GetChat(chat.JID)
