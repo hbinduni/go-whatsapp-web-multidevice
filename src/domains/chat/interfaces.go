@@ -10,4 +10,7 @@ type IChatUsecase interface {
 	GetChatMessages(ctx context.Context, request GetChatMessagesRequest) (response GetChatMessagesResponse, err error)
 	PinChat(ctx context.Context, request PinChatRequest) (response PinChatResponse, err error)
 	SetDisappearingTimer(ctx context.Context, request SetDisappearingTimerRequest) (response SetDisappearingTimerResponse, err error)
+	// Storage backup/restore operations
+	ExportStorage(ctx context.Context) (filePath string, err error)
+	ImportStorage(ctx context.Context, backupFilePath string) (response ImportStorageResponse, err error)
 }

@@ -2,7 +2,10 @@ package usecase
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
@@ -14,6 +17,8 @@ import (
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/validations"
 	"github.com/sirupsen/logrus"
 	"go.mau.fi/whatsmeow/appstate"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 type serviceChat struct {
@@ -352,4 +357,242 @@ func (service serviceChat) SetDisappearingTimer(ctx context.Context, request dom
 	}).Info("Disappearing timer set successfully")
 
 	return response, nil
+}
+
+func (service serviceChat) ExportStorage(ctx context.Context) (filePath string, err error) {
+	// Get the database path from config
+	dbPath := config.ChatStorageURI
+
+	// Handle file: prefix in URI
+	if strings.HasPrefix(dbPath, "file:") {
+		dbPath = strings.TrimPrefix(dbPath, "file:")
+		// Remove any query parameters (like ?_foreign_keys=on)
+		if idx := strings.Index(dbPath, "?"); idx != -1 {
+			dbPath = dbPath[:idx]
+		}
+	}
+
+	// Check if file exists
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		return "", fmt.Errorf("chat storage database not found at %s", dbPath)
+	}
+
+	logrus.WithField("path", dbPath).Info("Exporting chat storage database")
+	return dbPath, nil
+}
+
+func (service serviceChat) ImportStorage(ctx context.Context, backupFilePath string) (response domainChat.ImportStorageResponse, err error) {
+	startTime := time.Now()
+
+	// Validate backup file exists
+	if _, err := os.Stat(backupFilePath); os.IsNotExist(err) {
+		return response, fmt.Errorf("backup file not found: %s", backupFilePath)
+	}
+
+	// Open backup database
+	backupDB, err := sql.Open("sqlite3", backupFilePath+"?mode=ro")
+	if err != nil {
+		return response, fmt.Errorf("failed to open backup database: %w", err)
+	}
+	defer backupDB.Close()
+
+	// Verify it's a valid chat storage database by checking for expected tables
+	var tableName string
+	err = backupDB.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='chats'").Scan(&tableName)
+	if err != nil {
+		return response, fmt.Errorf("invalid backup file: missing 'chats' table")
+	}
+
+	// Import chats
+	chatsImported, chatsSkipped, err := service.importChats(ctx, backupDB)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to import chats")
+		return response, fmt.Errorf("failed to import chats: %w", err)
+	}
+
+	// Import messages
+	messagesImported, messagesSkipped, err := service.importMessages(ctx, backupDB)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to import messages")
+		return response, fmt.Errorf("failed to import messages: %w", err)
+	}
+
+	// Build response
+	response.Status = "success"
+	response.Message = "Import completed successfully"
+	response.Imported = domainChat.ImportStorageStats{
+		Chats:    chatsImported,
+		Messages: messagesImported,
+	}
+	response.Skipped = domainChat.ImportStorageStats{
+		Chats:    chatsSkipped,
+		Messages: messagesSkipped,
+	}
+	response.Duration = time.Since(startTime).String()
+
+	logrus.WithFields(logrus.Fields{
+		"chats_imported":    chatsImported,
+		"chats_skipped":     chatsSkipped,
+		"messages_imported": messagesImported,
+		"messages_skipped":  messagesSkipped,
+		"duration":          response.Duration,
+	}).Info("Chat storage import completed")
+
+	return response, nil
+}
+
+func (service serviceChat) importChats(ctx context.Context, backupDB *sql.DB) (imported, skipped int64, err error) {
+	rows, err := backupDB.Query(`
+		SELECT jid, name, last_message_time, ephemeral_expiration, created_at, updated_at,
+		       last_message, last_message_from_me, last_message_type, unread_count
+		FROM chats
+	`)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var chat domainChatStorage.Chat
+		var lastMessageTime, createdAt, updatedAt string
+		var lastMessage, lastMessageType sql.NullString
+		var lastMessageFromMe sql.NullBool
+		var unreadCount sql.NullInt32
+
+		err := rows.Scan(
+			&chat.JID,
+			&chat.Name,
+			&lastMessageTime,
+			&chat.EphemeralExpiration,
+			&createdAt,
+			&updatedAt,
+			&lastMessage,
+			&lastMessageFromMe,
+			&lastMessageType,
+			&unreadCount,
+		)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to scan chat row, skipping")
+			skipped++
+			continue
+		}
+
+		// Parse timestamps
+		chat.LastMessageTime, _ = time.Parse(time.RFC3339, lastMessageTime)
+		chat.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+		chat.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+
+		// Handle nullable fields
+		if lastMessage.Valid {
+			chat.LastMessage = &lastMessage.String
+		}
+		if lastMessageFromMe.Valid {
+			chat.LastMessageFromMe = &lastMessageFromMe.Bool
+		}
+		if lastMessageType.Valid {
+			chat.LastMessageType = &lastMessageType.String
+		}
+		if unreadCount.Valid {
+			count := int(unreadCount.Int32)
+			chat.UnreadCount = &count
+		}
+
+		// Check if chat already exists
+		existing, _ := service.chatStorageRepo.GetChat(chat.JID)
+		if existing != nil {
+			// Chat exists, skip (merge behavior - keep existing)
+			skipped++
+			continue
+		}
+
+		// Store chat (will use ON CONFLICT handling)
+		if err := service.chatStorageRepo.StoreChat(&chat); err != nil {
+			logrus.WithError(err).WithField("jid", chat.JID).Warn("Failed to store chat, skipping")
+			skipped++
+			continue
+		}
+		imported++
+	}
+
+	return imported, skipped, rows.Err()
+}
+
+func (service serviceChat) importMessages(ctx context.Context, backupDB *sql.DB) (imported, skipped int64, err error) {
+	rows, err := backupDB.Query(`
+		SELECT id, chat_jid, sender, content, timestamp, is_from_me,
+		       media_type, filename, url, file_length, status,
+		       delivered_at, read_at, played_at, created_at, updated_at
+		FROM messages
+	`)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var msg domainChatStorage.Message
+		var timestamp, createdAt, updatedAt string
+		var deliveredAt, readAt, playedAt sql.NullString
+
+		err := rows.Scan(
+			&msg.ID,
+			&msg.ChatJID,
+			&msg.Sender,
+			&msg.Content,
+			&timestamp,
+			&msg.IsFromMe,
+			&msg.MediaType,
+			&msg.Filename,
+			&msg.URL,
+			&msg.FileLength,
+			&msg.Status,
+			&deliveredAt,
+			&readAt,
+			&playedAt,
+			&createdAt,
+			&updatedAt,
+		)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to scan message row, skipping")
+			skipped++
+			continue
+		}
+
+		// Parse timestamps
+		msg.Timestamp, _ = time.Parse(time.RFC3339, timestamp)
+		msg.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+		msg.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+
+		// Handle nullable timestamp fields
+		if deliveredAt.Valid {
+			t, _ := time.Parse(time.RFC3339, deliveredAt.String)
+			msg.DeliveredAt = &t
+		}
+		if readAt.Valid {
+			t, _ := time.Parse(time.RFC3339, readAt.String)
+			msg.ReadAt = &t
+		}
+		if playedAt.Valid {
+			t, _ := time.Parse(time.RFC3339, playedAt.String)
+			msg.PlayedAt = &t
+		}
+
+		// Check if message already exists
+		existing, _ := service.chatStorageRepo.GetMessageByID(msg.ID)
+		if existing != nil {
+			// Message exists, skip (merge behavior - keep existing)
+			skipped++
+			continue
+		}
+
+		// Store message (will use ON CONFLICT handling)
+		if err := service.chatStorageRepo.StoreMessage(&msg); err != nil {
+			logrus.WithError(err).WithField("id", msg.ID).Warn("Failed to store message, skipping")
+			skipped++
+			continue
+		}
+		imported++
+	}
+
+	return imported, skipped, rows.Err()
 }

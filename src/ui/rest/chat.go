@@ -1,6 +1,11 @@
 package rest
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"time"
+
 	domainChat "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/chat"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/utils"
 	"github.com/gofiber/fiber/v2"
@@ -18,6 +23,10 @@ func InitRestChat(app fiber.Router, service domainChat.IChatUsecase) Chat {
 	app.Get("/chat/:chat_jid/messages", rest.GetChatMessages)
 	app.Post("/chat/:chat_jid/pin", rest.PinChat)
 	app.Post("/chat/:chat_jid/disappearing", rest.SetDisappearingTimer)
+
+	// Storage export/import endpoints
+	app.Get("/chat/export", rest.ExportStorage)
+	app.Post("/chat/import", rest.ImportStorage)
 
 	return rest
 }
@@ -124,6 +133,79 @@ func (controller *Chat) SetDisappearingTimer(c *fiber.Ctx) error {
 
 	response, err := controller.Service.SetDisappearingTimer(c.UserContext(), request)
 	utils.PanicIfNeeded(err)
+
+	return c.JSON(utils.ResponseData{
+		Status:  200,
+		Code:    "SUCCESS",
+		Message: response.Message,
+		Results: response,
+	})
+}
+
+func (controller *Chat) ExportStorage(c *fiber.Ctx) error {
+	filePath, err := controller.Service.ExportStorage(c.UserContext())
+	if err != nil {
+		return c.Status(500).JSON(utils.ResponseData{
+			Status:  500,
+			Code:    "EXPORT_ERROR",
+			Message: err.Error(),
+			Results: nil,
+		})
+	}
+
+	// Set headers for file download
+	filename := fmt.Sprintf("chatstorage-%s.db", time.Now().Format("20060102-150405"))
+	c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	c.Set("Content-Type", "application/octet-stream")
+
+	return c.SendFile(filePath)
+}
+
+func (controller *Chat) ImportStorage(c *fiber.Ctx) error {
+	// Get uploaded file
+	file, err := c.FormFile("file")
+	if err != nil {
+		return c.Status(400).JSON(utils.ResponseData{
+			Status:  400,
+			Code:    "BAD_REQUEST",
+			Message: "No file uploaded. Please upload a SQLite backup file.",
+			Results: nil,
+		})
+	}
+
+	// Validate file extension
+	ext := filepath.Ext(file.Filename)
+	if ext != ".db" && ext != ".sqlite" && ext != ".sqlite3" {
+		return c.Status(400).JSON(utils.ResponseData{
+			Status:  400,
+			Code:    "BAD_REQUEST",
+			Message: "Invalid file type. Please upload a SQLite database file (.db, .sqlite, .sqlite3)",
+			Results: nil,
+		})
+	}
+
+	// Save to temp file
+	tempPath := filepath.Join(os.TempDir(), fmt.Sprintf("wa-import-%d%s", time.Now().UnixNano(), ext))
+	if err := c.SaveFile(file, tempPath); err != nil {
+		return c.Status(500).JSON(utils.ResponseData{
+			Status:  500,
+			Code:    "UPLOAD_ERROR",
+			Message: "Failed to save uploaded file",
+			Results: nil,
+		})
+	}
+	defer os.Remove(tempPath) // Cleanup temp file after import
+
+	// Perform import
+	response, err := controller.Service.ImportStorage(c.UserContext(), tempPath)
+	if err != nil {
+		return c.Status(500).JSON(utils.ResponseData{
+			Status:  500,
+			Code:    "IMPORT_ERROR",
+			Message: err.Error(),
+			Results: nil,
+		})
+	}
 
 	return c.JSON(utils.ResponseData{
 		Status:  200,

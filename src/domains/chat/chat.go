@@ -95,3 +95,26 @@ type SetDisappearingTimerResponse struct {
 	ChatJID      string `json:"chat_jid"`
 	TimerSeconds uint32 `json:"timer_seconds"`
 }
+
+// Storage Export/Import operations
+
+type ImportStorageRequest struct {
+	// File is handled by multipart form, not JSON
+}
+
+type ImportStorageResponse struct {
+	Status   string             `json:"status"`
+	Message  string             `json:"message"`
+	Imported ImportStorageStats `json:"imported"`
+	Skipped  ImportStorageStats `json:"skipped"`
+	Duration string             `json:"duration"`
+}
+
+type ImportStorageStats struct {
+	Chats    int64 `json:"chats"`
+	Messages int64 `json:"messages"`
+}
+
+type ExportStorageResponse struct {
+	Filename string `json:"filename"`
+}
