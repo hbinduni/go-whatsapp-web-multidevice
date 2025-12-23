@@ -38,8 +38,11 @@ func createMessagePayload(ctx context.Context, evt *events.Message) (map[string]
 		body["device_jid"] = cli.Store.ID.String()
 	}
 
-	body["sender_id"] = evt.Info.Sender.User
-	body["chat_id"] = evt.Info.Chat.User
+	// Normalize JIDs from @lid to @s.whatsapp.net format for consistent webhook data
+	normalizedSender := NormalizeJIDFromLID(ctx, evt.Info.Sender, cli)
+	normalizedChat := NormalizeJIDFromLID(ctx, evt.Info.Chat, cli)
+	body["sender_id"] = normalizedSender.User
+	body["chat_id"] = normalizedChat.User
 
 	if from := evt.Info.SourceString(); from != "" {
 		body["from"] = from
