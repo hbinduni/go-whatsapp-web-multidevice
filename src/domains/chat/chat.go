@@ -122,11 +122,11 @@ type ExportStorageResponse struct {
 // Storage Analyze operations
 
 type AnalyzeStorageResponse struct {
-	Filename    string              `json:"filename"`
-	Size        string              `json:"size"`
-	SizeBytes   int64               `json:"size_bytes"`
-	Tables      []TableInfo         `json:"tables"`
-	Schema      []SchemaDescription `json:"schema"`
+	Filename  string              `json:"filename"`
+	Size      string              `json:"size"`
+	SizeBytes int64               `json:"size_bytes"`
+	Tables    []TableInfo         `json:"tables"`
+	Schema    []SchemaDescription `json:"schema"`
 }
 
 type TableInfo struct {
