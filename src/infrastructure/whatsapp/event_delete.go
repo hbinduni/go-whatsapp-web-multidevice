@@ -22,6 +22,11 @@ func forwardDeleteToWebhook(ctx context.Context, evt *events.DeleteForMe, messag
 func createDeletePayload(_ context.Context, evt *events.DeleteForMe, message *domainChatStorage.Message) (map[string]any, error) {
 	body := make(map[string]any)
 
+	// Add device_jid to identify which WhatsApp account received this event
+	if cli != nil && cli.Store != nil && cli.Store.ID != nil {
+		body["device_jid"] = cli.Store.ID.String()
+	}
+
 	// Basic delete event information
 	body["action"] = "event.delete_for_me"
 	body["deleted_message_id"] = evt.MessageID

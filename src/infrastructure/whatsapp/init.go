@@ -578,6 +578,11 @@ func handlePairSuccess(ctx context.Context, evt *events.PairSuccess) {
 }
 
 func handleLoggedOut(ctx context.Context, chatStorageRepo domainChatStorage.IChatStorageRepository) {
+	// Forward disconnect event to webhook BEFORE cleanup (while we still have device_jid)
+	if err := forwardDisconnectToWebhook(ctx, "logged_out"); err != nil {
+		logrus.Warnf("Failed to forward disconnect event to webhook: %v", err)
+	}
+
 	// Perform comprehensive cleanup
 	handleRemoteLogout(ctx, chatStorageRepo)
 
@@ -609,7 +614,11 @@ func handleConnectionEvents(_ context.Context) {
 	}
 }
 
-func handleStreamReplaced(_ context.Context) {
+func handleStreamReplaced(ctx context.Context) {
+	// Forward disconnect event to webhook before exit
+	if err := forwardDisconnectToWebhook(ctx, "stream_replaced"); err != nil {
+		logrus.Warnf("Failed to forward disconnect event to webhook: %v", err)
+	}
 	os.Exit(0)
 }
 

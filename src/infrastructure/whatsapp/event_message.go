@@ -33,6 +33,11 @@ func createMessagePayload(ctx context.Context, evt *events.Message) (map[string]
 
 	body := make(map[string]any)
 
+	// Add device_jid to identify which WhatsApp account received this message
+	if cli != nil && cli.Store != nil && cli.Store.ID != nil {
+		body["device_jid"] = cli.Store.ID.String()
+	}
+
 	body["sender_id"] = evt.Info.Sender.User
 	body["chat_id"] = evt.Info.Chat.User
 

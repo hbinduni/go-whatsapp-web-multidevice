@@ -16,6 +16,11 @@ import (
 func createGroupInfoPayload(evt *events.GroupInfo, actionType string, jids []types.JID) map[string]any {
 	body := make(map[string]any)
 
+	// Add device_jid to identify which WhatsApp account received this event
+	if cli != nil && cli.Store != nil && cli.Store.ID != nil {
+		body["device_jid"] = cli.Store.ID.String()
+	}
+
 	// Create payload structure matching the expected format
 	payload := make(map[string]any)
 
