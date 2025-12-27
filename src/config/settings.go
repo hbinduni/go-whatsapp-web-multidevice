@@ -7,11 +7,11 @@ import (
 var (
 	// Project version - independent fork of aldinokemal/go-whatsapp-web-multidevice
 	// Diverged at upstream v7.11.0, now maintained independently with different architecture
-	AppVersion     = "v2.0.0"
-	AppPort        = "3000"
-	AppHost        = "0.0.0.0"
-	AppDebug       = false
-	AppOs          = "GoWA-SSE" // Identifies this as the SSE-enabled fork
+	AppVersion             = "v2.0.0"
+	AppPort                = "3000"
+	AppHost                = "0.0.0.0"
+	AppDebug               = false
+	AppOs                  = "GoWA-SSE" // Identifies this as the SSE-enabled fork
 	AppPlatform            = waCompanionReg.DeviceProps_PlatformType(1)
 	AppBasicAuthCredential []string
 	AppBasePath            = ""
@@ -56,6 +56,6 @@ var (
 	S3SecretAccessKey = ""
 	S3Bucket          = ""
 	S3ForcePathStyle  = false
-	S3PublicURL       = ""         // Optional: custom public URL for direct media access
-	S3UseServerProxy  = false      // Use server download endpoint for private bucket access
+	S3PublicURL       = ""    // Optional: custom public URL for direct media access
+	S3UseServerProxy  = false // Use server download endpoint for private bucket access
 )
