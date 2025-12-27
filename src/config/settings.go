@@ -19,7 +19,6 @@ var (
 
 	PathQrCode    = "statics/qrcode"
 	PathSendItems = "statics/senditems"
-	PathMedia     = "statics/media"
 	PathStorages  = "storages"
 
 	DBURI     = "file:storages/whatsapp.db?_foreign_keys=on"
@@ -50,16 +49,13 @@ var (
 	HistorySyncMaxDays int32 = 90   // Maximum days of history to process (default 90 days = 3 months)
 	// Options: 90 (3 months), 365 (1 year), 730 (2 years), 1095 (3 years), -1 (all available)
 
-	// Media Storage Configuration
-	MediaStorageType = "local" // "local" or "s3"
-
-	// S3/MinIO Configuration
+	// S3/MinIO Configuration (required for media storage)
 	S3Endpoint        = ""
 	S3Region          = "us-east-1"
 	S3AccessKeyID     = ""
 	S3SecretAccessKey = ""
 	S3Bucket          = ""
 	S3ForcePathStyle  = false
-	S3PublicURL       = ""
-	S3UseServerProxy  = false // Use server download endpoint for private bucket access
+	S3PublicURL       = ""         // Optional: custom public URL for direct media access
+	S3UseServerProxy  = false      // Use server download endpoint for private bucket access
 )

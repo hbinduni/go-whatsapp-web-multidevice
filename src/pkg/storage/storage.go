@@ -17,8 +17,7 @@ type MediaStorage interface {
 	Delete(ctx context.Context, path string) error
 
 	// GetURL returns a publicly accessible URL for the media
-	// For local storage, this returns the local file path
-	// For S3 storage, this returns the S3 URL or public URL if configured
+	// Returns the S3 URL or public URL if configured
 	GetURL(path string) string
 
 	// SaveStream saves media from a reader stream to storage
@@ -33,9 +32,6 @@ type MediaStorage interface {
 type StorageType string
 
 const (
-	// StorageTypeLocal represents local file system storage
-	StorageTypeLocal StorageType = "local"
-
 	// StorageTypeS3 represents S3/MinIO storage
 	StorageTypeS3 StorageType = "s3"
 )

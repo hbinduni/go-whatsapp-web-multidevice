@@ -199,10 +199,10 @@ func (service serviceChat) GetChatMessages(ctx context.Context, request domainCh
 	// Convert entities to domain objects
 	messageInfos := make([]domainChat.MessageInfo, 0, len(messages))
 	for _, message := range messages {
-		// Determine URL: use constructed S3 URL for media messages if S3 storage is enabled
+		// Determine URL: use constructed S3 URL for media messages if storage is initialized
 		// and auto-download is enabled (media should exist in S3 only if auto-download was on)
 		url := message.URL
-		if message.MediaType != "" && storage.IsS3StorageEnabled() && config.WhatsappAutoDownloadMedia && deviceID != "" {
+		if message.MediaType != "" && storage.IsStorageInitialized() && config.WhatsappAutoDownloadMedia && deviceID != "" {
 			if s3URL := storage.ConstructMediaURL(deviceID, message.ChatJID, message.ID, message.MediaType); s3URL != "" {
 				url = s3URL
 			}

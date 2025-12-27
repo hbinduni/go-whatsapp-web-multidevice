@@ -19,35 +19,18 @@ var (
 	storageMu     sync.RWMutex
 )
 
-// InitStorage initializes the global storage instance based on configuration
-func InitStorage(storageType StorageType, localBasePath string, s3Config *S3Config) error {
-	var storage MediaStorage
-	var err error
-
-	switch storageType {
-	case StorageTypeLocal:
-		storage, err = NewLocalStorage(localBasePath)
-		if err != nil {
-			return fmt.Errorf("failed to initialize local storage: %w", err)
-		}
-		logrus.Debug("Initialized local file storage")
-
-	case StorageTypeS3:
-		if s3Config == nil {
-			return fmt.Errorf("S3 configuration is required for S3 storage type")
-		}
-
-		// Use MinIO native SDK for better compatibility
-		storage, err = NewMinIOStorage(*s3Config)
-		if err != nil {
-			return fmt.Errorf("failed to initialize MinIO storage: %w", err)
-		}
-
-		logrus.Debugf("Initialized S3-compatible storage (endpoint: %s, bucket: %s)", s3Config.Endpoint, s3Config.Bucket)
-
-	default:
-		return fmt.Errorf("unsupported storage type: %s", storageType)
+// InitStorage initializes the global S3 storage instance
+func InitStorage(s3Config *S3Config) error {
+	if s3Config == nil {
+		return fmt.Errorf("S3 configuration is required")
 	}
+
+	storage, err := NewMinIOStorage(*s3Config)
+	if err != nil {
+		return fmt.Errorf("failed to initialize S3 storage: %w", err)
+	}
+
+	logrus.Infof("Initialized S3 storage (endpoint: %s, bucket: %s)", s3Config.Endpoint, s3Config.Bucket)
 
 	storageMu.Lock()
 	globalStorage = storage
@@ -56,44 +39,23 @@ func InitStorage(storageType StorageType, localBasePath string, s3Config *S3Conf
 }
 
 // GetStorage returns the global storage instance
+// Returns nil if storage is not initialized - caller must handle this
 func GetStorage() MediaStorage {
 	storageMu.RLock()
-	s := globalStorage
-	storageMu.RUnlock()
-	if s != nil {
-		return s
-	}
-	logrus.Warn("Storage not initialized, using default local storage")
-	fallback, err := NewLocalStorage("statics/media")
-	if err != nil {
-		logrus.Errorf("Failed to create fallback local storage: %v", err)
-		return nil
-	}
-	storageMu.Lock()
-	if globalStorage == nil {
-		globalStorage = fallback
-	}
-	s = globalStorage
-	storageMu.Unlock()
-	return s
+	defer storageMu.RUnlock()
+	return globalStorage
 }
 
-// ParseStorageType converts a string to StorageType
-func ParseStorageType(s string) (StorageType, error) {
-	s = strings.ToLower(strings.TrimSpace(s))
-	switch s {
-	case "local", "":
-		return StorageTypeLocal, nil
-	case "s3", "minio":
-		return StorageTypeS3, nil
-	default:
-		return "", fmt.Errorf("invalid storage type: %s (valid options: local, s3)", s)
-	}
+// IsStorageInitialized returns true if storage has been initialized
+func IsStorageInitialized() bool {
+	storageMu.RLock()
+	defer storageMu.RUnlock()
+	return globalStorage != nil
 }
 
 // ConstructMediaURL constructs a direct media URL for S3 storage
 // This allows clients to access media directly without calling the download endpoint
-// Returns empty string if storage type is not S3 or if required parameters are missing
+// Returns empty string if required parameters are missing
 //
 // Parameters:
 //   - deviceID: The WhatsApp device ID (phone number)
@@ -104,13 +66,13 @@ func ParseStorageType(s string) (StorageType, error) {
 // URL Pattern: {S3PublicURL or S3Endpoint}/{S3Bucket}/{deviceID}/{chatJID_sanitized}/{messageID}
 // Note: No file extension - S3 handles content-type via metadata
 func ConstructMediaURL(deviceID, chatJID, messageID, mediaType string) string {
-	// Only construct URL for S3 storage
-	if config.MediaStorageType != "s3" {
+	// Validate required parameters
+	if deviceID == "" || chatJID == "" || messageID == "" {
 		return ""
 	}
 
-	// Validate required parameters
-	if deviceID == "" || chatJID == "" || messageID == "" {
+	// Validate S3 configuration
+	if config.S3Bucket == "" || config.S3Endpoint == "" {
 		return ""
 	}
 
@@ -139,7 +101,8 @@ func ConstructMediaURL(deviceID, chatJID, messageID, mediaType string) string {
 	return fmt.Sprintf("%s/%s/%s", baseURL, config.S3Bucket, path)
 }
 
-// IsS3StorageEnabled returns true if S3 storage is configured and enabled
-func IsS3StorageEnabled() bool {
-	return config.MediaStorageType == "s3" && config.S3Bucket != "" && config.S3Endpoint != ""
+// IsS3ConfigValid returns true if S3 storage is properly configured
+func IsS3ConfigValid() bool {
+	return config.S3Bucket != "" && config.S3Endpoint != "" &&
+		config.S3AccessKeyID != "" && config.S3SecretAccessKey != ""
 }

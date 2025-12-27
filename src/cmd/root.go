@@ -158,12 +158,7 @@ func initEnvConfig() {
 		config.HistorySyncMaxDays = viper.GetInt32("whatsapp_history_sync_max_days")
 	}
 
-	// Media Storage settings
-	if envStorageType := viper.GetString("media_storage_type"); envStorageType != "" {
-		config.MediaStorageType = envStorageType
-	}
-
-	// S3/MinIO settings
+	// S3/MinIO settings (required for media storage)
 	if envS3Endpoint := viper.GetString("s3_endpoint"); envS3Endpoint != "" {
 		config.S3Endpoint = envS3Endpoint
 	}
@@ -326,7 +321,7 @@ func initApp() {
 	}
 
 	//preparing folder if not exist
-	err := utils.CreateFolder(config.PathQrCode, config.PathSendItems, config.PathStorages, config.PathMedia)
+	err := utils.CreateFolder(config.PathQrCode, config.PathSendItems, config.PathStorages)
 	if err != nil {
 		logrus.Errorln(err)
 	}
@@ -352,15 +347,9 @@ func initApp() {
 
 	whatsappCli = whatsapp.InitWaCLI(ctx, whatsappDB, keysDB, chatStorageRepo)
 
-	// Initialize storage
-	storageType, err := storage.ParseStorageType(config.MediaStorageType)
-	if err != nil {
-		logrus.Fatalf("invalid media storage type: %v", err)
-	}
-
-	var s3Config *storage.S3Config
-	if storageType == storage.StorageTypeS3 {
-		s3Config = &storage.S3Config{
+	// Initialize S3 storage (required for media)
+	if storage.IsS3ConfigValid() {
+		s3Config := &storage.S3Config{
 			Endpoint:        config.S3Endpoint,
 			Region:          config.S3Region,
 			AccessKeyID:     config.S3AccessKeyID,
@@ -370,10 +359,11 @@ func initApp() {
 			PublicURL:       config.S3PublicURL,
 			UseServerProxy:  config.S3UseServerProxy,
 		}
-	}
-
-	if err := storage.InitStorage(storageType, config.PathMedia, s3Config); err != nil {
-		logrus.Fatalf("failed to initialize media storage: %v", err)
+		if err := storage.InitStorage(s3Config); err != nil {
+			logrus.Fatalf("failed to initialize S3 storage: %v", err)
+		}
+	} else {
+		logrus.Warn("S3 storage not configured - media download/upload features will be disabled")
 	}
 
 	// Usecase
