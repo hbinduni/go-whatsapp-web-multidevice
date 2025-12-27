@@ -66,8 +66,8 @@ Originally forked from aldinokemal/go-whatsapp-web-multidevice, now maintained i
 
 Send WhatsApp messages over HTTP API. Requires WhatsApp multi-device account.`, config.AppVersion),
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		// Print version banner on startup (only for rest/mcp commands, not help)
-		if cmd.Name() == "rest" || cmd.Name() == "mcp" {
+		// Print version banner on startup (only for rest command, not help)
+		if cmd.Name() == "rest" {
 			logrus.Infof("========================================")
 			logrus.Infof("  GoWA-SSE: WhatsApp Web API")
 			logrus.Infof("  Version: %s", config.AppVersion)

@@ -7,8 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Building and Running
 
 - **Build binary**: `cd src && go build -o whatsapp` (Linux/macOS) or `go build -o whatsapp.exe` (Windows)
-- **Run REST API mode**: `cd src && go run . rest` or `./whatsapp rest`
-- **Run MCP server mode**: `cd src && go run . mcp` or `./whatsapp mcp`
+- **Run REST API server**: `cd src && go run . rest` or `./whatsapp rest`
 - **Run with Docker**: `docker-compose up -d --build`
 
 ### Testing
@@ -25,21 +24,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Architecture
 
-This is a Go-based WhatsApp Web API server supporting both REST API and MCP (Model Context Protocol) modes.
+This is a Go-based WhatsApp Web REST API server with SSE real-time events, S3/MinIO media storage, and chat history synchronization.
 
 ### Core Architecture Pattern
 
 - **Domain-Driven Design**: Business logic separated into domain packages (`domains/`)
 - **Clean Architecture**: Clear separation between UI, use cases, and infrastructure layers
-- **Cobra CLI**: Command pattern with separate commands for `rest` and `mcp` modes
+- **Cobra CLI**: Command pattern for the `rest` server mode
 
 ### Key Directories
 
 - `src/`: Main source code directory
-- `src/cmd/`: CLI commands (root, rest, mcp)
+- `src/cmd/`: CLI commands (root, rest)
 - `src/domains/`: Business domain logic (app, chat, group, message, send, user, newsletter)
 - `src/infrastructure/`: External integrations (WhatsApp, database)
-- `src/ui/`: User interface layers (REST API, MCP server, WebSocket)
+- `src/ui/`: User interface layers (REST API, SSE, WebSocket)
 - `src/usecase/`: Application use cases bridging domains and UI
 - `src/validations/`: Input validation logic
 - `src/pkg/`: Shared utilities and helpers
@@ -56,18 +55,13 @@ This is a Go-based WhatsApp Web API server supporting both REST API and MCP (Mod
 - **Chat Storage**: Separate SQLite database for chat history (`storages/chatstorage.db`)
 - **Database URIs**: Configurable via `DB_URI` and `DB_KEYS_URI` environment variables
 
-### Mode-Specific Architecture
-
-- **REST Mode**: Fiber web server with HTML templates, WebSocket support, middleware stack
-- **MCP Mode**: Model Context Protocol server with SSE transport for AI agent integration
-
 ### Key Dependencies
 
 - `go.mau.fi/whatsmeow`: WhatsApp Web protocol implementation
 - `github.com/gofiber/fiber/v2`: Web framework for REST API
-- `github.com/mark3labs/mcp-go`: MCP server implementation
 - `github.com/spf13/cobra`: CLI framework
 - `github.com/spf13/viper`: Configuration management
+- `github.com/minio/minio-go/v7`: S3/MinIO storage client
 
 ### WhatsApp Integration
 
@@ -78,7 +72,6 @@ This is a Go-based WhatsApp Web API server supporting both REST API and MCP (Mod
 
 ## Important Notes
 
-- The application cannot run both REST and MCP modes simultaneously (limitation from whatsmeow library)
 - All source code must be in the `src/` directory
 - Media files are stored in `src/statics/media/` and `src/storages/`
 - HTML templates and assets are embedded in the binary using Go's embed feature

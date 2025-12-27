@@ -14,7 +14,7 @@
 >
 > For the original project, please visit the upstream repository.
 
-## Support for `ARM` & `AMD` Architecture along with `MCP` Support
+## Support for `ARM` & `AMD` Architecture
 
 Download:
 
@@ -32,8 +32,6 @@ Download:
 - `v6`
   - For REST mode, you need to run `<binary> rest` instead of `<binary>`
     - for example: `./whatsapp rest` instead of ~~./whatsapp~~
-  - For MCP mode, you need to run `<binary> mcp`
-    - for example: `./whatsapp mcp`
 - `v7`
   - Starting version 7.x we are using goreleaser to build the binary, so you can download the binary
       from [release](https://github.com/aldinokemal/go-whatsapp-web-multidevice/releases/latest)
@@ -41,7 +39,6 @@ Download:
 ## Feature
 
 - Send WhatsApp message via http API, [docs/openapi.yml](./docs/openapi.yaml) for more details
-- **MCP (Model Context Protocol) Server Support** - Integrate with AI agents and tools using standardized protocol
 - Mention someone
   - `@phoneNumber`
   - example: `Hello @628974812XXXX, @628974812XXXX`
@@ -240,87 +237,6 @@ make help
         1. run `.\whatsapp.exe --help` for more detail flags
 6. open `http://localhost:3000` in browser
 
-### MCP Server (Model Context Protocol)
-
-This application can also run as an MCP server, allowing AI agents and tools to interact with WhatsApp through a
-standardized protocol.
-
-1. Clone this repo `git clone https://github.com/aldinokemal/go-whatsapp-web-multidevice`
-2. Open the folder that was cloned via cmd/terminal.
-3. run `cd src`
-4. run `go run . mcp` or build the binary and run `./whatsapp mcp`
-5. The MCP server will start on `http://localhost:8080` by default
-
-#### MCP Server Options
-
-- `--host localhost` - Set the host for MCP server (default: localhost)
-- `--port 8080` - Set the port for MCP server (default: 8080)
-
-#### Available MCP Tools
-
-The WhatsApp MCP server provides comprehensive tools for AI agents to interact with WhatsApp through a standardized protocol. Below is the complete list of available tools:
-
-##### **📱 Connection Management**
-
-- `whatsapp_connection_status` - Check whether the WhatsApp client is connected and logged in
-- `whatsapp_login_qr` - Initiate QR code based login flow with image output
-- `whatsapp_login_with_code` - Generate pairing code for multi-device login using phone number
-- `whatsapp_logout` - Sign out the current WhatsApp session
-- `whatsapp_reconnect` - Attempt to reconnect to WhatsApp using stored session
-
-##### **💬 Messaging & Communication**
-
-- `whatsapp_send_text` - Send text messages with reply and forwarding support
-- `whatsapp_send_contact` - Send contact cards with name and phone number
-- `whatsapp_send_link` - Send links with custom captions
-- `whatsapp_send_location` - Send location coordinates (latitude/longitude)
-- `whatsapp_send_image` - Send images with captions, compression, and view-once options
-- `whatsapp_send_sticker` - Send stickers with automatic WebP conversion (supports JPG/PNG/GIF)
-
-##### **📋 Chat & Contact Management**
-
-- `whatsapp_list_contacts` - Retrieve all contacts in your WhatsApp account
-- `whatsapp_list_chats` - Get recent chats with pagination and search filters
-- `whatsapp_get_chat_messages` - Fetch messages from specific chats with time/media filtering
-- `whatsapp_download_message_media` - Download images/videos from messages
-
-##### **👥 Group Management**
-
-- `whatsapp_group_create` - Create new groups with optional initial participants
-- `whatsapp_group_join_via_link` - Join groups using invite links
-- `whatsapp_group_leave` - Leave groups by group ID
-- `whatsapp_group_participants` - List all participants in a group
-- `whatsapp_group_manage_participants` - Add, remove, promote, or demote group members
-- `whatsapp_group_invite_link` - Get or reset group invite links
-- `whatsapp_group_info` - Get detailed group information
-- `whatsapp_group_set_name` - Update group display name
-- `whatsapp_group_set_topic` - Update group description/topic
-- `whatsapp_group_set_locked` - Toggle admin-only group info editing
-- `whatsapp_group_set_announce` - Toggle announcement-only mode
-- `whatsapp_group_join_requests` - List pending join requests
-- `whatsapp_group_manage_join_requests` - Approve or reject join requests
-
-#### MCP Endpoints
-
-- SSE endpoint: `http://localhost:8080/sse`
-- Message endpoint: `http://localhost:8080/message`
-
-### MCP Configuration
-
-Make sure you have the MCP server running: `./whatsapp mcp`
-
-For AI tools that support MCP with SSE (like Cursor), add this configuration:
-
-```json
-{
-  "mcpServers": {
-    "whatsapp": {
-      "url": "http://localhost:8080/sse"
-    }
-  }
-}
-```
-
 ### Production Mode REST (docker)
 
 Using Docker Hub:
@@ -441,13 +357,6 @@ You can fork or edit this source code !
 
 ## Current API
 
-### MCP (Model Context Protocol) API
-
-- MCP server provides standardized tools for AI agents to interact with WhatsApp
-- Supports Server-Sent Events (SSE) transport
-- Available tools: `whatsapp_send_text`, `whatsapp_send_contact`, `whatsapp_send_link`, `whatsapp_send_location`
-- Compatible with MCP-enabled AI tools and agents
-
 ### HTTP REST API
 
 - [API Specification Document](https://bump.sh/aldinokemal/doc/go-whatsapp-web-multidevice).
@@ -525,15 +434,6 @@ You can fork or edit this source code !
 
 ## User Interface
 
-### MCP UI
-
-- Setup MCP (tested in cursor)
-  ![Setup MCP](https://i.ibb.co/vCg4zNWt/mcpsetup.png)
-- Test MCP
-  ![Test MCP](https://i.ibb.co/B2LX38DW/mcptest.png)
-- Successfully setup MCP
-  ![Success MCP](https://i.ibb.co/1fCx0Myc/mcpsuccess.png)
-
 ### HTTP REST API UI
 
 | Description          | Image                                                         |
@@ -570,5 +470,3 @@ You can fork or edit this source code !
 
 - This project is unofficial and not affiliated with WhatsApp.
 - Please use official WhatsApp API to avoid any issues.
-- We only able to run MCP or REST API, this is limitation from whatsmeow library. independent MCP will be available in
-  the future.
