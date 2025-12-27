@@ -15,7 +15,7 @@ The access key or secret key doesn't match what's configured in MinIO.
 **How to verify:**
 ```bash
 # Using MinIO Client (mc)
-mc alias set myminio https://your-s3-endpoint.com hbinduni YOUR_SECRET_KEY
+mc alias set myminio https://your-s3-endpoint.com YOUR_ACCESS_KEY YOUR_SECRET_KEY
 mc ls myminio/id1
 
 # Or using AWS CLI with MinIO
@@ -91,24 +91,24 @@ brew install minio/stable/mc
 2. **Configure and Test:**
 ```bash
 # Add your MinIO server
-mc alias set larahq https://your-s3-endpoint.com hbinduni YOUR_SECRET_KEY
+mc alias set mys3 https://your-s3-endpoint.com YOUR_ACCESS_KEY YOUR_SECRET_KEY
 
 # List buckets
-mc ls larahq
+mc ls mys3
 
 # List files in id1 bucket
-mc ls larahq/id1
+mc ls mys3/id1
 
 # Upload test file
 echo "test" > test.txt
-mc cp test.txt larahq/id1/test.txt
+mc cp test.txt mys3/id1/test.txt
 
 # Download test file
-mc cp larahq/id1/test.txt downloaded.txt
+mc cp mys3/id1/test.txt downloaded.txt
 
 # Clean up
 rm test.txt downloaded.txt
-mc rm larahq/id1/test.txt
+mc rm mys3/id1/test.txt
 ```
 
 ### Method 2: Using AWS CLI
@@ -131,7 +131,7 @@ sudo ./aws/install
 mkdir -p ~/.aws
 cat > ~/.aws/credentials <<EOF
 [minio]
-aws_access_key_id = hbinduni
+aws_access_key_id = YOUR_ACCESS_KEY
 aws_secret_access_key = YOUR_SECRET_KEY
 EOF
 ```
@@ -201,7 +201,7 @@ Successfully uploaded media to S3: ...
 
 4. **Verify in MinIO:**
 ```bash
-mc ls larahq/id1/
+mc ls mys3/id1/
 ```
 
 ## Common Fixes
@@ -209,7 +209,7 @@ mc ls larahq/id1/
 ### Fix 1: Verify Credentials
 ```bash
 # Test with mc client
-mc alias set test https://your-s3-endpoint.com hbinduni YOUR_SECRET_KEY
+mc alias set test https://your-s3-endpoint.com YOUR_ACCESS_KEY YOUR_SECRET_KEY
 
 # If this fails, your credentials are wrong
 # If it works, continue...
@@ -220,13 +220,13 @@ mc ls test
 ### Fix 2: Create Bucket Before Starting Application
 ```bash
 # Create bucket using MinIO Client (mc)
-mc mb larahq/id1
+mc mb mys3/id1
 
 # Or via AWS CLI
 aws --endpoint-url https://your-s3-endpoint.com s3 mb s3://id1
 
 # Verify bucket was created
-mc ls larahq/
+mc ls mys3/
 ```
 
 **Note**: The application will NOT create the bucket automatically. You must create it manually before starting the application.
@@ -241,7 +241,7 @@ Make sure your MinIO user has these permissions:
 
 In MinIO console:
 1. Go to Identity → Users
-2. Select your user (hbinduni)
+2. Select your user
 3. Check assigned policies
 4. Ensure policy allows the above actions on bucket `id1`
 
