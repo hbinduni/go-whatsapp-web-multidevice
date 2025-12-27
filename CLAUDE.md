@@ -70,6 +70,38 @@ This is a Go-based WhatsApp Web REST API server with SSE real-time events, S3/Mi
 - Auto-reconnection and connection monitoring
 - Media compression and webhook support
 
+## Security Guidelines (PUBLIC REPO)
+
+**This is a public repository. Never commit secrets or credentials.**
+
+### What NOT to commit:
+- Passwords, API keys, access tokens
+- S3/MinIO credentials (access key, secret key)
+- Database connection strings with passwords
+- Private endpoints or internal URLs
+- `.env` files (use `.env.example` with placeholders)
+
+### Use placeholders in documentation:
+```
+# Good
+mc alias set mys3 https://your-s3-endpoint.com YOUR_ACCESS_KEY YOUR_SECRET_KEY
+
+# Bad - real credentials
+mc alias set mys3 https://s3.example.com admin realpassword123
+```
+
+### If credentials are accidentally committed:
+1. Rotate the credentials immediately
+2. Use `git-filter-repo` to remove from history
+3. Force push to update remote
+4. Contact GitHub to purge cached commits if needed
+
+### Environment variables for scripts:
+Scripts should use environment variables, not hardcoded values:
+```bash
+WA_USER=xxx WA_PASS=yyy bun run script.ts
+```
+
 ## Important Notes
 
 - All source code must be in the `src/` directory
