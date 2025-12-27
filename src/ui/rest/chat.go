@@ -8,6 +8,7 @@ import (
 
 	domainChat "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/chat"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/utils"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/ui/rest/helpers"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -42,14 +43,11 @@ func (controller *Chat) ListChats(c *fiber.Ctx) error {
 	request.HasMedia = c.QueryBool("has_media", false)
 
 	response, err := controller.Service.ListChats(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: "Success get chat list",
-		Results: response,
-	})
+	return helpers.HandleSuccess(c, "Success get chat list", response)
 }
 
 func (controller *Chat) GetChatMessages(c *fiber.Ctx) error {
@@ -79,14 +77,11 @@ func (controller *Chat) GetChatMessages(c *fiber.Ctx) error {
 	}
 
 	response, err := controller.Service.GetChatMessages(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: "Success get chat messages",
-		Results: response,
-	})
+	return helpers.HandleSuccess(c, "Success get chat messages", response)
 }
 
 func (controller *Chat) PinChat(c *fiber.Ctx) error {
@@ -97,23 +92,15 @@ func (controller *Chat) PinChat(c *fiber.Ctx) error {
 
 	// Parse JSON body
 	if err := c.BodyParser(&request); err != nil {
-		return c.Status(400).JSON(utils.ResponseData{
-			Status:  400,
-			Code:    "BAD_REQUEST",
-			Message: "Invalid request body",
-			Results: nil,
-		})
+		return helpers.HandleBadRequest(c, "Invalid request body")
 	}
 
 	response, err := controller.Service.PinChat(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: response.Message,
-		Results: response,
-	})
+	return helpers.HandleSuccess(c, response.Message, response)
 }
 
 func (controller *Chat) SetDisappearingTimer(c *fiber.Ctx) error {
@@ -124,23 +111,15 @@ func (controller *Chat) SetDisappearingTimer(c *fiber.Ctx) error {
 
 	// Parse JSON body
 	if err := c.BodyParser(&request); err != nil {
-		return c.Status(400).JSON(utils.ResponseData{
-			Status:  400,
-			Code:    "BAD_REQUEST",
-			Message: "Invalid request body",
-			Results: nil,
-		})
+		return helpers.HandleBadRequest(c, "Invalid request body")
 	}
 
 	response, err := controller.Service.SetDisappearingTimer(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: response.Message,
-		Results: response,
-	})
+	return helpers.HandleSuccess(c, response.Message, response)
 }
 
 func (controller *Chat) ExportStorage(c *fiber.Ctx) error {
@@ -166,12 +145,7 @@ func (controller *Chat) ImportStorage(c *fiber.Ctx) error {
 	// Get uploaded file
 	file, err := c.FormFile("file")
 	if err != nil {
-		return c.Status(400).JSON(utils.ResponseData{
-			Status:  400,
-			Code:    "BAD_REQUEST",
-			Message: "No file uploaded. Please upload a SQLite backup file.",
-			Results: nil,
-		})
+		return helpers.HandleBadRequest(c, "No file uploaded. Please upload a SQLite backup file.")
 	}
 
 	// Get overwrite parameter (default: false for backward compatibility)
@@ -180,12 +154,7 @@ func (controller *Chat) ImportStorage(c *fiber.Ctx) error {
 	// Validate file extension
 	ext := filepath.Ext(file.Filename)
 	if ext != ".db" && ext != ".sqlite" && ext != ".sqlite3" {
-		return c.Status(400).JSON(utils.ResponseData{
-			Status:  400,
-			Code:    "BAD_REQUEST",
-			Message: "Invalid file type. Please upload a SQLite database file (.db, .sqlite, .sqlite3)",
-			Results: nil,
-		})
+		return helpers.HandleBadRequest(c, "Invalid file type. Please upload a SQLite database file (.db, .sqlite, .sqlite3)")
 	}
 
 	// Save to temp file
@@ -203,43 +172,23 @@ func (controller *Chat) ImportStorage(c *fiber.Ctx) error {
 	// Perform import
 	response, err := controller.Service.ImportStorage(c.UserContext(), tempPath, overwrite)
 	if err != nil {
-		return c.Status(500).JSON(utils.ResponseData{
-			Status:  500,
-			Code:    "IMPORT_ERROR",
-			Message: err.Error(),
-			Results: nil,
-		})
+		return helpers.HandleError(c, err)
 	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: response.Message,
-		Results: response,
-	})
+	return helpers.HandleSuccess(c, response.Message, response)
 }
 
 func (controller *Chat) AnalyzeStorage(c *fiber.Ctx) error {
 	// Get uploaded file
 	file, err := c.FormFile("file")
 	if err != nil {
-		return c.Status(400).JSON(utils.ResponseData{
-			Status:  400,
-			Code:    "BAD_REQUEST",
-			Message: "No file uploaded. Please upload a SQLite backup file.",
-			Results: nil,
-		})
+		return helpers.HandleBadRequest(c, "No file uploaded. Please upload a SQLite backup file.")
 	}
 
 	// Validate file extension
 	ext := filepath.Ext(file.Filename)
 	if ext != ".db" && ext != ".sqlite" && ext != ".sqlite3" {
-		return c.Status(400).JSON(utils.ResponseData{
-			Status:  400,
-			Code:    "BAD_REQUEST",
-			Message: "Invalid file type. Please upload a SQLite database file (.db, .sqlite, .sqlite3)",
-			Results: nil,
-		})
+		return helpers.HandleBadRequest(c, "Invalid file type. Please upload a SQLite database file (.db, .sqlite, .sqlite3)")
 	}
 
 	// Save to temp file
@@ -257,21 +206,11 @@ func (controller *Chat) AnalyzeStorage(c *fiber.Ctx) error {
 	// Perform analysis
 	response, err := controller.Service.AnalyzeStorage(c.UserContext(), tempPath)
 	if err != nil {
-		return c.Status(500).JSON(utils.ResponseData{
-			Status:  500,
-			Code:    "ANALYZE_ERROR",
-			Message: err.Error(),
-			Results: nil,
-		})
+		return helpers.HandleError(c, err)
 	}
 
 	// Use original filename in response
 	response.Filename = file.Filename
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: "Analysis completed successfully",
-		Results: response,
-	})
+	return helpers.HandleSuccess(c, "Analysis completed successfully", response)
 }

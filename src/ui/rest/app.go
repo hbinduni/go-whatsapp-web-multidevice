@@ -7,6 +7,7 @@ import (
 	domainApp "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/app"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/whatsapp"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/utils"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/ui/rest/helpers"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -28,7 +29,9 @@ func InitRestApp(app fiber.Router, service domainApp.IAppUsecase) App {
 
 func (handler *App) Login(c *fiber.Ctx) error {
 	response, err := handler.Service.Login(c.UserContext())
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
 	return c.JSON(utils.ResponseData{
 		Status:  200,
@@ -43,7 +46,9 @@ func (handler *App) Login(c *fiber.Ctx) error {
 
 func (handler *App) LoginWithCode(c *fiber.Ctx) error {
 	pairCode, err := handler.Service.LoginWithCode(c.UserContext(), c.Query("phone"))
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
 	return c.JSON(utils.ResponseData{
 		Status:  200,
@@ -57,38 +62,29 @@ func (handler *App) LoginWithCode(c *fiber.Ctx) error {
 
 func (handler *App) Logout(c *fiber.Ctx) error {
 	err := handler.Service.Logout(c.UserContext())
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: "Success logout",
-		Results: nil,
-	})
+	return helpers.HandleSuccess(c, "Success logout", nil)
 }
 
 func (handler *App) Reconnect(c *fiber.Ctx) error {
 	err := handler.Service.Reconnect(c.UserContext())
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: "Reconnect success",
-		Results: nil,
-	})
+	return helpers.HandleSuccess(c, "Reconnect success", nil)
 }
 
 func (handler *App) Devices(c *fiber.Ctx) error {
 	devices, err := handler.Service.FetchDevices(c.UserContext())
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: "Fetch device success",
-		Results: devices,
-	})
+	return helpers.HandleSuccess(c, "Fetch device success", devices)
 }
 
 func (handler *App) ConnectionStatus(c *fiber.Ctx) error {

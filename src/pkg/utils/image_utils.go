@@ -8,6 +8,7 @@ import (
 	"io"
 	"mime/multipart"
 
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/constants"
 	"github.com/disintegration/imaging"
 )
 
@@ -129,17 +130,10 @@ func ValidateGroupPhotoFormat(file *multipart.FileHeader) error {
 		return nil // Photo is optional (can be nil to remove photo)
 	}
 
-	// Check content type
+	// Check content type using centralized constants
 	contentType := file.Header.Get("Content-Type")
-	supportedTypes := map[string]bool{
-		"image/jpeg": true,
-		"image/jpg":  true,
-		"image/png":  true,
-		"image/webp": true,
-	}
-
-	if contentType != "" && !supportedTypes[contentType] {
-		return fmt.Errorf("unsupported image format: %s (supported: JPEG, PNG, WebP)", contentType)
+	if contentType != "" && !constants.IsAllowedGroupPhotoType(contentType) {
+		return fmt.Errorf("unsupported image format: %s (supported: JPEG, PNG, WebP, GIF)", contentType)
 	}
 
 	// Check file size (before processing)

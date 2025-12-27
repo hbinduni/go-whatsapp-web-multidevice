@@ -3,6 +3,7 @@ package rest
 import (
 	domainMessage "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/message"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/utils"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/ui/rest/helpers"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -27,136 +28,123 @@ func InitRestMessage(app fiber.Router, service domainMessage.IMessageUsecase) Me
 
 func (controller *Message) RevokeMessage(c *fiber.Ctx) error {
 	var request domainMessage.RevokeRequest
-	err := c.BodyParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
 
 	request.MessageID = c.Params("message_id")
 	utils.SanitizePhone(&request.Phone)
 
 	response, err := controller.Service.RevokeMessage(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: response.Status,
-		Results: response,
-	})
+	return helpers.HandleSuccess(c, response.Status, response)
 }
 
 func (controller *Message) DeleteMessage(c *fiber.Ctx) error {
 	var request domainMessage.DeleteRequest
-	err := c.BodyParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
 
 	request.MessageID = c.Params("message_id")
 	utils.SanitizePhone(&request.Phone)
 
-	err = controller.Service.DeleteMessage(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	err := controller.Service.DeleteMessage(c.UserContext(), request)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: "Message deleted successfully",
-		Results: nil,
-	})
+	return helpers.HandleSuccess(c, "Message deleted successfully", nil)
 }
 
 func (controller *Message) UpdateMessage(c *fiber.Ctx) error {
 	var request domainMessage.UpdateMessageRequest
-	err := c.BodyParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
 
 	request.MessageID = c.Params("message_id")
 	utils.SanitizePhone(&request.Phone)
 
 	response, err := controller.Service.UpdateMessage(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: response.Status,
-		Results: response,
-	})
+	return helpers.HandleSuccess(c, response.Status, response)
 }
 
 func (controller *Message) ReactMessage(c *fiber.Ctx) error {
 	var request domainMessage.ReactionRequest
-	err := c.BodyParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
 
 	request.MessageID = c.Params("message_id")
 	utils.SanitizePhone(&request.Phone)
 
 	response, err := controller.Service.ReactMessage(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: response.Status,
-		Results: response,
-	})
+	return helpers.HandleSuccess(c, response.Status, response)
 }
 
 func (controller *Message) MarkAsRead(c *fiber.Ctx) error {
 	var request domainMessage.MarkAsReadRequest
-	err := c.BodyParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
 
 	request.MessageID = c.Params("message_id")
 	utils.SanitizePhone(&request.Phone)
 
 	response, err := controller.Service.MarkAsRead(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: response.Status,
-		Results: response,
-	})
+	return helpers.HandleSuccess(c, response.Status, response)
 }
 
 func (controller *Message) StarMessage(c *fiber.Ctx) error {
 	var request domainMessage.StarRequest
-	err := c.BodyParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
 
 	request.MessageID = c.Params("message_id")
 	utils.SanitizePhone(&request.Phone)
 	request.IsStarred = true
 
-	err = controller.Service.StarMessage(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	err := controller.Service.StarMessage(c.UserContext(), request)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: "Starred message successfully",
-		Results: nil,
-	})
+	return helpers.HandleSuccess(c, "Starred message successfully", nil)
 }
 
 func (controller *Message) UnstarMessage(c *fiber.Ctx) error {
 	var request domainMessage.StarRequest
-	err := c.BodyParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
 
 	request.MessageID = c.Params("message_id")
 	utils.SanitizePhone(&request.Phone)
 	request.IsStarred = false
-	err = controller.Service.StarMessage(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: "Unstarred message successfully",
-		Results: nil,
-	})
+	err := controller.Service.StarMessage(c.UserContext(), request)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
+
+	return helpers.HandleSuccess(c, "Unstarred message successfully", nil)
 }
 
 func (controller *Message) DownloadMedia(c *fiber.Ctx) error {
@@ -167,12 +155,9 @@ func (controller *Message) DownloadMedia(c *fiber.Ctx) error {
 	utils.SanitizePhone(&request.Phone)
 
 	response, err := controller.Service.DownloadMedia(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: response.Status,
-		Results: response,
-	})
+	return helpers.HandleSuccess(c, response.Status, response)
 }

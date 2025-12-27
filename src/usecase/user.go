@@ -118,10 +118,10 @@ func (service serviceUser) MyListGroups(ctx context.Context) (response domainUse
 	return response, nil
 }
 
-func (service serviceUser) MyListNewsletter(_ context.Context) (response domainUser.MyListNewsletterResponse, err error) {
+func (service serviceUser) MyListNewsletter(ctx context.Context) (response domainUser.MyListNewsletterResponse, err error) {
 	utils.MustLogin(whatsapp.GetClient())
 
-	datas, err := whatsapp.GetClient().GetSubscribedNewsletters(context.Background())
+	datas, err := whatsapp.GetClient().GetSubscribedNewsletters(ctx)
 	if err != nil {
 		return
 	}

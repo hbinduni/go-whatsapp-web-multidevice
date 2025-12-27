@@ -12,6 +12,7 @@ type IChatStorageRepository interface {
 	// Chat operations
 	CreateMessage(ctx context.Context, evt *events.Message) error
 	StoreChat(chat *Chat) error
+	StoreChatsBatch(chats []*Chat, skipExisting bool) (imported, skipped int64, err error) // Batch insert chats
 	GetChat(jid string) (*Chat, error)
 	GetChats(filter *ChatFilter) ([]*Chat, error)
 	DeleteChat(jid string) error
@@ -19,6 +20,7 @@ type IChatStorageRepository interface {
 	// Message operations
 	StoreMessage(message *Message) error
 	StoreMessagesBatch(messages []*Message) error
+	ImportMessagesBatch(messages []*Message, skipExisting bool) (imported, skipped int64, err error) // Batch import with skip/upsert mode
 	GetMessageByID(id string) (*Message, error) // New method for efficient ID-only search
 	GetMessages(filter *MessageFilter) ([]*Message, error)
 	SearchMessages(chatJID, searchText string, limit int) ([]*Message, error) // Database-level search

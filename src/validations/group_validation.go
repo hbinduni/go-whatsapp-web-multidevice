@@ -4,6 +4,7 @@ import (
 	"context"
 
 	domainGroup "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/group"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/constants"
 	pkgError "github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/error"
 	validation "github.com/go-ozzo/ozzo-validation/v4"
 	"go.mau.fi/whatsmeow"
@@ -137,20 +138,7 @@ func ValidateSetGroupPhoto(ctx context.Context, request domainGroup.SetGroupPhot
 
 // Helper function to check if content type is an image
 func isImageContentType(contentType string) bool {
-	imageTypes := []string{
-		"image/jpeg",
-		"image/jpg",
-		"image/png",
-		"image/gif",
-		"image/webp",
-	}
-
-	for _, imageType := range imageTypes {
-		if contentType == imageType {
-			return true
-		}
-	}
-	return false
+	return constants.IsAllowedGroupPhotoType(contentType)
 }
 
 func ValidateSetGroupName(ctx context.Context, request domainGroup.SetGroupNameRequest) error {

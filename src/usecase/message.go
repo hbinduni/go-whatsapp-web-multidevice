@@ -96,7 +96,7 @@ func (service serviceMessage) RevokeMessage(ctx context.Context, request domainM
 		return response, err
 	}
 
-	ts, err := whatsapp.GetClient().SendMessage(context.Background(), dataWaRecipient, whatsapp.GetClient().BuildRevoke(dataWaRecipient, types.EmptyJID, request.MessageID))
+	ts, err := whatsapp.GetClient().SendMessage(ctx, dataWaRecipient, whatsapp.GetClient().BuildRevoke(dataWaRecipient, types.EmptyJID, request.MessageID))
 	if err != nil {
 		return response, err
 	}
@@ -151,7 +151,7 @@ func (service serviceMessage) UpdateMessage(ctx context.Context, request domainM
 	}
 
 	msg := &waE2E.Message{Conversation: proto.String(request.Message)}
-	ts, err := whatsapp.GetClient().SendMessage(context.Background(), dataWaRecipient, whatsapp.GetClient().BuildEdit(dataWaRecipient, request.MessageID, msg))
+	ts, err := whatsapp.GetClient().SendMessage(ctx, dataWaRecipient, whatsapp.GetClient().BuildEdit(dataWaRecipient, request.MessageID, msg))
 	if err != nil {
 		return response, err
 	}

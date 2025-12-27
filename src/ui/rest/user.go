@@ -3,6 +3,7 @@ package rest
 import (
 	domainUser "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/user"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/utils"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/ui/rest/helpers"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -28,151 +29,132 @@ func InitRestUser(app fiber.Router, service domainUser.IUserUsecase) User {
 
 func (controller *User) UserInfo(c *fiber.Ctx) error {
 	var request domainUser.InfoRequest
-	err := c.QueryParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.QueryParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid query parameters: "+err.Error())
+	}
 
 	utils.SanitizePhone(&request.Phone)
 
 	response, err := controller.Service.Info(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: "Success get user info",
-		Results: response.Data[0],
-	})
+	return helpers.HandleSuccess(c, "Success get user info", response.Data[0])
 }
 
 func (controller *User) UserAvatar(c *fiber.Ctx) error {
 	var request domainUser.AvatarRequest
-	err := c.QueryParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.QueryParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid query parameters: "+err.Error())
+	}
 
 	utils.SanitizePhone(&request.Phone)
 
 	response, err := controller.Service.Avatar(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: "Success get avatar",
-		Results: response,
-	})
+	return helpers.HandleSuccess(c, "Success get avatar", response)
 }
 
 func (controller *User) UserChangeAvatar(c *fiber.Ctx) error {
 	var request domainUser.ChangeAvatarRequest
-	err := c.BodyParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
 
-	request.Avatar, err = c.FormFile("avatar")
-	utils.PanicIfNeeded(err)
+	file, err := c.FormFile("avatar")
+	if err != nil {
+		return helpers.HandleBadRequest(c, "Avatar file is required: "+err.Error())
+	}
+	request.Avatar = file
 
 	err = controller.Service.ChangeAvatar(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: "Success change avatar",
-	})
+	return helpers.HandleSuccess(c, "Success change avatar", nil)
 }
 
 func (controller *User) UserMyPrivacySetting(c *fiber.Ctx) error {
 	response, err := controller.Service.MyPrivacySetting(c.UserContext())
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: "Success get privacy",
-		Results: response,
-	})
+	return helpers.HandleSuccess(c, "Success get privacy", response)
 }
 
 func (controller *User) UserMyListGroups(c *fiber.Ctx) error {
 	response, err := controller.Service.MyListGroups(c.UserContext())
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: "Success get list groups",
-		Results: response,
-	})
+	return helpers.HandleSuccess(c, "Success get list groups", response)
 }
 
 func (controller *User) UserMyListNewsletter(c *fiber.Ctx) error {
 	response, err := controller.Service.MyListNewsletter(c.UserContext())
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: "Success get list newsletter",
-		Results: response,
-	})
+	return helpers.HandleSuccess(c, "Success get list newsletter", response)
 }
 
 func (controller *User) UserMyListContacts(c *fiber.Ctx) error {
 	response, err := controller.Service.MyListContacts(c.UserContext())
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: "Success get list contacts",
-		Results: response,
-	})
+	return helpers.HandleSuccess(c, "Success get list contacts", response)
 }
 
 func (controller *User) UserChangePushName(c *fiber.Ctx) error {
 	var request domainUser.ChangePushNameRequest
-	err := c.BodyParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
 
-	err = controller.Service.ChangePushName(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	err := controller.Service.ChangePushName(c.UserContext(), request)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: "Success change push name",
-	})
+	return helpers.HandleSuccess(c, "Success change push name", nil)
 }
 
 func (controller *User) UserCheck(c *fiber.Ctx) error {
 	var request domainUser.CheckRequest
-	err := c.QueryParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.QueryParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid query parameters: "+err.Error())
+	}
 
 	response, err := controller.Service.IsOnWhatsApp(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: "Success check user",
-		Results: response,
-	})
+	return helpers.HandleSuccess(c, "Success check user", response)
 }
 
 func (controller *User) UserBusinessProfile(c *fiber.Ctx) error {
 	var request domainUser.BusinessProfileRequest
-	err := c.QueryParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.QueryParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid query parameters: "+err.Error())
+	}
 
 	utils.SanitizePhone(&request.Phone)
 
 	response, err := controller.Service.BusinessProfile(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: "Success get business profile",
-		Results: response,
-	})
+	return helpers.HandleSuccess(c, "Success get business profile", response)
 }

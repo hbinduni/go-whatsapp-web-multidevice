@@ -2,7 +2,7 @@ package rest
 
 import (
 	domainNewsletter "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/newsletter"
-	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/utils"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/ui/rest/helpers"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -18,15 +18,14 @@ func InitRestNewsletter(app fiber.Router, service domainNewsletter.INewsletterUs
 
 func (controller *Newsletter) Unfollow(c *fiber.Ctx) error {
 	var request domainNewsletter.UnfollowRequest
-	err := c.BodyParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
 
-	err = controller.Service.Unfollow(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	err := controller.Service.Unfollow(c.UserContext(), request)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: "Success unfollow newsletter",
-	})
+	return helpers.HandleSuccess(c, "Success unfollow newsletter", nil)
 }

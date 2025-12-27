@@ -491,6 +491,11 @@ func (service serviceChat) importChats(ctx context.Context, backupDB *sql.DB) (i
 	}
 	defer rows.Close()
 
+	// Collect all chats into a batch for efficient import
+	// This eliminates N+1 queries by using a single transaction with ON CONFLICT handling
+	var chats []*domainChatStorage.Chat
+	var scanErrors int64
+
 	for rows.Next() {
 		var chat domainChatStorage.Chat
 		var lastMessageTime, createdAt, updatedAt string
@@ -505,7 +510,7 @@ func (service serviceChat) importChats(ctx context.Context, backupDB *sql.DB) (i
 		)
 		if err != nil {
 			logrus.WithError(err).Warn("Failed to scan chat row, skipping")
-			skipped++
+			scanErrors++
 			continue
 		}
 
@@ -514,24 +519,18 @@ func (service serviceChat) importChats(ctx context.Context, backupDB *sql.DB) (i
 		chat.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 		chat.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
 
-		// Check if chat already exists
-		existing, _ := service.chatStorageRepo.GetChat(chat.JID)
-		if existing != nil {
-			// Chat exists, skip (merge behavior - keep existing)
-			skipped++
-			continue
-		}
-
-		// Store chat (will use ON CONFLICT handling)
-		if err := service.chatStorageRepo.StoreChat(&chat); err != nil {
-			logrus.WithError(err).WithField("jid", chat.JID).Warn("Failed to store chat, skipping")
-			skipped++
-			continue
-		}
-		imported++
+		chats = append(chats, &chat)
 	}
 
-	return imported, skipped, rows.Err()
+	if err := rows.Err(); err != nil {
+		return 0, scanErrors, err
+	}
+
+	// Batch insert all chats with skipExisting=true (merge mode keeps existing records)
+	imported, skipped, err = service.chatStorageRepo.StoreChatsBatch(chats, true)
+	skipped += scanErrors
+
+	return imported, skipped, err
 }
 
 func (service serviceChat) importMessages(ctx context.Context, backupDB *sql.DB) (imported, skipped int64, err error) {
@@ -545,6 +544,11 @@ func (service serviceChat) importMessages(ctx context.Context, backupDB *sql.DB)
 		return 0, 0, err
 	}
 	defer rows.Close()
+
+	// Collect all messages into a batch for efficient import
+	// This eliminates N+1 queries by using a single transaction with ON CONFLICT handling
+	var messages []*domainChatStorage.Message
+	var scanErrors int64
 
 	for rows.Next() {
 		var msg domainChatStorage.Message
@@ -571,7 +575,7 @@ func (service serviceChat) importMessages(ctx context.Context, backupDB *sql.DB)
 		)
 		if err != nil {
 			logrus.WithError(err).Warn("Failed to scan message row, skipping")
-			skipped++
+			scanErrors++
 			continue
 		}
 
@@ -594,24 +598,18 @@ func (service serviceChat) importMessages(ctx context.Context, backupDB *sql.DB)
 			msg.PlayedAt = &t
 		}
 
-		// Check if message already exists
-		existing, _ := service.chatStorageRepo.GetMessageByID(msg.ID)
-		if existing != nil {
-			// Message exists, skip (merge behavior - keep existing)
-			skipped++
-			continue
-		}
-
-		// Store message (will use ON CONFLICT handling)
-		if err := service.chatStorageRepo.StoreMessage(&msg); err != nil {
-			logrus.WithError(err).WithField("id", msg.ID).Warn("Failed to store message, skipping")
-			skipped++
-			continue
-		}
-		imported++
+		messages = append(messages, &msg)
 	}
 
-	return imported, skipped, rows.Err()
+	if err := rows.Err(); err != nil {
+		return 0, scanErrors, err
+	}
+
+	// Batch insert all messages with skipExisting=true (merge mode keeps existing records)
+	imported, skipped, err = service.chatStorageRepo.ImportMessagesBatch(messages, true)
+	skipped += scanErrors
+
+	return imported, skipped, err
 }
 
 func (service serviceChat) AnalyzeStorage(ctx context.Context, filePath string) (response domainChat.AnalyzeStorageResponse, err error) {

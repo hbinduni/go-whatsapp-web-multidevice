@@ -10,6 +10,7 @@ import (
 
 	domainGroup "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/group"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/utils"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/ui/rest/helpers"
 	"github.com/gofiber/fiber/v2"
 	"go.mau.fi/whatsmeow"
 )
@@ -45,11 +46,14 @@ func InitRestGroup(app fiber.Router, service domainGroup.IGroupUsecase) Group {
 
 func (controller *Group) JoinGroupWithLink(c *fiber.Ctx) error {
 	var request domainGroup.JoinGroupWithLinkRequest
-	err := c.BodyParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
 
 	response, err := controller.Service.JoinGroupWithLink(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
 	return c.JSON(utils.ResponseData{
 		Status:  200,
@@ -63,44 +67,44 @@ func (controller *Group) JoinGroupWithLink(c *fiber.Ctx) error {
 
 func (controller *Group) GetGroupInfoFromLink(c *fiber.Ctx) error {
 	var request domainGroup.GetGroupInfoFromLinkRequest
-	err := c.QueryParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.QueryParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid query parameters: "+err.Error())
+	}
 
 	response, err := controller.Service.GetGroupInfoFromLink(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: "Success get group info from link",
-		Results: response,
-	})
+	return helpers.HandleSuccess(c, "Success get group info from link", response)
 }
 
 func (controller *Group) LeaveGroup(c *fiber.Ctx) error {
 	var request domainGroup.LeaveGroupRequest
-	err := c.BodyParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
 
 	utils.SanitizePhone(&request.GroupID)
 
-	err = controller.Service.LeaveGroup(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	err := controller.Service.LeaveGroup(c.UserContext(), request)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: "Success leave group",
-	})
+	return helpers.HandleSuccess(c, "Success leave group", nil)
 }
 
 func (controller *Group) CreateGroup(c *fiber.Ctx) error {
 	var request domainGroup.CreateGroupRequest
-	err := c.BodyParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
 
 	groupID, err := controller.Service.CreateGroup(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
 	return c.JSON(utils.ResponseData{
 		Status:  200,
@@ -114,52 +118,47 @@ func (controller *Group) CreateGroup(c *fiber.Ctx) error {
 
 func (controller *Group) ListParticipants(c *fiber.Ctx) error {
 	var request domainGroup.GetGroupParticipantsRequest
-	err := c.QueryParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.QueryParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid query parameters: "+err.Error())
+	}
 
 	if request.GroupID == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(utils.ResponseData{
-			Status:  400,
-			Code:    "INVALID_GROUP_ID",
-			Message: "Group ID cannot be empty",
-		})
+		return helpers.HandleBadRequest(c, "Group ID cannot be empty")
 	}
 
 	utils.SanitizePhone(&request.GroupID)
 
 	result, err := controller.Service.GetGroupParticipants(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: "Success getting group participants",
-		Results: result,
-	})
+	return helpers.HandleSuccess(c, "Success getting group participants", result)
 }
 
 func (controller *Group) ExportParticipants(c *fiber.Ctx) error {
 	var request domainGroup.GetGroupParticipantsRequest
-	err := c.QueryParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.QueryParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid query parameters: "+err.Error())
+	}
 
 	if request.GroupID == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(utils.ResponseData{
-			Status:  400,
-			Code:    "INVALID_GROUP_ID",
-			Message: "Group ID cannot be empty",
-		})
+		return helpers.HandleBadRequest(c, "Group ID cannot be empty")
 	}
 
 	utils.SanitizePhone(&request.GroupID)
 
 	result, err := controller.Service.GetGroupParticipants(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
 	var buffer bytes.Buffer
 	writer := csv.NewWriter(&buffer)
 
-	utils.PanicIfNeeded(writer.Write([]string{"participant_jid", "phone_number", "lid", "display_name", "role"}))
+	if err := writer.Write([]string{"participant_jid", "phone_number", "lid", "display_name", "role"}); err != nil {
+		return helpers.HandleError(c, err)
+	}
 
 	for _, participant := range result.Participants {
 		role := "member"
@@ -177,11 +176,15 @@ func (controller *Group) ExportParticipants(c *fiber.Ctx) error {
 			role,
 		}
 
-		utils.PanicIfNeeded(writer.Write(record))
+		if err := writer.Write(record); err != nil {
+			return helpers.HandleError(c, err)
+		}
 	}
 
 	writer.Flush()
-	utils.PanicIfNeeded(writer.Error())
+	if err := writer.Error(); err != nil {
+		return helpers.HandleError(c, err)
+	}
 
 	fileName := fmt.Sprintf("group-%s-participants.csv", strings.ReplaceAll(result.GroupID, "@", "_"))
 
@@ -209,28 +212,22 @@ func (controller *Group) DemoteParticipants(c *fiber.Ctx) error {
 
 func (controller *Group) ListParticipantRequests(c *fiber.Ctx) error {
 	var request domainGroup.GetGroupRequestParticipantsRequest
-	err := c.QueryParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.QueryParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid query parameters: "+err.Error())
+	}
 
 	if request.GroupID == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(utils.ResponseData{
-			Status:  400,
-			Code:    "INVALID_GROUP_ID",
-			Message: "Group ID cannot be empty",
-		})
+		return helpers.HandleBadRequest(c, "Group ID cannot be empty")
 	}
 
 	utils.SanitizePhone(&request.GroupID)
 
 	result, err := controller.Service.GetGroupRequestParticipants(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: "Success getting list requested participants",
-		Results: result,
-	})
+	return helpers.HandleSuccess(c, "Success getting list requested participants", result)
 }
 
 func (controller *Group) ApproveParticipantRequests(c *fiber.Ctx) error {
@@ -244,41 +241,44 @@ func (controller *Group) RejectParticipantRequests(c *fiber.Ctx) error {
 // Generalized participant management handler
 func (controller *Group) manageParticipants(c *fiber.Ctx, action whatsmeow.ParticipantChange, successMsg string) error {
 	var request domainGroup.ParticipantRequest
-	err := c.BodyParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
+
 	utils.SanitizePhone(&request.GroupID)
 	request.Action = action
+
 	result, err := controller.Service.ManageParticipant(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: successMsg,
-		Results: result,
-	})
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
+
+	return helpers.HandleSuccess(c, successMsg, result)
 }
 
 // Generalized requested participants handler
 func (controller *Group) handleRequestedParticipants(c *fiber.Ctx, action whatsmeow.ParticipantRequestChange, successMsg string) error {
 	var request domainGroup.GroupRequestParticipantsRequest
-	err := c.BodyParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
+
 	utils.SanitizePhone(&request.GroupID)
 	request.Action = action
+
 	result, err := controller.Service.ManageGroupRequestParticipants(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: successMsg,
-		Results: result,
-	})
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
+
+	return helpers.HandleSuccess(c, successMsg, result)
 }
 
 func (controller *Group) SetGroupPhoto(c *fiber.Ctx) error {
 	var request domainGroup.SetGroupPhotoRequest
-	err := c.BodyParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
 
 	utils.SanitizePhone(&request.GroupID)
 
@@ -290,11 +290,7 @@ func (controller *Group) SetGroupPhoto(c *fiber.Ctx) error {
 		// Basic validation only - processing will be done in usecase
 		if err := utils.ValidateGroupPhotoFormat(file); err != nil {
 			logrus.Printf("ERROR: Group photo validation failed - %v", err)
-			return c.Status(fiber.StatusBadRequest).JSON(utils.ResponseData{
-				Status:  400,
-				Code:    "INVALID_IMAGE_FORMAT",
-				Message: fmt.Sprintf("Image validation failed: %v", err),
-			})
+			return helpers.HandleBadRequest(c, fmt.Sprintf("Image validation failed: %v", err))
 		}
 
 		request.Photo = file
@@ -305,8 +301,8 @@ func (controller *Group) SetGroupPhoto(c *fiber.Ctx) error {
 	pictureID, err := controller.Service.SetGroupPhoto(c.UserContext(), request)
 	if err != nil {
 		logrus.Printf("ERROR: WhatsApp service failed to set group photo - %v", err)
+		return helpers.HandleError(c, err)
 	}
-	utils.PanicIfNeeded(err)
 
 	message := "Success update group photo"
 	if request.Photo == nil {
@@ -326,120 +322,112 @@ func (controller *Group) SetGroupPhoto(c *fiber.Ctx) error {
 
 func (controller *Group) SetGroupName(c *fiber.Ctx) error {
 	var request domainGroup.SetGroupNameRequest
-	err := c.BodyParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
 
 	utils.SanitizePhone(&request.GroupID)
 
-	err = controller.Service.SetGroupName(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	err := controller.Service.SetGroupName(c.UserContext(), request)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: fmt.Sprintf("Success update group name to '%s'", request.Name),
-	})
+	return helpers.HandleSuccess(c, fmt.Sprintf("Success update group name to '%s'", request.Name), nil)
 }
 
 func (controller *Group) SetGroupLocked(c *fiber.Ctx) error {
 	var request domainGroup.SetGroupLockedRequest
-	err := c.BodyParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
 
 	utils.SanitizePhone(&request.GroupID)
 
-	err = controller.Service.SetGroupLocked(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	err := controller.Service.SetGroupLocked(c.UserContext(), request)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
 	message := "Success set group as unlocked"
 	if request.Locked {
 		message = "Success set group as locked"
 	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: message,
-	})
+	return helpers.HandleSuccess(c, message, nil)
 }
 
 func (controller *Group) SetGroupAnnounce(c *fiber.Ctx) error {
 	var request domainGroup.SetGroupAnnounceRequest
-	err := c.BodyParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
 
 	utils.SanitizePhone(&request.GroupID)
 
-	err = controller.Service.SetGroupAnnounce(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	err := controller.Service.SetGroupAnnounce(c.UserContext(), request)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
 	message := "Success disable announce mode"
 	if request.Announce {
 		message = "Success enable announce mode"
 	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: message,
-	})
+	return helpers.HandleSuccess(c, message, nil)
 }
 
 func (controller *Group) SetGroupTopic(c *fiber.Ctx) error {
 	var request domainGroup.SetGroupTopicRequest
-	err := c.BodyParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
 
 	utils.SanitizePhone(&request.GroupID)
 
-	err = controller.Service.SetGroupTopic(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	err := controller.Service.SetGroupTopic(c.UserContext(), request)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
 	message := "Success update group topic"
 	if request.Topic == "" {
 		message = "Success remove group topic"
 	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: message,
-	})
+	return helpers.HandleSuccess(c, message, nil)
 }
 
 // GroupInfo handles the /group/info endpoint to fetch group information
 func (controller *Group) GroupInfo(c *fiber.Ctx) error {
 	var request domainGroup.GroupInfoRequest
-	err := c.QueryParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.QueryParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid query parameters: "+err.Error())
+	}
 
 	utils.SanitizePhone(&request.GroupID)
 
 	response, err := controller.Service.GroupInfo(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: "Success get group info",
-		Results: response.Data,
-	})
+	return helpers.HandleSuccess(c, "Success get group info", response.Data)
 }
 
 func (controller *Group) GetGroupInviteLink(c *fiber.Ctx) error {
 	var request domainGroup.GetGroupInviteLinkRequest
-	err := c.QueryParser(&request)
-	utils.PanicIfNeeded(err)
+	if err := c.QueryParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid query parameters: "+err.Error())
+	}
 
 	utils.SanitizePhone(&request.GroupID)
 
 	response, err := controller.Service.GetGroupInviteLink(c.UserContext(), request)
-	utils.PanicIfNeeded(err)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: "Success get group invite link",
-		Results: response,
-	})
+	return helpers.HandleSuccess(c, "Success get group invite link", response)
 }

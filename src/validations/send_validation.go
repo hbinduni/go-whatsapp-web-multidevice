@@ -3,10 +3,10 @@ package validations
 import (
 	"context"
 	"fmt"
-	"sort"
 
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
 	domainSend "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/send"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/constants"
 	pkgError "github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/error"
 	"github.com/dustin/go-humanize"
 	validation "github.com/go-ozzo/ozzo-validation/v4"
@@ -98,13 +98,7 @@ func ValidateSendImage(ctx context.Context, request domainSend.ImageRequest) err
 	}
 
 	if request.Image != nil {
-		availableMimes := map[string]bool{
-			"image/jpeg": true,
-			"image/jpg":  true,
-			"image/png":  true,
-		}
-
-		if !availableMimes[request.Image.Header.Get("Content-Type")] {
+		if !constants.IsAllowedImageType(request.Image.Header.Get("Content-Type")) {
 			return pkgError.ValidationError("your image is not allowed. please use jpg/jpeg/png")
 		}
 	}
@@ -154,15 +148,7 @@ func ValidateSendSticker(ctx context.Context, request domainSend.StickerRequest)
 
 	// Validate file type if sticker file is provided
 	if request.Sticker != nil {
-		availableMimes := map[string]bool{
-			"image/jpeg": true,
-			"image/jpg":  true,
-			"image/png":  true,
-			"image/webp": true, // Also accept WebP directly
-			"image/gif":  true, // Support GIF for animated stickers
-		}
-
-		if !availableMimes[request.Sticker.Header.Get("Content-Type")] {
+		if !constants.IsAllowedStickerType(request.Sticker.Header.Get("Content-Type")) {
 			return pkgError.ValidationError("your sticker is not allowed. please use jpg/jpeg/png/webp/gif")
 		}
 	}
@@ -232,14 +218,7 @@ func ValidateSendVideo(ctx context.Context, request domainSend.VideoRequest) err
 
 	// If Video file provided perform MIME / size validation
 	if request.Video != nil {
-		availableMimes := map[string]bool{
-			"video/mp4":        true,
-			"video/x-matroska": true,
-			"video/avi":        true,
-			"video/x-msvideo":  true,
-		}
-
-		if !availableMimes[request.Video.Header.Get("Content-Type")] {
+		if !constants.IsAllowedVideoType(request.Video.Header.Get("Content-Type")) {
 			return pkgError.ValidationError("your video type is not allowed. please use mp4/mkv/avi/x-msvideo")
 		}
 
@@ -362,39 +341,8 @@ func ValidateSendAudio(ctx context.Context, request domainSend.AudioRequest) err
 
 	// If Audio file is provided, validate file MIME
 	if request.Audio != nil {
-		availableMimes := map[string]bool{
-			"audio/aac":      true,
-			"audio/amr":      true,
-			"audio/flac":     true,
-			"audio/m4a":      true,
-			"audio/m4r":      true,
-			"audio/mp3":      true,
-			"audio/mpeg":     true,
-			"audio/ogg":      true,
-			"audio/wma":      true,
-			"audio/x-ms-wma": true,
-			"audio/wav":      true,
-			"audio/vnd.wav":  true,
-			"audio/vnd.wave": true,
-			"audio/wave":     true,
-			"audio/x-pn-wav": true,
-			"audio/x-wav":    true,
-		}
-		availableMimesStr := ""
-
-		// Sort MIME types for consistent error message order
-		mimeKeys := make([]string, 0, len(availableMimes))
-		for k := range availableMimes {
-			mimeKeys = append(mimeKeys, k)
-		}
-		sort.Strings(mimeKeys)
-
-		for _, k := range mimeKeys {
-			availableMimesStr += k + ","
-		}
-
-		if !availableMimes[request.Audio.Header.Get("Content-Type")] {
-			return pkgError.ValidationError(fmt.Sprintf("your audio type is not allowed. please use (%s)", availableMimesStr))
+		if !constants.IsAllowedAudioType(request.Audio.Header.Get("Content-Type")) {
+			return pkgError.ValidationError(fmt.Sprintf("your audio type is not allowed. please use (%s)", constants.AllowedAudioTypesString()))
 		}
 	}
 

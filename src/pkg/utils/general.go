@@ -20,6 +20,7 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/constants"
 	"github.com/sirupsen/logrus"
 	_ "golang.org/x/image/webp" // Register WebP format
 )
@@ -82,16 +83,8 @@ type Metadata struct {
 }
 
 func GetMetaDataFromURL(urlStr string) (meta Metadata, err error) {
-	// Create HTTP client with timeout
-	client := &http.Client{
-		Timeout: 15 * time.Second,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				return fmt.Errorf("too many redirects")
-			}
-			return nil
-		},
-	}
+	// Use fast HTTP client for quick metadata fetches (15s timeout)
+	client := GetFastHTTPClient()
 
 	// Parse the base URL for resolving relative URLs later
 	baseURL, err := url.Parse(urlStr)
@@ -233,15 +226,8 @@ func ContainsMention(message string) []string {
 }
 
 func DownloadImageFromURL(url string) ([]byte, string, error) {
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				return fmt.Errorf("too many redirects")
-			}
-			return nil
-		},
-	}
+	// Use singleton HTTP client for connection reuse
+	client := GetHTTPClient()
 	response, err := client.Get(url)
 	if err != nil {
 		return nil, "", err
@@ -289,15 +275,8 @@ func DownloadImageFromURL(url string) ([]byte, string, error) {
 // WhatsappSettingMaxDownloadSize limit to avoid memory exhaustion. Only the MIME types defined in audio validation
 // are allowed to ensure WhatsApp compatibility.
 func DownloadAudioFromURL(audioURL string) ([]byte, string, error) {
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				return fmt.Errorf("too many redirects")
-			}
-			return nil
-		},
-	}
+	// Use singleton HTTP client for connection reuse
+	client := GetHTTPClient()
 
 	resp, err := client.Get(audioURL)
 	if err != nil {
@@ -312,27 +291,8 @@ func DownloadAudioFromURL(audioURL string) ([]byte, string, error) {
 	// Extract only the MIME type portion (ignore parameters like charset)
 	contentType := strings.TrimSpace(strings.Split(resp.Header.Get("Content-Type"), ";")[0])
 
-	// Align audio MIME validation with the one used for uploaded files to ensure consistency with WhatsApp requirements.
-	allowedMimes := map[string]bool{
-		"audio/aac":      true,
-		"audio/amr":      true,
-		"audio/flac":     true,
-		"audio/m4a":      true,
-		"audio/m4r":      true,
-		"audio/mp3":      true,
-		"audio/mpeg":     true,
-		"audio/ogg":      true,
-		"audio/wma":      true,
-		"audio/x-ms-wma": true,
-		"audio/wav":      true,
-		"audio/vnd.wav":  true,
-		"audio/vnd.wave": true,
-		"audio/wave":     true,
-		"audio/x-pn-wav": true,
-		"audio/x-wav":    true,
-	}
-
-	if !allowedMimes[contentType] {
+	// Validate audio MIME type using centralized constants
+	if !constants.IsAllowedAudioType(contentType) {
 		return nil, "", fmt.Errorf("invalid content type: %s", contentType)
 	}
 
@@ -373,15 +333,8 @@ func DownloadAudioFromURL(audioURL string) ([]byte, string, error) {
 // It validates that the content-type returned by the server is one of the supported WhatsApp video formats and
 // that the size does not exceed WhatsappSettingMaxDownloadSize to avoid memory exhaustion.
 func DownloadVideoFromURL(videoURL string) ([]byte, string, error) {
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				return fmt.Errorf("too many redirects")
-			}
-			return nil
-		},
-	}
+	// Use singleton HTTP client for connection reuse
+	client := GetHTTPClient()
 
 	resp, err := client.Get(videoURL)
 	if err != nil {
@@ -396,14 +349,8 @@ func DownloadVideoFromURL(videoURL string) ([]byte, string, error) {
 	// Extract MIME type without parameters
 	contentType := strings.TrimSpace(strings.Split(resp.Header.Get("Content-Type"), ";")[0])
 
-	allowedMimes := map[string]bool{
-		"video/mp4":        true,
-		"video/x-matroska": true, // mkv
-		"video/avi":        true,
-		"video/x-msvideo":  true,
-	}
-
-	if !allowedMimes[contentType] {
+	// Validate video MIME type using centralized constants
+	if !constants.IsAllowedVideoType(contentType) {
 		return nil, "", fmt.Errorf("invalid content type: %s", contentType)
 	}
 

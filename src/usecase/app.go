@@ -30,14 +30,14 @@ func NewAppService(chatStorageRepo domainChatStorage.IChatStorageRepository) dom
 	}
 }
 
-func (service *serviceApp) Login(_ context.Context) (response domainApp.LoginResponse, err error) {
+func (service *serviceApp) Login(ctx context.Context) (response domainApp.LoginResponse, err error) {
 	client := whatsapp.GetClient()
 	if client == nil {
 		return response, pkgError.ErrWaCLI
 	}
 
 	logrus.Debug("Starting login process...")
-	devices, dbErr := whatsapp.GetDB().GetAllDevices(context.Background())
+	devices, dbErr := whatsapp.GetDB().GetAllDevices(ctx)
 	if dbErr != nil {
 		logrus.Debugf("Error getting devices before login: %v", dbErr)
 	} else {
@@ -49,7 +49,7 @@ func (service *serviceApp) Login(_ context.Context) (response domainApp.LoginRes
 
 	chImage := make(chan string)
 
-	ch, err := client.GetQRChannel(context.Background())
+	ch, err := client.GetQRChannel(ctx)
 	if err != nil {
 		logrus.Debugf("GetQRChannel failed: %v", err)
 		// This error means that we're already logged in, so ignore it.
