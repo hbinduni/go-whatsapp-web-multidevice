@@ -27,13 +27,8 @@ if (!USER || !PASS) {
 }
 const AUTH_HEADER = Buffer.from(`${USER}:${PASS}`).toString("base64");
 
-// Known country codes for LID detection
-const KNOWN_COUNTRY_CODES = new Set([
-  "1", "7", "20", "27", "30", "31", "32", "33", "34", "36", "39", "40", "41",
-  "43", "44", "45", "46", "47", "48", "49", "51", "52", "53", "54", "55", "56",
-  "57", "58", "60", "61", "62", "63", "64", "65", "66", "81", "82", "84", "86",
-  "90", "91", "92", "93", "94", "95", "98"
-]);
+// Indonesian country code - all valid customer JIDs must start with this
+const INDONESIA_PREFIX = "62";
 
 interface ChatInfo {
   jid: string;
@@ -43,15 +38,10 @@ interface ChatInfo {
 }
 
 function isLikelyLID(jidUser: string): boolean {
+  // Must be all digits
   if (!/^\d+$/.test(jidUser)) return false;
-  if (jidUser.length > 15) return true;
-  for (const codeLen of [1, 2, 3]) {
-    if (jidUser.length >= codeLen) {
-      const prefix = jidUser.substring(0, codeLen);
-      if (KNOWN_COUNTRY_CODES.has(prefix)) return false;
-    }
-  }
-  return jidUser.length >= 12;
+  // Indonesian numbers start with 62 - anything else is a LID
+  return !jidUser.startsWith(INDONESIA_PREFIX);
 }
 
 async function isDeviceConnected(host: string): Promise<boolean> {
@@ -127,9 +117,30 @@ function analyzeAndFix(dbPath: string, dryRun: boolean): { lids: number; fixed: 
 
   stats.lids = lids.length;
 
-  // Auto-fix by matching names
+  // Auto-fix by matching names or finding single candidate
   for (const lid of lids) {
-    const match = normalJids.find(n => lid.name && lid.name !== lid.user && n.name === lid.name);
+    // Strategy 1: Match by identical contact name
+    let match = normalJids.find(n => lid.name && lid.name !== lid.user && n.name === lid.name);
+
+    // Strategy 2: If LID has no real name (name equals user), try to find a single candidate
+    // by looking for chats with similar message patterns (same last message content)
+    if (!match && (lid.name === lid.user || !lid.name)) {
+      // Get last message from LID chat
+      const lidLastMsg = db.query("SELECT content FROM messages WHERE chat_jid = ? ORDER BY timestamp DESC LIMIT 1").get(lid.jid) as any;
+      if (lidLastMsg?.content) {
+        // Find normal JIDs with matching last message
+        const candidates = normalJids.filter(n => {
+          const nLastMsg = db.query("SELECT content FROM messages WHERE chat_jid = ? ORDER BY timestamp DESC LIMIT 1").get(n.jid) as any;
+          return nLastMsg?.content === lidLastMsg.content;
+        });
+        // Only auto-match if there's exactly one candidate
+        if (candidates.length === 1) {
+          match = candidates[0];
+          console.log(`  [content-match] ${lid.jid} -> ${match.jid}`);
+        }
+      }
+    }
+
     if (!match) continue;
 
     // Count and move messages

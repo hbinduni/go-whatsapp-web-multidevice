@@ -364,6 +364,20 @@ func (service serviceChat) ExportStorage(ctx context.Context) (filePath string, 
 		return "", fmt.Errorf("chat storage database not found at %s", dbPath)
 	}
 
+	// Checkpoint WAL to ensure all recent writes are in the main database file
+	// This is critical for exporting a complete, consistent backup
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to open database for WAL checkpoint")
+	} else {
+		defer db.Close()
+		if _, err := db.Exec("PRAGMA wal_checkpoint(TRUNCATE)"); err != nil {
+			logrus.WithError(err).Warn("Failed to checkpoint WAL before export")
+		} else {
+			logrus.Info("WAL checkpoint completed before export")
+		}
+	}
+
 	logrus.WithField("path", dbPath).Info("Exporting chat storage database")
 	return dbPath, nil
 }
