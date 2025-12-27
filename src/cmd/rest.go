@@ -25,8 +25,8 @@ import (
 // rootCmd represents the base command when called without any subcommands
 var restCmd = &cobra.Command{
 	Use:   "rest",
-	Short: "Send whatsapp API over http",
-	Long:  `This application is from clone https://github.com/aldinokemal/go-whatsapp-web-multidevice`,
+	Short: "Start REST API server for WhatsApp Web",
+	Long:  `GoWA-SSE REST API server - WhatsApp Web API with SSE support, S3 storage, and chat history.`,
 	Run:   restServer,
 }
 
@@ -34,7 +34,7 @@ func init() {
 	rootCmd.AddCommand(restCmd)
 }
 func restServer(_ *cobra.Command, _ []string) {
-	logrus.Infof("🚀 Starting REST API mode (Fork: %s)...", config.AppForkVersion)
+	logrus.Infof("🚀 Starting REST API mode (%s)...", config.AppVersion)
 
 	engine := html.NewFileSystem(http.FS(EmbedIndex), ".html")
 	engine.AddFunc("isEnableBasicAuth", func(token any) bool {
@@ -113,7 +113,6 @@ func restServer(_ *cobra.Command, _ []string) {
 		return c.Render("views/index", fiber.Map{
 			"AppHost":        fmt.Sprintf("%s://%s", c.Protocol(), c.Hostname()),
 			"AppVersion":     config.AppVersion,
-			"AppForkVersion": config.AppForkVersion,
 			"AppBasePath":    config.AppBasePath,
 			"BasicAuthToken": c.UserContext().Value(middleware.AuthorizationValue("BASIC_AUTH")),
 			"MaxFileSize":    humanize.Bytes(uint64(config.WhatsappSettingMaxFileSize)),

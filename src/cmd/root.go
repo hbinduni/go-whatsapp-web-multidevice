@@ -57,20 +57,20 @@ var (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Short: fmt.Sprintf("Send free whatsapp API (Version %s, Fork %s)", config.AppVersion, config.AppForkVersion),
-	Long: fmt.Sprintf(`WhatsApp Web Multidevice
-Upstream Version: %s
-Fork Version: %s
+	Short: fmt.Sprintf("GoWA-SSE: WhatsApp Web API with SSE support (%s)", config.AppVersion),
+	Long: fmt.Sprintf(`GoWA-SSE - WhatsApp Web API Server
+Version: %s
 
-This application is from clone https://github.com/aldinokemal/go-whatsapp-web-multidevice,
-you can send whatsapp over http api but your whatsapp account have to be multi device version`, config.AppVersion, config.AppForkVersion),
+Features: SSE real-time events, S3 media storage, history sync, chat storage API.
+Originally forked from aldinokemal/go-whatsapp-web-multidevice, now maintained independently.
+
+Send WhatsApp messages over HTTP API. Requires WhatsApp multi-device account.`, config.AppVersion),
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		// Print version banner on startup (only for rest/mcp commands, not help)
 		if cmd.Name() == "rest" || cmd.Name() == "mcp" {
 			logrus.Infof("========================================")
-			logrus.Infof("  WhatsApp Web Multidevice")
-			logrus.Infof("  Upstream Version: %s", config.AppVersion)
-			logrus.Infof("  Fork Version: %s", config.AppForkVersion)
+			logrus.Infof("  GoWA-SSE: WhatsApp Web API")
+			logrus.Infof("  Version: %s", config.AppVersion)
 			logrus.Infof("========================================")
 		}
 	},

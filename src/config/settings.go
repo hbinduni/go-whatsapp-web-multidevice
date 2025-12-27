@@ -5,11 +5,13 @@ import (
 )
 
 var (
-	AppVersion             = "v7.11.0"     // Upstream version from aldinokemal
-	AppForkVersion         = "v1.2.13-sse" // Fork version (binduni's version)
-	AppPort                = "3000"
-	AppDebug               = false
-	AppOs                  = "AldinoKemal"
+	// Project version - independent fork of aldinokemal/go-whatsapp-web-multidevice
+	// Diverged at upstream v7.11.0, now maintained independently with different architecture
+	AppVersion     = "v2.0.0"
+	AppPort        = "3000"
+	AppHost        = "0.0.0.0"
+	AppDebug       = false
+	AppOs          = "GoWA-SSE" // Identifies this as the SSE-enabled fork
 	AppPlatform            = waCompanionReg.DeviceProps_PlatformType(1)
 	AppBasicAuthCredential []string
 	AppBasePath            = ""

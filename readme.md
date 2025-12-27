@@ -4,18 +4,15 @@
   <!-- markdownlint-disable-next-line MD033 -->
   <img src="src/views/assets/gowa.svg" alt="GoWA Logo" width="200" height="200">
 
-## Golang WhatsApp - Built with Go for efficient memory use
+## GoWA-SSE - WhatsApp Web API with SSE Support
+
+*Built with Go for efficient memory use*
 
 </div>
 
-[![Patreon](https://img.shields.io/badge/Support%20on-Patreon-orange.svg)](https://www.patreon.com/c/aldinokemal)
-**If you're using this tools to generate income, consider supporting its development by becoming a Patreon member!**
-Your support helps ensure the library stays maintained and receives regular updates!
-___
-
-![release version](https://img.shields.io/github/v/release/aldinokemal/go-whatsapp-web-multidevice)
-![Build Image](https://github.com/aldinokemal/go-whatsapp-web-multidevice/actions/workflows/build-docker-image.yaml/badge.svg)
-![Binary Release](https://github.com/aldinokemal/go-whatsapp-web-multidevice/actions/workflows/release.yml/badge.svg)
+> **Note:** This is an independent project, originally forked from [aldinokemal/go-whatsapp-web-multidevice](https://github.com/aldinokemal/go-whatsapp-web-multidevice) at v7.11.0. It has since diverged significantly with a different architecture focused on SSE real-time events, S3/MinIO media storage, and chat history synchronization.
+>
+> For the original project, please visit the upstream repository.
 
 ## Support for `ARM` & `AMD` Architecture along with `MCP` Support
 
