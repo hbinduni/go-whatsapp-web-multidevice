@@ -7,7 +7,7 @@ import (
 var (
 	// Project version - independent fork of aldinokemal/go-whatsapp-web-multidevice
 	// Diverged at upstream v7.11.0, now maintained independently with different architecture
-	AppVersion             = "v2.0.3"
+	AppVersion             = "v2.0.4"
 	AppPort                = "3000"
 	AppHost                = "0.0.0.0"
 	AppDebug               = false

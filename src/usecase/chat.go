@@ -223,6 +223,19 @@ func (service serviceChat) GetChatMessages(ctx context.Context, request domainCh
 			messageInfo.PlayedAt = &playedAt
 		}
 
+		// Convert reactions to API format
+		if len(message.Reactions) > 0 {
+			reactions := make([]domainChat.ReactionInfo, 0, len(message.Reactions))
+			for _, reaction := range message.Reactions {
+				reactions = append(reactions, domainChat.ReactionInfo{
+					Emoji:     reaction.Emoji,
+					SenderJID: reaction.SenderJID,
+					Timestamp: reaction.Timestamp.Format(time.RFC3339),
+				})
+			}
+			messageInfo.Reactions = reactions
+		}
+
 		messageInfos = append(messageInfos, messageInfo)
 	}
 
