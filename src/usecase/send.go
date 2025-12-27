@@ -275,7 +275,7 @@ func (service serviceSend) SendImage(ctx context.Context, request domainSend.Ima
 	}
 	uploadedImage, err := service.uploadMedia(ctx, whatsmeow.MediaImage, dataWaImage, dataWaRecipient)
 	if err != nil {
-		fmt.Printf("failed to upload file: %v", err)
+		logrus.Errorf("failed to upload image: %v", err)
 		return response, err
 	}
 	dataWaThumbnail, err := os.ReadFile(imageThumbnail)
@@ -317,9 +317,8 @@ func (service serviceSend) SendImage(ctx context.Context, request domainSend.Ima
 	}
 	ts, err := service.wrapSendMessage(ctx, dataWaRecipient, msg, caption)
 	go func() {
-		errDelete := utils.RemoveFile(0, deletedItems...)
-		if errDelete != nil {
-			fmt.Println("error when deleting picture: ", errDelete)
+		if errDelete := utils.RemoveFile(0, deletedItems...); errDelete != nil {
+			logrus.Warnf("error deleting temporary image files: %v", errDelete)
 		}
 	}()
 	if err != nil {
@@ -347,7 +346,7 @@ func (service serviceSend) SendFile(ctx context.Context, request domainSend.File
 	// Send to WA server
 	uploadedFile, err := service.uploadMedia(ctx, whatsmeow.MediaDocument, fileBytes, dataWaRecipient)
 	if err != nil {
-		fmt.Printf("Failed to upload file: %v", err)
+		logrus.Errorf("failed to upload document: %v", err)
 		return response, err
 	}
 

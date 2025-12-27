@@ -335,9 +335,11 @@ func (service serviceChat) SetDisappearingTimer(ctx context.Context, request dom
 	}
 
 	// Update local storage immediately for consistency
-	if existingChat, _ := service.chatStorageRepo.GetChat(request.ChatJID); existingChat != nil {
+	if existingChat, err := service.chatStorageRepo.GetChat(request.ChatJID); err == nil && existingChat != nil {
 		existingChat.EphemeralExpiration = request.TimerSeconds
-		_ = service.chatStorageRepo.StoreChat(existingChat)
+		if storeErr := service.chatStorageRepo.StoreChat(existingChat); storeErr != nil {
+			logrus.Warnf("failed to update local chat storage: %v", storeErr)
+		}
 	}
 
 	// Build response

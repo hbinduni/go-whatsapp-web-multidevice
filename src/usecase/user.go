@@ -71,50 +71,37 @@ func (service serviceUser) Info(ctx context.Context, request domainUser.InfoRequ
 }
 
 func (service serviceUser) Avatar(ctx context.Context, request domainUser.AvatarRequest) (response domainUser.AvatarResponse, err error) {
+	// Use context with timeout instead of busy-wait polling
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
 
-	chanResp := make(chan domainUser.AvatarResponse)
-	chanErr := make(chan error)
-	waktu := time.Now()
-
-	go func() {
-		err = validations.ValidateUserAvatar(ctx, request)
-		if err != nil {
-			chanErr <- err
-		}
-		dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.Phone)
-		if err != nil {
-			chanErr <- err
-		}
-		pic, err := whatsapp.GetClient().GetProfilePictureInfo(ctx, dataWaRecipient, &whatsmeow.GetProfilePictureParams{
-			Preview:     request.IsPreview,
-			IsCommunity: request.IsCommunity,
-		})
-		if err != nil {
-			chanErr <- err
-		} else if pic == nil {
-			chanErr <- errors.New("no avatar found")
-		} else {
-			response.URL = pic.URL
-			response.ID = pic.ID
-			response.Type = pic.Type
-
-			chanResp <- response
-		}
-	}()
-
-	for {
-		select {
-		case err := <-chanErr:
-			return response, err
-		case response := <-chanResp:
-			return response, nil
-		default:
-			if waktu.Add(2 * time.Second).Before(time.Now()) {
-				return response, pkgError.ContextError("Error timeout get avatar !")
-			}
-		}
+	if err = validations.ValidateUserAvatar(ctx, request); err != nil {
+		return response, err
 	}
 
+	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.Phone)
+	if err != nil {
+		return response, err
+	}
+
+	pic, err := whatsapp.GetClient().GetProfilePictureInfo(ctx, dataWaRecipient, &whatsmeow.GetProfilePictureParams{
+		Preview:     request.IsPreview,
+		IsCommunity: request.IsCommunity,
+	})
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return response, pkgError.ContextError("timeout getting avatar")
+		}
+		return response, err
+	}
+	if pic == nil {
+		return response, errors.New("no avatar found")
+	}
+
+	response.URL = pic.URL
+	response.ID = pic.ID
+	response.Type = pic.Type
+	return response, nil
 }
 
 func (service serviceUser) MyListGroups(ctx context.Context) (response domainUser.MyListGroupsResponse, err error) {
