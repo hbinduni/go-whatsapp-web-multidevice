@@ -20,6 +20,7 @@ const (
 	EventMessageStatusUpdate EventType = "message_status_update"
 	EventMessageDeleted      EventType = "message_deleted"
 	EventMessageRevoked      EventType = "message_revoked"
+	EventReactionReceived    EventType = "reaction_received"
 
 	// Chat events
 	EventChatUpdated EventType = "chat_updated"
@@ -249,5 +250,18 @@ func BroadcastConnectionStatus(isConnected, isLoggedIn bool, deviceID string) {
 		"is_connected": isConnected,
 		"is_logged_in": isLoggedIn,
 		"device_id":    deviceID,
+	})
+}
+
+// BroadcastReactionReceived broadcasts a reaction event
+func BroadcastReactionReceived(messageID, chatJID, sender, reactionEmoji, targetMessageID string, timestamp time.Time, isFromMe bool) {
+	BroadcastMessage(EventReactionReceived, "REACTION_RECEIVED", "Reaction received", map[string]any{
+		"message_id":        messageID,
+		"chat_jid":          chatJID,
+		"sender":            sender,
+		"reaction_emoji":    reactionEmoji,
+		"target_message_id": targetMessageID,
+		"timestamp":         timestamp,
+		"is_from_me":        isFromMe,
 	})
 }

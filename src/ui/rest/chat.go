@@ -174,6 +174,9 @@ func (controller *Chat) ImportStorage(c *fiber.Ctx) error {
 		})
 	}
 
+	// Get overwrite parameter (default: false for backward compatibility)
+	overwrite := c.FormValue("overwrite", "false") == "true"
+
 	// Validate file extension
 	ext := filepath.Ext(file.Filename)
 	if ext != ".db" && ext != ".sqlite" && ext != ".sqlite3" {
@@ -198,7 +201,7 @@ func (controller *Chat) ImportStorage(c *fiber.Ctx) error {
 	defer os.Remove(tempPath) // Cleanup temp file after import
 
 	// Perform import
-	response, err := controller.Service.ImportStorage(c.UserContext(), tempPath)
+	response, err := controller.Service.ImportStorage(c.UserContext(), tempPath, overwrite)
 	if err != nil {
 		return c.Status(500).JSON(utils.ResponseData{
 			Status:  500,

@@ -59,26 +59,11 @@ func (service serviceChat) ListChats(ctx context.Context, request domainChat.Lis
 		totalCount = 0
 	}
 
-	// Convert entities to domain objects with JID normalization and deduplication
-	// Use a map to deduplicate chats after normalization (same contact may have @lid and @s.whatsapp.net entries)
-	seenJIDs := make(map[string]bool)
+	// Convert entities to domain objects
 	chatInfos := make([]domainChat.ChatInfo, 0, len(chats))
 	for _, chat := range chats {
-		// Normalize JID from @lid to @s.whatsapp.net if possible
-		normalizedJID := whatsapp.NormalizeJIDString(ctx, chat.JID)
-
-		// Skip duplicates (keep the first one which has most recent last_message_time due to ORDER BY)
-		if seenJIDs[normalizedJID] {
-			logrus.WithFields(logrus.Fields{
-				"original_jid":   chat.JID,
-				"normalized_jid": normalizedJID,
-			}).Debug("Skipping duplicate chat after JID normalization")
-			continue
-		}
-		seenJIDs[normalizedJID] = true
-
 		chatInfo := domainChat.ChatInfo{
-			JID:                 normalizedJID,
+			JID:                 chat.JID,
 			Name:                chat.Name,
 			LastMessageTime:     chat.LastMessageTime.Format(time.RFC3339),
 			EphemeralExpiration: chat.EphemeralExpiration,
@@ -383,8 +368,9 @@ func (service serviceChat) ExportStorage(ctx context.Context) (filePath string, 
 	return dbPath, nil
 }
 
-func (service serviceChat) ImportStorage(ctx context.Context, backupFilePath string) (response domainChat.ImportStorageResponse, err error) {
+func (service serviceChat) ImportStorage(ctx context.Context, backupFilePath string, overwrite bool) (response domainChat.ImportStorageResponse, err error) {
 	startTime := time.Now()
+	response.Overwrite = overwrite
 
 	// Validate backup file exists
 	if _, err := os.Stat(backupFilePath); os.IsNotExist(err) {
@@ -405,6 +391,24 @@ func (service serviceChat) ImportStorage(ctx context.Context, backupFilePath str
 		return response, fmt.Errorf("invalid backup file: missing 'chats' table")
 	}
 
+	// If overwrite mode, clear all existing data first
+	if overwrite {
+		logrus.Info("Overwrite mode enabled - clearing existing data before import")
+
+		// Get counts before deletion for response
+		chatCount, messageCount, _ := service.chatStorageRepo.GetStorageStatistics()
+		response.Deleted = domainChat.ImportStorageStats{
+			Chats:    chatCount,
+			Messages: messageCount,
+		}
+
+		// Clear all existing data
+		if err := service.chatStorageRepo.TruncateAllDataWithLogging("ImportStorage"); err != nil {
+			logrus.WithError(err).Error("Failed to clear existing data")
+			return response, fmt.Errorf("failed to clear existing data: %w", err)
+		}
+	}
+
 	// Import chats
 	chatsImported, chatsSkipped, err := service.importChats(ctx, backupDB)
 	if err != nil {
@@ -421,7 +425,11 @@ func (service serviceChat) ImportStorage(ctx context.Context, backupFilePath str
 
 	// Build response
 	response.Status = "success"
-	response.Message = "Import completed successfully"
+	if overwrite {
+		response.Message = "Import completed successfully (existing data replaced)"
+	} else {
+		response.Message = "Import completed successfully (merged with existing data)"
+	}
 	response.Imported = domainChat.ImportStorageStats{
 		Chats:    chatsImported,
 		Messages: messagesImported,
@@ -433,6 +441,7 @@ func (service serviceChat) ImportStorage(ctx context.Context, backupFilePath str
 	response.Duration = time.Since(startTime).String()
 
 	logrus.WithFields(logrus.Fields{
+		"overwrite":         overwrite,
 		"chats_imported":    chatsImported,
 		"chats_skipped":     chatsSkipped,
 		"messages_imported": messagesImported,

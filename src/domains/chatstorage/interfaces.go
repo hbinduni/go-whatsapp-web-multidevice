@@ -26,6 +26,11 @@ type IChatStorageRepository interface {
 	StoreSentMessageWithContext(ctx context.Context, messageID string, senderJID string, recipientJID string, content string, timestamp time.Time) error
 	UpdateMessageStatus(ctx context.Context, messageID string, status string, statusTime time.Time) error // Update message delivery/read status
 
+	// Reaction operations
+	StoreReaction(ctx context.Context, reaction *MessageReaction) error                                // Upsert a reaction (empty emoji = delete)
+	GetReactionsForMessage(messageID, chatJID string) ([]MessageReaction, error)                       // Get all reactions for a message
+	GetReactionsForMessages(messageIDs []string, chatJID string) (map[string][]MessageReaction, error) // Batch get reactions
+
 	// Statistics
 	GetChatMessageCount(chatJID string) (int64, error)
 	GetTotalMessageCount() (int64, error)

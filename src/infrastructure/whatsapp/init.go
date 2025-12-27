@@ -639,6 +639,45 @@ func handleMessage(ctx context.Context, evt *events.Message, chatStorageRepo dom
 	messageContent := utils.ExtractMessageTextFromEvent(evt)
 	mediaType, _, _, _, _, _, _ := utils.ExtractMediaInfo(evt.Message)
 
+	// Check if this is a reaction message - store and broadcast separately
+	if reactionMessage := evt.Message.GetReactionMessage(); reactionMessage != nil {
+		reactionEmoji := reactionMessage.GetText()
+		targetMessageID := reactionMessage.GetKey().GetID()
+
+		// Store reaction in database
+		reaction := &domainChatStorage.MessageReaction{
+			MessageID: targetMessageID,
+			ChatJID:   normalizedChatJID.String(),
+			SenderJID: normalizedSenderJID.String(),
+			Emoji:     reactionEmoji,
+			Timestamp: evt.Info.Timestamp,
+		}
+		if err := chatStorageRepo.StoreReaction(ctx, reaction); err != nil {
+			log.Errorf("Failed to store reaction: %v", err)
+		} else {
+			if reactionEmoji == "" {
+				log.Debugf("📍 Reaction removed from message %s", targetMessageID)
+			} else {
+				log.Debugf("📍 Reaction '%s' stored for message %s", reactionEmoji, targetMessageID)
+			}
+		}
+
+		// Broadcast via SSE for real-time updates
+		sse.BroadcastReactionReceived(
+			evt.Info.ID,
+			normalizedChatJID.String(),
+			normalizedSenderJID.String(),
+			reactionEmoji,
+			targetMessageID,
+			evt.Info.Timestamp,
+			evt.Info.IsFromMe,
+		)
+
+		// Forward to webhook and skip normal message processing
+		handleWebhookForward(ctx, evt)
+		return
+	}
+
 	// Download media BEFORE broadcasting SSE so we can include the media URL
 	var mediaPath string
 	var mediaMimeType string

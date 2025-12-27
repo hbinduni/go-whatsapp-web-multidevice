@@ -12,6 +12,6 @@ type IChatUsecase interface {
 	SetDisappearingTimer(ctx context.Context, request SetDisappearingTimerRequest) (response SetDisappearingTimerResponse, err error)
 	// Storage backup/restore operations
 	ExportStorage(ctx context.Context) (filePath string, err error)
-	ImportStorage(ctx context.Context, backupFilePath string) (response ImportStorageResponse, err error)
+	ImportStorage(ctx context.Context, backupFilePath string, overwrite bool) (response ImportStorageResponse, err error)
 	AnalyzeStorage(ctx context.Context, filePath string) (response AnalyzeStorageResponse, err error)
 }

@@ -38,6 +38,8 @@ type Message struct {
 	PlayedAt      *time.Time `db:"played_at"`    // When view-once message was played
 	CreatedAt     time.Time  `db:"created_at"`
 	UpdatedAt     time.Time  `db:"updated_at"`
+	// Reactions is populated when fetching messages (not stored in messages table)
+	Reactions []MessageReaction `db:"-" json:"reactions,omitempty"`
 }
 
 // MediaInfo represents downloadable media information
@@ -51,6 +53,15 @@ type MediaInfo struct {
 	FileSHA256    []byte
 	FileEncSHA256 []byte
 	FileLength    uint64
+}
+
+// MessageReaction represents a reaction to a message
+type MessageReaction struct {
+	MessageID string    `db:"message_id" json:"message_id"` // Target message ID being reacted to
+	ChatJID   string    `db:"chat_jid" json:"chat_jid"`
+	SenderJID string    `db:"sender_jid" json:"sender_jid"` // Who sent the reaction
+	Emoji     string    `db:"emoji" json:"emoji"`           // The reaction emoji (empty = removed)
+	Timestamp time.Time `db:"timestamp" json:"timestamp"`
 }
 
 // MessageFilter represents query filters for messages

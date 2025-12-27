@@ -103,16 +103,19 @@ type ImportStorageRequest struct {
 }
 
 type ImportStorageResponse struct {
-	Status   string             `json:"status"`
-	Message  string             `json:"message"`
-	Imported ImportStorageStats `json:"imported"`
-	Skipped  ImportStorageStats `json:"skipped"`
-	Duration string             `json:"duration"`
+	Status    string             `json:"status"`
+	Message   string             `json:"message"`
+	Overwrite bool               `json:"overwrite"`
+	Deleted   ImportStorageStats `json:"deleted,omitempty"`
+	Imported  ImportStorageStats `json:"imported"`
+	Skipped   ImportStorageStats `json:"skipped"`
+	Duration  string             `json:"duration"`
 }
 
 type ImportStorageStats struct {
-	Chats    int64 `json:"chats"`
-	Messages int64 `json:"messages"`
+	Chats     int64 `json:"chats"`
+	Messages  int64 `json:"messages"`
+	Reactions int64 `json:"reactions,omitempty"`
 }
 
 type ExportStorageResponse struct {

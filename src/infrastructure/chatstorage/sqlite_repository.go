@@ -307,7 +307,7 @@ func (r *SQLiteRepository) StoreMessagesBatch(messages []*domainChatStorage.Mess
 	return tx.Commit()
 }
 
-// GetMessages retrieves messages with filtering
+// GetMessages retrieves messages with filtering and includes reactions
 func (r *SQLiteRepository) GetMessages(filter *domainChatStorage.MessageFilter) ([]*domainChatStorage.Message, error) {
 	var conditions []string
 	var args []any
@@ -366,15 +366,37 @@ func (r *SQLiteRepository) GetMessages(filter *domainChatStorage.MessageFilter) 
 	defer rows.Close()
 
 	var messages []*domainChatStorage.Message
+	var messageIDs []string
 	for rows.Next() {
 		message, err := r.scanMessage(rows)
 		if err != nil {
 			return nil, err
 		}
 		messages = append(messages, message)
+		messageIDs = append(messageIDs, message.ID)
 	}
 
-	return messages, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Fetch reactions for all messages in a single batch query
+	if len(messageIDs) > 0 {
+		reactionsMap, err := r.GetReactionsForMessages(messageIDs, filter.ChatJID)
+		if err != nil {
+			// Log error but don't fail - reactions are optional
+			logrus.Warnf("Failed to fetch reactions for messages: %v", err)
+		} else {
+			// Attach reactions to messages
+			for _, msg := range messages {
+				if reactions, ok := reactionsMap[msg.ID]; ok {
+					msg.Reactions = reactions
+				}
+			}
+		}
+	}
+
+	return messages, nil
 }
 
 // SearchMessages performs database-level search for messages containing specific text
@@ -508,7 +530,14 @@ func (r *SQLiteRepository) TruncateAllChats() error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	// Delete messages first (foreign key constraint)
+	// Delete reactions first
+	_, err = tx.Exec("DELETE FROM message_reactions")
+	if err != nil {
+		// Table might not exist in older schemas, ignore error
+		logrus.Debugf("Failed to delete message_reactions (table may not exist): %v", err)
+	}
+
+	// Delete messages (foreign key constraint)
 	_, err = tx.Exec("DELETE FROM messages")
 	if err != nil {
 		return fmt.Errorf("failed to delete messages: %w", err)
@@ -814,6 +843,102 @@ func (r *SQLiteRepository) UpdateMessageStatus(ctx context.Context, messageID st
 	return nil
 }
 
+// StoreReaction stores or updates a reaction (empty emoji = delete the reaction)
+func (r *SQLiteRepository) StoreReaction(ctx context.Context, reaction *domainChatStorage.MessageReaction) error {
+	// Check if context is cancelled
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	// If emoji is empty, delete the reaction
+	if reaction.Emoji == "" {
+		_, err := r.db.ExecContext(ctx,
+			"DELETE FROM message_reactions WHERE message_id = ? AND chat_jid = ? AND sender_jid = ?",
+			reaction.MessageID, reaction.ChatJID, reaction.SenderJID,
+		)
+		return err
+	}
+
+	// Upsert the reaction
+	query := `
+		INSERT INTO message_reactions (message_id, chat_jid, sender_jid, emoji, timestamp)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(message_id, chat_jid, sender_jid) DO UPDATE SET
+			emoji = excluded.emoji,
+			timestamp = excluded.timestamp
+	`
+	_, err := r.db.ExecContext(ctx, query,
+		reaction.MessageID, reaction.ChatJID, reaction.SenderJID, reaction.Emoji, reaction.Timestamp,
+	)
+	return err
+}
+
+// GetReactionsForMessage returns all reactions for a specific message
+func (r *SQLiteRepository) GetReactionsForMessage(messageID, chatJID string) ([]domainChatStorage.MessageReaction, error) {
+	query := `
+		SELECT message_id, chat_jid, sender_jid, emoji, timestamp
+		FROM message_reactions
+		WHERE message_id = ? AND chat_jid = ?
+		ORDER BY timestamp ASC
+	`
+	rows, err := r.db.Query(query, messageID, chatJID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var reactions []domainChatStorage.MessageReaction
+	for rows.Next() {
+		var reaction domainChatStorage.MessageReaction
+		if err := rows.Scan(&reaction.MessageID, &reaction.ChatJID, &reaction.SenderJID, &reaction.Emoji, &reaction.Timestamp); err != nil {
+			return nil, err
+		}
+		reactions = append(reactions, reaction)
+	}
+	return reactions, rows.Err()
+}
+
+// GetReactionsForMessages returns reactions for multiple messages (batch query)
+func (r *SQLiteRepository) GetReactionsForMessages(messageIDs []string, chatJID string) (map[string][]domainChatStorage.MessageReaction, error) {
+	if len(messageIDs) == 0 {
+		return make(map[string][]domainChatStorage.MessageReaction), nil
+	}
+
+	// Build query with placeholders
+	placeholders := make([]string, len(messageIDs))
+	args := make([]any, len(messageIDs)+1)
+	for i, id := range messageIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	args[len(messageIDs)] = chatJID
+
+	query := fmt.Sprintf(`
+		SELECT message_id, chat_jid, sender_jid, emoji, timestamp
+		FROM message_reactions
+		WHERE message_id IN (%s) AND chat_jid = ?
+		ORDER BY timestamp ASC
+	`, strings.Join(placeholders, ","))
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string][]domainChatStorage.MessageReaction)
+	for rows.Next() {
+		var reaction domainChatStorage.MessageReaction
+		if err := rows.Scan(&reaction.MessageID, &reaction.ChatJID, &reaction.SenderJID, &reaction.Emoji, &reaction.Timestamp); err != nil {
+			return nil, err
+		}
+		result[reaction.MessageID] = append(result[reaction.MessageID], reaction)
+	}
+	return result, rows.Err()
+}
+
 // _____________________________________________________________________________________________________________________
 
 // initializeSchema creates or migrates the database schema
@@ -941,6 +1066,24 @@ func (r *SQLiteRepository) getMigrations() []string {
 
 		-- Create index for status queries
 		CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(status);
+		`,
+
+		// Migration 4: Add message_reactions table for storing emoji reactions
+		`
+		-- Create message_reactions table
+		-- Each sender can have one reaction per message (upsert on conflict)
+		CREATE TABLE IF NOT EXISTS message_reactions (
+			message_id TEXT NOT NULL,
+			chat_jid TEXT NOT NULL,
+			sender_jid TEXT NOT NULL,
+			emoji TEXT NOT NULL,
+			timestamp TIMESTAMP NOT NULL,
+			PRIMARY KEY (message_id, chat_jid, sender_jid)
+		);
+
+		-- Create indexes for efficient lookups
+		CREATE INDEX IF NOT EXISTS idx_reactions_message ON message_reactions(message_id, chat_jid);
+		CREATE INDEX IF NOT EXISTS idx_reactions_chat ON message_reactions(chat_jid);
 		`,
 	}
 }
