@@ -82,3 +82,15 @@ type ChatFilter struct {
 	SearchName string
 	HasMedia   bool
 }
+
+// DetailedStats represents detailed storage statistics for admin operations
+type DetailedStats struct {
+	TotalChats        int64      `json:"total_chats"`
+	TotalMessages     int64      `json:"total_messages"`
+	DatabaseSizeBytes int64      `json:"database_size_bytes"`
+	OldestMessage     *time.Time `json:"oldest_message,omitempty"`
+	NewestMessage     *time.Time `json:"newest_message,omitempty"`
+	EmptyChats        int64      `json:"empty_chats"`
+	MediaMessages     int64      `json:"media_messages"`
+	TextMessages      int64      `json:"text_messages"`
+}

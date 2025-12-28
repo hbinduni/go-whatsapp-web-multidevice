@@ -21,7 +21,7 @@ type IChatStorageRepository interface {
 	StoreMessage(message *Message) error
 	StoreMessagesBatch(messages []*Message) error
 	ImportMessagesBatch(messages []*Message, skipExisting bool) (imported, skipped int64, err error) // Batch import with skip/upsert mode
-	GetMessageByID(id string) (*Message, error) // New method for efficient ID-only search
+	GetMessageByID(id string) (*Message, error)                                                      // New method for efficient ID-only search
 	GetMessages(filter *MessageFilter) ([]*Message, error)
 	SearchMessages(chatJID, searchText string, limit int) ([]*Message, error) // Database-level search
 	DeleteMessage(id, chatJID string) error
@@ -43,6 +43,17 @@ type IChatStorageRepository interface {
 	// Cleanup operations
 	TruncateAllChats() error
 	TruncateAllDataWithLogging(logPrefix string) error
+
+	// Admin operations
+	DeleteChatsByPattern(pattern string) (chatsDeleted, messagesDeleted int64, deletedJIDs []string, err error)
+	DeleteChatsByJIDs(jids []string) (chatsDeleted, messagesDeleted int64, err error)
+	GetDetailedStats() (*DetailedStats, error)
+	VacuumDatabase() error
+	GetDatabaseSize() (int64, error)
+	GetMessageDateRange() (oldest, newest *time.Time, err error)
+	CountEmptyChats() (int64, error)
+	DeleteEmptyChats() (deleted int64, err error)
+	DeleteMessagesOlderThan(before time.Time) (deleted int64, err error)
 
 	// Schema operations
 	InitializeSchema() error

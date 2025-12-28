@@ -428,6 +428,13 @@ func (r *SQLiteRepository) CreateMessage(ctx context.Context, evt *events.Messag
 	normalizedChatJID := whatsapp.NormalizeJIDFromLID(ctx, evt.Info.Chat, client)
 	normalizedSender := whatsapp.NormalizeJIDFromLID(ctx, evt.Info.Sender, client)
 
+	// Skip broadcast JIDs (status@broadcast) - these are WhatsApp Status/Stories
+	// and should not appear as regular chats in the chat list
+	if normalizedChatJID.Server == types.BroadcastServer {
+		logrus.Debugf("Skipping broadcast message from %s (chat: %s)", normalizedSender.String(), normalizedChatJID.String())
+		return nil
+	}
+
 	chatJID := normalizedChatJID.String()
 	// Store the full sender JID (user@server) to ensure consistency between received and sent messages
 	sender := normalizedSender.String()

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
+	domainAdmin "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/admin"
 	domainApp "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/app"
 	domainChat "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/chat"
 	domainChatStorage "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/chatstorage"
@@ -46,6 +47,7 @@ var (
 
 	// Usecase
 	appUsecase        domainApp.IAppUsecase
+	adminUsecase      domainAdmin.IAdminUsecase
 	chatUsecase       domainChat.IChatUsecase
 	sendUsecase       domainSend.ISendUsecase
 	userUsecase       domainUser.IUserUsecase
@@ -368,6 +370,7 @@ func initApp() {
 
 	// Usecase
 	appUsecase = usecase.NewAppService(chatStorageRepo)
+	adminUsecase = usecase.NewAdminService(chatStorageRepo)
 	chatUsecase = usecase.NewChatService(chatStorageRepo)
 	sendUsecase = usecase.NewSendService(appUsecase, chatStorageRepo)
 	userUsecase = usecase.NewUserService()

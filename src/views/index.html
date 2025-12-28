@@ -154,6 +154,14 @@
         <chat-storage-backup></chat-storage-backup>
     </div>
 
+    <div class="ui horizontal divider">
+        Admin
+    </div>
+
+    <div class="ui three column doubling grid cards">
+        <admin-storage></admin-storage>
+    </div>
+
 </div>
 <script>
     window.TYPEGROUP = "@g.us";
@@ -235,6 +243,7 @@
     import ChatList from "{{ .AppBasePath }}/components/ChatList.js";
     import ChatMessages from "{{ .AppBasePath }}/components/ChatMessages.js";
     import ChatStorageBackup from "{{ .AppBasePath }}/components/ChatStorageBackup.js";
+    import AdminStorage from "{{ .AppBasePath }}/components/AdminStorage.js";
 
     const showErrorInfo = (message) => {
         $('body').toast({
@@ -270,7 +279,8 @@
             GroupList, GroupCreate, GroupJoinWithLink, GroupInfoFromLink, GroupAddParticipants, GroupSetPhoto, GroupSetName, GroupSetLocked, GroupSetAnnounce, GroupSetTopic, GroupGetInviteLink, GroupInfo,
             NewsletterList,
             AccountAvatar, AccountUserInfo, AccountPrivacy, AccountChangeAvatar, AccountContact, AccountChangePushName, AccountUserCheck, AccountBusinessProfile,
-            ChatPinManager, ChatDisappearingManager, ChatList, ChatMessages, ChatStorageBackup
+            ChatPinManager, ChatDisappearingManager, ChatList, ChatMessages, ChatStorageBackup,
+            AdminStorage
         },
         delimiters: ['[[', ']]'],
         data() {
