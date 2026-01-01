@@ -11,6 +11,7 @@ src/whatsapp
 src/whatsapp.exe
 storages
 .env
+src/.env
 bin
 .playwright-mcp
 .cursor/mcp.json
