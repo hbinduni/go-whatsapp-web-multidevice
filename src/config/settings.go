@@ -63,9 +63,9 @@ var (
 	WhatsappAccountValidation               = true
 
 	// FFmpeg/Media processing timeouts (in seconds)
-	FFmpegThumbnailTimeout  = 30  // Timeout for generating video thumbnails
-	FFmpegCompressTimeout   = 120 // Timeout for video compression
-	FFmpegConvertTimeout    = 45  // Timeout for sticker/image conversion
+	FFmpegThumbnailTimeout = 30  // Timeout for generating video thumbnails
+	FFmpegCompressTimeout  = 120 // Timeout for video compression
+	FFmpegConvertTimeout   = 45  // Timeout for sticker/image conversion
 
 	// Chat storage database configuration (PostgreSQL only)
 	// Uses the same database as DatabaseURL

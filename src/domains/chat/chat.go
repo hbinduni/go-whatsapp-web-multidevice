@@ -103,4 +103,3 @@ type SetDisappearingTimerResponse struct {
 	ChatJID      string `json:"chat_jid"`
 	TimerSeconds uint32 `json:"timer_seconds"`
 }
-

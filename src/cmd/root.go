@@ -624,6 +624,15 @@ func initClients(ctx context.Context) {
 			continue
 		}
 
+		// Validate phone number format early
+		normalizedPhone, err := whatsapp.ValidatePhone(phone)
+		if err != nil {
+			logrus.Fatalf("Invalid phone number in WHATSAPP_CLIENTS: %v", err)
+		}
+
+		// Use normalized phone for consistency
+		phone = normalizedPhone
+
 		// Create a device-specific chat storage repository
 		clientChatStorageRepo := chatstorage.NewPostgresRepository(chatStorageDB, phone)
 

@@ -127,13 +127,25 @@ func GetRegistry() *ClientRegistry {
 
 // RegisterClient registers and initializes a new WhatsApp client for a phone number
 func (r *ClientRegistry) RegisterClient(ctx context.Context, phone string, chatStorageRepo domainChatStorage.IChatStorageRepository) (*ManagedClient, error) {
+	// Validate phone number format before acquiring lock
+	normalizedPhone, err := ValidatePhone(phone)
+	if err != nil {
+		return nil, fmt.Errorf("invalid phone number: %w", err)
+	}
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// Check if client already exists
+	// Check if client already exists (try both original and normalized)
 	if existing, ok := r.clients[phone]; ok {
 		r.log.Infof("Client for %s already registered, returning existing", phone)
 		return existing, nil
+	}
+	if phone != normalizedPhone {
+		if existing, ok := r.clients[normalizedPhone]; ok {
+			r.log.Infof("Client for %s already registered (normalized), returning existing", normalizedPhone)
+			return existing, nil
+		}
 	}
 
 	// Get or create device for this phone number
@@ -232,6 +244,36 @@ func normalizePhone(phone string) string {
 		}
 	}
 	return cleaned
+}
+
+// ValidatePhone validates that the phone string is a valid phone number format
+// Returns the normalized phone number (digits only) and any validation error
+func ValidatePhone(phone string) (string, error) {
+	if phone == "" {
+		return "", fmt.Errorf("phone number cannot be empty")
+	}
+
+	// Normalize to digits only
+	normalized := normalizePhone(phone)
+
+	// Check minimum length (shortest valid phone numbers are ~7 digits)
+	if len(normalized) < 7 {
+		return "", fmt.Errorf("phone number too short: %q (minimum 7 digits, got %d)", phone, len(normalized))
+	}
+
+	// Check maximum length (E.164 standard max is 15 digits)
+	if len(normalized) > 15 {
+		return "", fmt.Errorf("phone number too long: %q (maximum 15 digits, got %d)", phone, len(normalized))
+	}
+
+	// Verify it contains only digits after normalization
+	for _, c := range normalized {
+		if c < '0' || c > '9' {
+			return "", fmt.Errorf("phone number contains invalid characters: %q", phone)
+		}
+	}
+
+	return normalized, nil
 }
 
 // GetClient retrieves a client by phone number
