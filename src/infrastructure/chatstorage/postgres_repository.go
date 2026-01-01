@@ -1152,8 +1152,34 @@ func (r *PostgresRepository) GetReactionsForMessages(messageIDs []string, chatJI
 // Admin Operations
 // ============================================================================
 
+// validateLikePattern validates a SQL LIKE pattern to prevent abuse
+func validateLikePattern(pattern string) error {
+	if pattern == "" {
+		return fmt.Errorf("pattern cannot be empty")
+	}
+	if len(pattern) > 100 {
+		return fmt.Errorf("pattern too long (max 100 characters)")
+	}
+	// Count wildcards - too many could be slow
+	wildcardCount := strings.Count(pattern, "%") + strings.Count(pattern, "_")
+	if wildcardCount > 5 {
+		return fmt.Errorf("too many wildcards in pattern (max 5)")
+	}
+	// Reject patterns that are only wildcards (would match everything inefficiently)
+	trimmed := strings.ReplaceAll(strings.ReplaceAll(pattern, "%", ""), "_", "")
+	if len(trimmed) == 0 {
+		return fmt.Errorf("pattern must contain at least one non-wildcard character")
+	}
+	return nil
+}
+
 // DeleteChatsByPattern deletes chats matching a pattern
 func (r *PostgresRepository) DeleteChatsByPattern(pattern string) (chatsDeleted, messagesDeleted int64, deletedJIDs []string, err error) {
+	// Validate pattern to prevent abuse
+	if err := validateLikePattern(pattern); err != nil {
+		return 0, 0, nil, fmt.Errorf("invalid pattern: %w", err)
+	}
+
 	// Find matching chats
 	rows, err := r.db.Query("SELECT jid FROM chats WHERE device_id = $1 AND jid LIKE $2", r.deviceID, pattern)
 	if err != nil {

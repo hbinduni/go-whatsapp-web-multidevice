@@ -319,6 +319,17 @@ func initEnvConfig() {
 		config.ShutdownTimeout = viper.GetInt("shutdown_timeout")
 	}
 
+	// FFmpeg/Media processing timeouts
+	if viper.IsSet("ffmpeg_thumbnail_timeout") {
+		config.FFmpegThumbnailTimeout = viper.GetInt("ffmpeg_thumbnail_timeout")
+	}
+	if viper.IsSet("ffmpeg_compress_timeout") {
+		config.FFmpegCompressTimeout = viper.GetInt("ffmpeg_compress_timeout")
+	}
+	if viper.IsSet("ffmpeg_convert_timeout") {
+		config.FFmpegConvertTimeout = viper.GetInt("ffmpeg_convert_timeout")
+	}
+
 	// WhatsApp settings
 	if envAutoReply := viper.GetString("whatsapp_auto_reply"); envAutoReply != "" {
 		config.WhatsappAutoReplyMessage = envAutoReply

@@ -163,11 +163,13 @@ func (service serviceSend) SendImage(ctx context.Context, request domainSend.Ima
 		caption = "🖼️ " + request.Caption
 	}
 	ts, err := service.wrapSendMessage(ctx, dataWaRecipient, msg, caption)
-	go func() {
-		if errDelete := utils.RemoveFile(0, deletedItems...); errDelete != nil {
-			logrus.Warnf("error deleting temporary image files: %v", errDelete)
+	// Cleanup temporary files asynchronously
+	go func(files []string) {
+		logrus.Debugf("[Cleanup] Removing %d temporary image files", len(files))
+		if errDelete := utils.RemoveFile(0, files...); errDelete != nil {
+			logrus.Warnf("[Cleanup] Error deleting temporary image files: %v", errDelete)
 		}
-	}()
+	}(deletedItems)
 	if err != nil {
 		return response, err
 	}
@@ -273,9 +275,13 @@ func (service serviceSend) SendVideo(ctx context.Context, request domainSend.Vid
 
 	defer func() {
 		if len(deletedItems) > 0 {
-			go func() {
-				_ = utils.RemoveFile(1, deletedItems...)
-			}()
+			// Cleanup temporary files asynchronously
+			go func(files []string) {
+				logrus.Debugf("[Cleanup] Removing %d temporary video files", len(files))
+				if err := utils.RemoveFile(1, files...); err != nil {
+					logrus.Warnf("[Cleanup] Error deleting temporary video files: %v", err)
+				}
+			}(deletedItems)
 		}
 	}()
 
@@ -306,10 +312,16 @@ func (service serviceSend) SendVideo(ctx context.Context, request domainSend.Vid
 		return response, pkgError.InternalServerError("ffmpeg not installed")
 	}
 
+	// Generate video thumbnail with timeout
 	thumbnailVideoPath := fmt.Sprintf("%s/%s", config.PathSendItems, generateUUID+".png")
-	cmdThumbnail := exec.Command("ffmpeg", "-i", oriVideoPath, "-ss", "00:00:01.000", "-vframes", "1", thumbnailVideoPath)
-	err = cmdThumbnail.Run()
-	if err != nil {
+	thumbCtx, thumbCancel := context.WithTimeout(ctx, time.Duration(config.FFmpegThumbnailTimeout)*time.Second)
+	defer thumbCancel()
+
+	cmdThumbnail := exec.CommandContext(thumbCtx, "ffmpeg", "-i", oriVideoPath, "-ss", "00:00:01.000", "-vframes", "1", thumbnailVideoPath)
+	if err = cmdThumbnail.Run(); err != nil {
+		if thumbCtx.Err() == context.DeadlineExceeded {
+			return response, pkgError.InternalServerError("thumbnail generation timed out")
+		}
 		return response, pkgError.InternalServerError(fmt.Sprintf("failed to create thumbnail %v", err))
 	}
 
@@ -328,8 +340,12 @@ func (service serviceSend) SendVideo(ctx context.Context, request domainSend.Vid
 	videoThumbnail = thumbnailResizeVideoPath
 
 	if request.Compress {
+		// Compress video with timeout
+		compressCtx, compressCancel := context.WithTimeout(ctx, time.Duration(config.FFmpegCompressTimeout)*time.Second)
+		defer compressCancel()
+
 		compresVideoPath := fmt.Sprintf("%s/%s", config.PathSendItems, generateUUID+".mp4")
-		cmdCompress := exec.Command("ffmpeg", "-i", oriVideoPath,
+		cmdCompress := exec.CommandContext(compressCtx, "ffmpeg", "-i", oriVideoPath,
 			"-c:v", "libx264",
 			"-crf", "28",
 			"-preset", "fast",
@@ -342,6 +358,9 @@ func (service serviceSend) SendVideo(ctx context.Context, request domainSend.Vid
 
 		output, err := cmdCompress.CombinedOutput()
 		if err != nil {
+			if compressCtx.Err() == context.DeadlineExceeded {
+				return response, pkgError.InternalServerError("video compression timed out")
+			}
 			logrus.Errorf("ffmpeg compression failed: %v, output: %s", err, string(output))
 			return response, pkgError.InternalServerError(fmt.Sprintf("failed to compress video: %v", err))
 		}
@@ -576,7 +595,8 @@ func (service serviceSend) SendSticker(ctx context.Context, request domainSend.S
 
 	var convertCmd *exec.Cmd
 
-	convCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	// Use configurable timeout for sticker conversion
+	convCtx, cancel := context.WithTimeout(ctx, time.Duration(config.FFmpegConvertTimeout)*time.Second)
 	defer cancel()
 
 	if _, err := exec.LookPath("ffmpeg"); err == nil {
@@ -591,6 +611,9 @@ func (service serviceSend) SendSticker(ctx context.Context, request domainSend.S
 	convertCmd.Stderr = &stderr
 
 	if err := convertCmd.Run(); err != nil {
+		if convCtx.Err() == context.DeadlineExceeded {
+			return response, pkgError.InternalServerError("sticker conversion timed out")
+		}
 		return response, pkgError.InternalServerError(fmt.Sprintf("failed to convert sticker to WebP: %v, stderr: %s", err, stderr.String()))
 	}
 

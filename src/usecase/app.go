@@ -142,7 +142,7 @@ func (service *serviceApp) LoginWithCode(ctx context.Context, phoneNumber string
 }
 
 func (service *serviceApp) Logout(ctx context.Context) (err error) {
-	logrus.Debug("Starting logout process...")
+	logrus.Debug("[Logout] Starting logout process...")
 
 	client := whatsapp.GetClientFromContext(ctx)
 	if client == nil {
@@ -152,17 +152,25 @@ func (service *serviceApp) Logout(ctx context.Context) (err error) {
 	// Get the phone number from context for registry operations
 	phone := whatsapp.GetDeviceIDFromContext(ctx)
 
+	// Track partial failures for better observability
+	var warnings []string
+
 	// Call WhatsApp client logout first to disconnect from server
-	err = client.Logout(ctx)
-	if err != nil {
-		logrus.Debugf("WhatsApp logout failed: %v", err)
+	if logoutErr := client.Logout(ctx); logoutErr != nil {
 		// Continue with cleanup even if logout fails - the client may already be disconnected
+		warnings = append(warnings, fmt.Sprintf("WhatsApp logout: %v", logoutErr))
+		logrus.Debugf("[Logout] WhatsApp logout failed (continuing with cleanup): %v", logoutErr)
+	} else {
+		logrus.Debug("[Logout] WhatsApp logout successful")
 	}
 
 	// Truncate chat storage for this client
 	if service.chatStorageRepo != nil {
 		if truncErr := service.chatStorageRepo.TruncateAllDataWithLogging("MANUAL_LOGOUT"); truncErr != nil {
-			logrus.Errorf("Failed to truncate chat storage: %v", truncErr)
+			warnings = append(warnings, fmt.Sprintf("truncate storage: %v", truncErr))
+			logrus.Errorf("[Logout] Failed to truncate chat storage: %v", truncErr)
+		} else {
+			logrus.Debug("[Logout] Chat storage truncated")
 		}
 	}
 
@@ -170,17 +178,25 @@ func (service *serviceApp) Logout(ctx context.Context) (err error) {
 	registry := whatsapp.GetRegistry()
 	if registry != nil && phone != "" {
 		if reinitErr := registry.ReinitializeClient(ctx, phone); reinitErr != nil {
-			logrus.Errorf("Failed to reinitialize client: %v", reinitErr)
-			return reinitErr
+			logrus.Errorf("[Logout] Failed to reinitialize client: %v", reinitErr)
+			return fmt.Errorf("failed to reinitialize client: %w", reinitErr)
 		}
+		logrus.Debug("[Logout] Client reinitialized")
 
 		// Reconnect the reinitialized client
 		if connectErr := registry.ConnectClient(phone); connectErr != nil {
-			logrus.Warnf("Failed to reconnect client after logout: %v", connectErr)
+			warnings = append(warnings, fmt.Sprintf("reconnect: %v", connectErr))
+			logrus.Warnf("[Logout] Failed to reconnect client after logout: %v", connectErr)
+		} else {
+			logrus.Debug("[Logout] Client reconnected")
 		}
 	}
 
-	logrus.Debug("Logout process completed successfully")
+	if len(warnings) > 0 {
+		logrus.Warnf("[Logout] Completed with warnings: %v", warnings)
+	} else {
+		logrus.Info("[Logout] Process completed successfully")
+	}
 	return nil
 }
 

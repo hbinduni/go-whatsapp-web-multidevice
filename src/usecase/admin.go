@@ -101,9 +101,13 @@ func (s *serviceAdmin) CleanupStorage(ctx context.Context, request domainAdmin.C
 	// Handle empty chats cleanup
 	if request.EmptyChats {
 		if request.DryRun {
-			count, _ := s.chatStorageRepo.CountEmptyChats()
-			logrus.Infof("[Admin] Dry run: would delete %d empty chats", count)
-			response.ChatsDeleted += count
+			count, err := s.chatStorageRepo.CountEmptyChats()
+			if err != nil {
+				logrus.Warnf("[Admin] Dry run: failed to count empty chats: %v", err)
+			} else {
+				logrus.Infof("[Admin] Dry run: would delete %d empty chats", count)
+				response.ChatsDeleted += count
+			}
 		} else {
 			deleted, err := s.chatStorageRepo.DeleteEmptyChats()
 			if err != nil {

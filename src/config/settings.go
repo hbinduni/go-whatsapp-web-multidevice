@@ -63,6 +63,11 @@ var (
 	WhatsappTypeGroup                       = "@g.us"
 	WhatsappAccountValidation               = true
 
+	// FFmpeg/Media processing timeouts (in seconds)
+	FFmpegThumbnailTimeout  = 30  // Timeout for generating video thumbnails
+	FFmpegCompressTimeout   = 120 // Timeout for video compression
+	FFmpegConvertTimeout    = 45  // Timeout for sticker/image conversion
+
 	// Chat storage database configuration
 	// For PostgreSQL: "postgresql://user:password@localhost:5432/dbname"
 	// For SQLite: "file:storages/chatstorage.db"
