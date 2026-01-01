@@ -593,12 +593,12 @@ func handlePairSuccessMultiClient(ctx context.Context, evt *events.PairSuccess, 
 
 	if normalizePhone(scannedPhone) != configuredPhone {
 		// Phone mismatch - reject the login
-		logrus.Errorf("[%s] Phone mismatch! Configured: %s, Scanned: %s. Logging out.",
+		logrus.Errorf("[%s] Phone mismatch! Configured: %s, Scanned: %s. Will disconnect in 5 seconds.",
 			mc.Phone, configuredPhone, scannedPhone)
 
-		// Broadcast error to clients
+		// Broadcast error to clients immediately
 		errorMsg := fmt.Sprintf("Phone mismatch: configured client %s but scanned with %s. "+
-			"Please scan with the correct phone or update WHATSAPP_CLIENTS configuration.",
+			"Disconnecting in 5 seconds. Please update WHATSAPP_CLIENTS configuration.",
 			mc.Phone, scannedPhone)
 
 		websocket.Broadcast <- websocket.BroadcastMessage{
@@ -608,6 +608,7 @@ func handlePairSuccessMultiClient(ctx context.Context, evt *events.PairSuccess, 
 				"configured_phone": mc.Phone,
 				"scanned_phone":    scannedPhone,
 				"reason":           "phone_mismatch",
+				"disconnect_in":    5,
 			},
 		}
 
@@ -616,18 +617,44 @@ func handlePairSuccessMultiClient(ctx context.Context, evt *events.PairSuccess, 
 				"configured_phone": mc.Phone,
 				"scanned_phone":    scannedPhone,
 				"reason":           "phone_mismatch",
+				"disconnect_in":    5,
 			})
 
-		// Logout the mismatched device
-		mc.Client.Logout(ctx)
-		mc.SetStatus(StatusLoggedOut)
+		// Wait 5 seconds before disconnecting to allow WhatsApp to complete its sync
+		// This prevents incomplete session cleanup on the phone
+		go func() {
+			time.Sleep(5 * time.Second)
 
-		// Delete the device from database to clean up
-		if mc.Client.Store != nil {
-			if err := mc.Client.Store.Delete(ctx); err != nil {
-				logrus.Warnf("[%s] Failed to delete mismatched device: %v", mc.Phone, err)
+			logrus.Infof("[%s] Disconnecting mismatched device now", mc.Phone)
+
+			// Logout the mismatched device
+			mc.Client.Logout(context.Background())
+			mc.SetStatus(StatusLoggedOut)
+
+			// Delete the device from database to clean up
+			if mc.Client.Store != nil {
+				if err := mc.Client.Store.Delete(context.Background()); err != nil {
+					logrus.Warnf("[%s] Failed to delete mismatched device: %v", mc.Phone, err)
+				}
 			}
-		}
+
+			// Notify that disconnect is complete
+			websocket.Broadcast <- websocket.BroadcastMessage{
+				Code:    "LOGIN_REJECTED_COMPLETE",
+				Message: fmt.Sprintf("Mismatched device %s has been disconnected", scannedPhone),
+				Result: map[string]any{
+					"configured_phone": mc.Phone,
+					"scanned_phone":    scannedPhone,
+				},
+			}
+
+			sse.BroadcastMessage(sse.EventLoginFailed, "LOGIN_REJECTED_COMPLETE",
+				fmt.Sprintf("Mismatched device %s has been disconnected", scannedPhone),
+				map[string]any{
+					"configured_phone": mc.Phone,
+					"scanned_phone":    scannedPhone,
+				})
+		}()
 
 		return
 	}
