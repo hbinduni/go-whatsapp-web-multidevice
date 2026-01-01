@@ -3,9 +3,7 @@ package cmd
 import (
 	"context"
 	"database/sql"
-	"embed"
 	"fmt"
-	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -31,12 +29,9 @@ import (
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/ui/sse"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/ui/websocket"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/usecase"
-	"github.com/dustin/go-humanize"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/gofiber/fiber/v2/middleware/filesystem"
 	"github.com/gofiber/fiber/v2/middleware/logger"
-	"github.com/gofiber/template/html/v2"
 	_ "github.com/lib/pq"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -44,9 +39,6 @@ import (
 )
 
 var (
-	EmbedIndex embed.FS
-	EmbedViews embed.FS
-
 	// Chat Storage
 	chatStorageDB   *sql.DB
 	chatStorageRepo domainChatStorage.IChatStorageRepository
@@ -92,13 +84,7 @@ func runServer(_ *cobra.Command, _ []string) {
 		logrus.Warn("⚠️  AUTH_PASSWORD_HASH not set - authentication disabled")
 	}
 
-	engine := html.NewFileSystem(http.FS(EmbedViews), ".html")
-	engine.AddFunc("isAuthenticated", func(username any) bool {
-		return username != nil && username != ""
-	})
-
 	fiberConfig := fiber.Config{
-		Views:                   engine,
 		EnableTrustedProxyCheck: true,
 		BodyLimit:               int(config.WhatsappSettingMaxVideoSize),
 		Network:                 "tcp",
@@ -114,16 +100,6 @@ func runServer(_ *cobra.Command, _ []string) {
 
 	// Static assets (public)
 	app.Static(config.AppBasePath+"/statics", "./statics")
-	app.Use(config.AppBasePath+"/components", filesystem.New(filesystem.Config{
-		Root:       http.FS(EmbedViews),
-		PathPrefix: "views/components",
-		Browse:     true,
-	}))
-	app.Use(config.AppBasePath+"/assets", filesystem.New(filesystem.Config{
-		Root:       http.FS(EmbedViews),
-		PathPrefix: "views/assets",
-		Browse:     true,
-	}))
 
 	// Global middleware
 	app.Use(middleware.Recovery())
@@ -144,16 +120,13 @@ func runServer(_ *cobra.Command, _ []string) {
 		baseGroup = app.Group(config.AppBasePath)
 	}
 
-	// Public routes (no auth required)
-	// Login page
-	baseGroup.Get("/login", func(c *fiber.Ctx) error {
-		// If already authenticated, redirect to dashboard
-		if c.Cookies("access_token") != "" {
-			return c.Redirect(config.AppBasePath + "/")
-		}
-		return c.Render("views/login", fiber.Map{
-			"AppVersion":  config.AppVersion,
-			"AppBasePath": config.AppBasePath,
+	// API info route (no auth required)
+	baseGroup.Get("/", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{
+			"name":    "GoWA-SSE WhatsApp Web API",
+			"version": config.AppVersion,
+			"status":  "running",
+			"docs":    "Use a separate webclient to interact with this API",
 		})
 	})
 
@@ -162,19 +135,6 @@ func runServer(_ *cobra.Command, _ []string) {
 
 	// Protected routes (JWT auth required)
 	protectedGroup := baseGroup.Group("", middleware.JWTAuth())
-
-	// Dashboard (main page)
-	protectedGroup.Get("/", func(c *fiber.Ctx) error {
-		return c.Render("views/index", fiber.Map{
-			"AppHost":      fmt.Sprintf("%s://%s", c.Protocol(), c.Hostname()),
-			"AppVersion":   config.AppVersion,
-			"AppBasePath":  config.AppBasePath,
-			"Username":     middleware.GetAuthUsername(c),
-			"MaxFileSize":  humanize.Bytes(uint64(config.WhatsappSettingMaxFileSize)),
-			"MaxVideoSize": humanize.Bytes(uint64(config.WhatsappSettingMaxVideoSize)),
-			"Clients":      config.WhatsAppClients,
-		})
-	})
 
 	// Admin routes (protected)
 	rest.InitRestAdmin(protectedGroup, adminUsecase)
@@ -634,9 +594,7 @@ func initClients(ctx context.Context) {
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
-func Execute(embedIndex embed.FS, embedViews embed.FS) {
-	EmbedIndex = embedIndex
-	EmbedViews = embedViews
+func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
