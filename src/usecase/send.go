@@ -38,15 +38,20 @@ func NewSendService(appService app.IAppUsecase, chatStorageRepo domainChatStorag
 
 // wrapSendMessage wraps the message sending process with message ID saving
 func (service serviceSend) wrapSendMessage(ctx context.Context, recipient types.JID, msg *waE2E.Message, content string) (whatsmeow.SendResponse, error) {
-	ts, err := whatsapp.GetClientFromContext(ctx).SendMessage(ctx, recipient, msg)
+	client := whatsapp.GetClientFromContext(ctx)
+	if client == nil {
+		return whatsmeow.SendResponse{}, errors.New("WhatsApp client not available")
+	}
+
+	ts, err := client.SendMessage(ctx, recipient, msg)
 	if err != nil {
 		return whatsmeow.SendResponse{}, err
 	}
 
 	// Store the sent message using chatstorage
 	senderJID := ""
-	if whatsapp.GetClientFromContext(ctx).Store.ID != nil {
-		senderJID = whatsapp.GetClientFromContext(ctx).Store.ID.String()
+	if client.Store != nil && client.Store.ID != nil {
+		senderJID = client.Store.ID.String()
 	}
 
 	// Store message asynchronously with timeout

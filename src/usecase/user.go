@@ -71,7 +71,8 @@ func (service serviceUser) Info(ctx context.Context, request domainUser.InfoRequ
 }
 
 func (service serviceUser) Avatar(ctx context.Context, request domainUser.AvatarRequest) (response domainUser.AvatarResponse, err error) {
-	// Use context with timeout instead of busy-wait polling
+	// Create a child context with 2s timeout. Note: this respects the parent's deadline
+	// if it's shorter (standard Go context behavior for request scoping)
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 

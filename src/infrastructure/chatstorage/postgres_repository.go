@@ -389,7 +389,7 @@ func (r *PostgresRepository) DeleteChat(jid string) error {
 	// Delete reactions first
 	_, err = tx.Exec("DELETE FROM message_reactions WHERE device_id = $1 AND chat_jid = $2", r.deviceID, jid)
 	if err != nil {
-		logrus.Debugf("Failed to delete reactions for chat %s: %v", jid, err)
+		return fmt.Errorf("failed to delete reactions for chat %s: %w", jid, err)
 	}
 
 	// Delete messages
@@ -1170,6 +1170,11 @@ func (r *PostgresRepository) DeleteChatsByPattern(pattern string) (chatsDeleted,
 	}
 	rows.Close()
 
+	// Check for iteration errors
+	if err := rows.Err(); err != nil {
+		return 0, 0, nil, fmt.Errorf("error iterating chat rows: %w", err)
+	}
+
 	if len(deletedJIDs) == 0 {
 		return 0, 0, nil, nil
 	}
@@ -1182,15 +1187,24 @@ func (r *PostgresRepository) DeleteChatsByPattern(pattern string) (chatsDeleted,
 	defer func() { _ = tx.Rollback() }()
 
 	for _, jid := range deletedJIDs {
-		result, _ := tx.Exec("DELETE FROM messages WHERE device_id = $1 AND chat_jid = $2", r.deviceID, jid)
+		result, err := tx.Exec("DELETE FROM messages WHERE device_id = $1 AND chat_jid = $2", r.deviceID, jid)
+		if err != nil {
+			return 0, 0, nil, fmt.Errorf("failed to delete messages for chat %s: %w", jid, err)
+		}
 		affected, _ := result.RowsAffected()
 		messagesDeleted += affected
 
-		_, _ = tx.Exec("DELETE FROM chats WHERE device_id = $1 AND jid = $2", r.deviceID, jid)
+		_, err = tx.Exec("DELETE FROM chats WHERE device_id = $1 AND jid = $2", r.deviceID, jid)
+		if err != nil {
+			return 0, 0, nil, fmt.Errorf("failed to delete chat %s: %w", jid, err)
+		}
 		chatsDeleted++
 	}
 
-	return chatsDeleted, messagesDeleted, deletedJIDs, tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return 0, 0, nil, fmt.Errorf("failed to commit delete transaction: %w", err)
+	}
+	return chatsDeleted, messagesDeleted, deletedJIDs, nil
 }
 
 // DeleteChatsByJIDs deletes multiple chats by their JIDs
@@ -1206,16 +1220,25 @@ func (r *PostgresRepository) DeleteChatsByJIDs(jids []string) (chatsDeleted, mes
 	defer func() { _ = tx.Rollback() }()
 
 	for _, jid := range jids {
-		result, _ := tx.Exec("DELETE FROM messages WHERE device_id = $1 AND chat_jid = $2", r.deviceID, jid)
+		result, err := tx.Exec("DELETE FROM messages WHERE device_id = $1 AND chat_jid = $2", r.deviceID, jid)
+		if err != nil {
+			return 0, 0, fmt.Errorf("failed to delete messages for chat %s: %w", jid, err)
+		}
 		affected, _ := result.RowsAffected()
 		messagesDeleted += affected
 
-		result, _ = tx.Exec("DELETE FROM chats WHERE device_id = $1 AND jid = $2", r.deviceID, jid)
+		result, err = tx.Exec("DELETE FROM chats WHERE device_id = $1 AND jid = $2", r.deviceID, jid)
+		if err != nil {
+			return 0, 0, fmt.Errorf("failed to delete chat %s: %w", jid, err)
+		}
 		affected, _ = result.RowsAffected()
 		chatsDeleted += affected
 	}
 
-	return chatsDeleted, messagesDeleted, tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return 0, 0, fmt.Errorf("failed to commit delete transaction: %w", err)
+	}
+	return chatsDeleted, messagesDeleted, nil
 }
 
 // GetDetailedStats returns detailed storage statistics
@@ -1239,12 +1262,22 @@ func (r *PostgresRepository) GetDetailedStats() (*domainChatStorage.DetailedStat
 		logrus.Warnf("Failed to get database size: %v", err)
 	}
 
-	stats.OldestMessage, stats.NewestMessage, _ = r.GetMessageDateRange()
+	stats.OldestMessage, stats.NewestMessage, err = r.GetMessageDateRange()
+	if err != nil {
+		logrus.Warnf("Failed to get message date range: %v", err)
+	}
 
-	stats.EmptyChats, _ = r.CountEmptyChats()
+	stats.EmptyChats, err = r.CountEmptyChats()
+	if err != nil {
+		logrus.Warnf("Failed to count empty chats: %v", err)
+	}
 
-	_ = r.db.QueryRow("SELECT COUNT(*) FROM messages WHERE device_id = $1 AND media_type != ''", r.deviceID).Scan(&stats.MediaMessages)
-	_ = r.db.QueryRow("SELECT COUNT(*) FROM messages WHERE device_id = $1 AND media_type = ''", r.deviceID).Scan(&stats.TextMessages)
+	if err := r.db.QueryRow("SELECT COUNT(*) FROM messages WHERE device_id = $1 AND media_type != ''", r.deviceID).Scan(&stats.MediaMessages); err != nil {
+		logrus.Warnf("Failed to count media messages: %v", err)
+	}
+	if err := r.db.QueryRow("SELECT COUNT(*) FROM messages WHERE device_id = $1 AND media_type = ''", r.deviceID).Scan(&stats.TextMessages); err != nil {
+		logrus.Warnf("Failed to count text messages: %v", err)
+	}
 
 	return stats, nil
 }

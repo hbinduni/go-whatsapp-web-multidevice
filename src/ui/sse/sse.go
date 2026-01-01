@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -61,13 +62,14 @@ type Client struct {
 
 // Hub manages SSE client connections and event broadcasting
 type Hub struct {
-	clients    map[string]*Client
-	register   chan *Client
-	unregister chan string
-	broadcast  chan Event
-	stop       chan struct{}
-	stopped    chan struct{}
-	mu         sync.RWMutex
+	clients       map[string]*Client
+	register      chan *Client
+	unregister    chan string
+	broadcast     chan Event
+	stop          chan struct{}
+	stopped       chan struct{}
+	mu            sync.RWMutex
+	droppedEvents uint64 // atomic counter for dropped events
 }
 
 var (
@@ -116,11 +118,13 @@ func (h *Hub) Run() {
 
 		case event := <-h.broadcast:
 			h.mu.RLock()
-			for _, client := range h.clients {
+			for id, client := range h.clients {
 				select {
 				case client.Channel <- event:
 				default:
 					// Channel is full, skip this client (non-blocking)
+					dropped := atomic.AddUint64(&h.droppedEvents, 1)
+					logrus.Warnf("[SSE] Event dropped for client %s (channel full), type: %s, total dropped: %d", id, event.Type, dropped)
 				}
 			}
 			h.mu.RUnlock()
@@ -184,6 +188,11 @@ func (h *Hub) ClientCount() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return len(h.clients)
+}
+
+// DroppedEventCount returns the total number of dropped events
+func (h *Hub) DroppedEventCount() uint64 {
+	return atomic.LoadUint64(&h.droppedEvents)
 }
 
 // FormatSSE formats an event as SSE data
