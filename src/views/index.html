@@ -44,8 +44,7 @@
         </h1>
     </div>
 
-    <!-- Multi-Client Selector -->
-    {{ if .IsMultiClient }}
+    <!-- Client Selector -->
     <div class="ui segment" style="margin-bottom: 1em;">
         <div class="ui grid">
             <div class="eight wide column">
@@ -78,7 +77,6 @@
             Please select a client to continue. All API operations will use the selected client.
         </div>
     </div>
-    {{ end }}
 
     <div class="ui success message" v-if="connected_devices != null && connected_devices.length > 0">
         <div class="header">
@@ -224,16 +222,15 @@
     }
 
 
-    // Multi-client configuration
-    window.isMultiClient = {{ if .IsMultiClient }}true{{ else }}false{{ end }};
+    // Client configuration
     window.configuredClients = [{{ range $i, $c := .Clients }}{{ if $i }},{{ end }}"{{ $c }}"{{ end }}];
     window.selectedClient = null;
     window.appBasePath = '{{ .AppBasePath }}';
 
-    // Build base URL - in multi-client mode, this will be updated when client is selected
+    // Build base URL with phone prefix for API calls
     const buildBaseURL = (phone) => {
         const base = `${window.location.protocol}//${window.location.hostname}${window.location.port ? ':' + window.location.port : ''}${window.appBasePath}`;
-        if (window.isMultiClient && phone) {
+        if (phone) {
             // Remove leading + from phone number for URL
             const cleanPhone = phone.replace(/^\+/, '');
             return `${base}/api/${cleanPhone}`;
@@ -249,7 +246,7 @@
     window.updateHttpClient = (phone) => {
         window.selectedClient = phone;
         window.http.defaults.baseURL = buildBaseURL(phone);
-        console.log('[Multi-Client] Updated baseURL to:', window.http.defaults.baseURL);
+        console.log('Updated baseURL to:', window.http.defaults.baseURL);
     };
 
     {{ if isEnableBasicAuth .BasicAuthToken }}
@@ -348,8 +345,6 @@
             return {
                 app_ws: null,
                 connected_devices: null,
-                // Multi-client support
-                isMultiClient: window.isMultiClient || false,
                 selectedClient: '',
                 clientStatus: { connected: false, device: null },
             }
@@ -413,15 +408,15 @@
             // Initialize app container as hidden
             document.getElementById('app').style.display = 'none';
 
-            // Multi-client: auto-select first client if available
-            if (window.isMultiClient && window.configuredClients.length > 0) {
+            // Auto-select first client if available
+            if (window.configuredClients.length > 0) {
                 this.selectedClient = window.configuredClients[0];
                 window.updateHttpClient(this.selectedClient);
                 // Fetch status after a short delay to ensure everything is initialized
                 setTimeout(() => {
                     this.fetchClientStatus();
                 }, 500);
-                console.log('[Multi-Client] Auto-selected first client:', this.selectedClient);
+                console.log('Auto-selected first client:', this.selectedClient);
             }
 
             if (window["WebSocket"]) {
@@ -456,31 +451,18 @@
                         case 'LOGIN_SUCCESS':
                             showSuccessInfo(message.message)
                             $('#modalLogin').modal('hide');
-
-                            // In multi-client mode, refresh from API; otherwise use WebSocket
-                            if (window.isMultiClient) {
-                                this.fetchClientStatus();
-                            } else {
-                                this.handleReloadDevice();
-                            }
+                            this.fetchClientStatus();
                             break;
                         case 'LIST_DEVICES':
-                            // Only update from WebSocket in single-client mode
                             // In multi-client mode, we use REST API for per-client status
-                            if (!window.isMultiClient) {
-                                this.connected_devices = message.result;
-                            }
+                            // This WebSocket event is ignored; status is fetched via fetchClientStatus()
+                            console.log('[LIST_DEVICES] Received, using REST API for status');
                             break;
                         case 'LOGOUT_COMPLETE':
                             // Handle successful cleanup after remote logout
                             showSuccessInfo('✅ ' + message.message)
                             console.log('[LOGOUT_COMPLETE] Remote logout cleanup completed:', message)
-                            // Refresh status
-                            if (window.isMultiClient) {
-                                this.fetchClientStatus();
-                            } else {
-                                this.handleReloadDevice();
-                            }
+                            this.fetchClientStatus();
                             break;
                         default:
                             console.log(message)

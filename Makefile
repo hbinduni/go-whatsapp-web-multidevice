@@ -6,7 +6,7 @@
 SHELL := /bin/bash
 export PATH := /usr/local/go/bin:$(PATH)
 
-.PHONY: help build run run-rest run-multi run-debug run-rest-debug run-multi-debug test clean install update-deps fmt vet lint lint-fix docker-build docker-up docker-down docker-logs docker-login-ghcr docker-build-image docker-push-ghcr docker-release docker-tag tidy check check-fix check-all dev-rest dev-multi docker-build-backup docker-push-backup docker-release-backup
+.PHONY: help build run run-debug test clean install update-deps fmt vet lint lint-fix docker-build docker-up docker-down docker-logs docker-login-ghcr docker-build-image docker-push-ghcr docker-release docker-tag tidy check check-fix check-all dev docker-build-backup docker-push-backup docker-release-backup
 
 # Variables
 BINARY_NAME=whatsapp
@@ -54,14 +54,9 @@ help:
 	@echo "  build-all      Build for all platforms"
 	@echo ""
 	@echo "Run Commands:"
-	@echo "  run             Run the application in REST mode (default, single-client)"
-	@echo "  run-rest        Run the application in REST API mode (single-client)"
-	@echo "  run-multi       Run in REST mode with multi-client support (PostgreSQL)"
-	@echo "  run-debug       Run in REST mode with debug logging"
-	@echo "  run-rest-debug  Run in REST mode with debug logging"
-	@echo "  run-multi-debug Run in multi-client mode with debug logging"
-	@echo "  dev-rest        Run with hot reload in REST mode (requires air)"
-	@echo "  dev-multi       Run with hot reload in multi-client mode (requires air)"
+	@echo "  run             Run the application (requires DATABASE_URL and WHATSAPP_CLIENTS)"
+	@echo "  run-debug       Run with debug logging"
+	@echo "  dev             Run with hot reload (requires air)"
 	@echo ""
 	@echo "Development Commands:"
 	@echo "  test           Run all tests"
@@ -140,73 +135,45 @@ build-mac:
 build-all: build-linux build-windows build-mac
 	@echo "All builds complete!"
 
-## run: Run the application in REST mode
-run: run-rest
-
-## run-rest: Run the application in REST API mode
-run-rest: build
-	@echo "Starting WhatsApp Web API in REST mode..."
-	cd $(SRC_DIR) && ../$(BUILD_DIR)/$(BINARY_NAME) rest
-
-## run-debug: Run in REST mode with debug logging (alias for run-rest-debug)
-run-debug: run-rest-debug
-
-## run-rest-debug: Run the application in REST API mode with debug logging
-run-rest-debug: build
-	@echo "Starting WhatsApp Web API in REST mode with DEBUG logging..."
-	cd $(SRC_DIR) && ../$(BUILD_DIR)/$(BINARY_NAME) rest --debug=true
-
-## run-multi: Run the application in multi-client mode (PostgreSQL recommended)
-run-multi: build
+## run: Run the application (requires DATABASE_URL and WHATSAPP_CLIENTS)
+run: build
 	@if [ -z "$$DATABASE_URL" ]; then \
 		echo ""; \
 		echo "╔═══════════════════════════════════════════════════════════════════════╗"; \
-		echo "║  MULTI-CLIENT MODE                                                    ║"; \
+		echo "║  CONFIGURATION REQUIRED                                               ║"; \
 		echo "╠═══════════════════════════════════════════════════════════════════════╣"; \
-		echo "║  DATABASE_URL is not set. Multi-client mode requires PostgreSQL.     ║"; \
+		echo "║  DATABASE_URL is required. Set it to a PostgreSQL connection string. ║"; \
 		echo "║                                                                       ║"; \
-		echo "║  Option 1: Set DATABASE_URL environment variable:                    ║"; \
+		echo "║  Example:                                                             ║"; \
 		echo "║    export DATABASE_URL='postgresql://user:pass@localhost:5432/wa'    ║"; \
+		echo "║    export WHATSAPP_CLIENTS='6281234567890,6289876543210'              ║"; \
 		echo "║                                                                       ║"; \
-		echo "║  Option 2: Use WHATSAPP_CLIENTS for SQLite multi-client (limited):   ║"; \
-		echo "║    export WHATSAPP_CLIENTS='+6281234567890,+6289876543210'            ║"; \
-		echo "║                                                                       ║"; \
-		echo "║  Then run: make run-multi                                             ║"; \
+		echo "║  Or copy .env.example to .env and configure it.                       ║"; \
 		echo "╚═══════════════════════════════════════════════════════════════════════╝"; \
 		echo ""; \
 		exit 1; \
 	fi
-	@echo "Starting WhatsApp Web API in MULTI-CLIENT mode..."
+	@echo "Starting WhatsApp Web API..."
 	@echo "  DATABASE_URL: $${DATABASE_URL:0:30}..."
 	cd $(SRC_DIR) && ../$(BUILD_DIR)/$(BINARY_NAME) rest
 
-## run-multi-debug: Run in multi-client mode with debug logging
-run-multi-debug: build
-	@if [ -z "$$DATABASE_URL" ] && [ -z "$$WHATSAPP_CLIENTS" ]; then \
-		echo "Error: Set DATABASE_URL or WHATSAPP_CLIENTS for multi-client mode"; \
+## run-debug: Run with debug logging
+run-debug: build
+	@if [ -z "$$DATABASE_URL" ]; then \
+		echo "Error: DATABASE_URL is required"; \
 		exit 1; \
 	fi
-	@echo "Starting WhatsApp Web API in MULTI-CLIENT mode with DEBUG logging..."
+	@echo "Starting WhatsApp Web API with DEBUG logging..."
 	cd $(SRC_DIR) && ../$(BUILD_DIR)/$(BINARY_NAME) rest --debug=true
 
-## dev-rest: Run with hot reload in REST mode (requires air)
-dev-rest:
-	@echo "Starting development server in REST mode with hot reload..."
-	@if command -v air > /dev/null; then \
-		cd $(SRC_DIR) && air -- rest; \
-	else \
-		echo "Error: 'air' is not installed. Install it with: go install github.com/air-verse/air@latest"; \
-		exit 1; \
-	fi
-
-## dev-multi: Run with hot reload in multi-client mode (requires air + DATABASE_URL)
-dev-multi:
-	@if [ -z "$$DATABASE_URL" ] && [ -z "$$WHATSAPP_CLIENTS" ]; then \
-		echo "Error: Set DATABASE_URL or WHATSAPP_CLIENTS for multi-client mode"; \
+## dev: Run with hot reload (requires air)
+dev:
+	@if [ -z "$$DATABASE_URL" ]; then \
+		echo "Error: DATABASE_URL is required"; \
 		echo "  export DATABASE_URL='postgresql://user:pass@localhost:5432/wa'"; \
 		exit 1; \
 	fi
-	@echo "Starting development server in MULTI-CLIENT mode with hot reload..."
+	@echo "Starting development server with hot reload..."
 	@if command -v air > /dev/null; then \
 		cd $(SRC_DIR) && air -- rest; \
 	else \

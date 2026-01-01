@@ -58,15 +58,13 @@ func InitWaDB(ctx context.Context, DBURI string) *sqlstore.Container {
 	return storeContainer
 }
 
-// initDatabase creates and returns a database store container based on the configured URI
+// initDatabase creates and returns a database store container for PostgreSQL
 func initDatabase(ctx context.Context, dbLog waLog.Logger, DBURI string) (*sqlstore.Container, error) {
-	if strings.HasPrefix(DBURI, "file:") {
-		return sqlstore.New(ctx, "sqlite3", DBURI, dbLog)
-	} else if strings.HasPrefix(DBURI, "postgres://") || strings.HasPrefix(DBURI, "postgresql://") {
+	if strings.HasPrefix(DBURI, "postgres://") || strings.HasPrefix(DBURI, "postgresql://") {
 		return sqlstore.New(ctx, "postgres", DBURI, dbLog)
 	}
 
-	return nil, fmt.Errorf("unknown database type: %s. Currently only sqlite3(file:) and postgres(postgresql://) are supported", DBURI)
+	return nil, fmt.Errorf("DATABASE_URL must be a PostgreSQL connection string (postgres:// or postgresql://), got: %s", DBURI)
 }
 
 func syncKeysDevice(ctx context.Context, db, keysDB *sqlstore.Container) {

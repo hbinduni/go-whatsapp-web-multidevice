@@ -21,25 +21,12 @@ const (
 // so that usecases can access the client via whatsapp.GetClientFromContext(ctx)
 func MultiClientMiddleware() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		// Check if we're in multi-client mode
-		if !whatsapp.IsMultiClientMode() {
-			// Single-client mode - inject global client into context
-			client := whatsapp.GetClient()
-			if client != nil {
-				c.Locals(string(ClientKey), client)
-				// Inject into Go context for usecase access
-				ctx := whatsapp.ContextWithClient(c.UserContext(), client)
-				c.SetUserContext(ctx)
-			}
-			return c.Next()
-		}
-
 		// Get phone from URL parameter
 		phone := c.Params("phone")
 		if phone == "" {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"code":    fiber.StatusBadRequest,
-				"message": "Phone number is required in multi-client mode",
+				"message": "Phone number is required",
 			})
 		}
 
@@ -92,19 +79,6 @@ func GetDeviceID(c *fiber.Ctx) string {
 // RequireLoggedIn middleware checks if the client is logged in
 func RequireLoggedIn() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		if !whatsapp.IsMultiClientMode() {
-			// Single-client mode - check global client
-			_, isLoggedIn, _ := whatsapp.GetConnectionStatus()
-			if !isLoggedIn {
-				return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-					"code":    fiber.StatusUnauthorized,
-					"message": "WhatsApp client is not logged in",
-				})
-			}
-			return c.Next()
-		}
-
-		// Multi-client mode - check the specific client
 		mc := GetManagedClient(c)
 		if mc == nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{

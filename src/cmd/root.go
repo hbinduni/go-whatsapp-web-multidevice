@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
-	"go.mau.fi/whatsmeow/store/sqlstore"
 	"os"
 	"strings"
 	"time"
@@ -27,19 +26,14 @@ import (
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/utils"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/usecase"
 	_ "github.com/lib/pq"
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"go.mau.fi/whatsmeow"
 )
 
 var (
 	EmbedIndex embed.FS
 	EmbedViews embed.FS
-
-	// Whatsapp
-	whatsappCli *whatsmeow.Client
 
 	// Chat Storage
 	chatStorageDB   *sql.DB
@@ -302,59 +296,28 @@ func initFlags() {
 }
 
 func initChatStorage() (*sql.DB, error) {
-	// Check if using PostgreSQL (multi-client mode)
-	if isPostgreSQLURI(config.ChatStorageURI) {
-		db, err := sql.Open("postgres", config.ChatStorageURI)
-		if err != nil {
-			return nil, err
-		}
-
-		// Configure connection pool for PostgreSQL
-		db.SetMaxOpenConns(50)
-		db.SetMaxIdleConns(10)
-		db.SetConnMaxLifetime(time.Hour)
-
-		if err := db.Ping(); err != nil {
-			db.Close()
-			return nil, fmt.Errorf("failed to ping PostgreSQL database: %w", err)
-		}
-
-		logrus.Info("Connected to PostgreSQL database for chat storage")
-		return db, nil
+	// Validate PostgreSQL URI
+	if !strings.HasPrefix(config.DatabaseURL, "postgres://") && !strings.HasPrefix(config.DatabaseURL, "postgresql://") {
+		return nil, fmt.Errorf("DATABASE_URL must be a PostgreSQL connection string (postgres:// or postgresql://)")
 	}
 
-	// SQLite mode (legacy single-client)
-	connStr := fmt.Sprintf("%s?_journal_mode=WAL", config.ChatStorageURI)
-	if config.ChatStorageEnableForeignKeys {
-		connStr += "&_foreign_keys=on"
-	}
-
-	db, err := sql.Open("sqlite3", connStr)
+	db, err := sql.Open("postgres", config.DatabaseURL)
 	if err != nil {
 		return nil, err
 	}
 
-	// Configure connection pool
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(5)
+	// Configure connection pool for PostgreSQL
+	db.SetMaxOpenConns(50)
+	db.SetMaxIdleConns(10)
+	db.SetConnMaxLifetime(time.Hour)
 
-	// Test connection
 	if err := db.Ping(); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("failed to ping database: %w", err)
+		return nil, fmt.Errorf("failed to connect to PostgreSQL: %w", err)
 	}
 
+	logrus.Info("Connected to PostgreSQL database")
 	return db, nil
-}
-
-// isPostgreSQLURI checks if the URI is a PostgreSQL connection string
-func isPostgreSQLURI(uri string) bool {
-	return strings.HasPrefix(uri, "postgres://") || strings.HasPrefix(uri, "postgresql://")
-}
-
-// isMultiClientMode returns true if multi-client mode is configured
-func isMultiClientMode() bool {
-	return len(config.WhatsAppClients) > 0 || config.DatabaseURL != ""
 }
 
 func initApp() {
@@ -373,6 +336,14 @@ func initApp() {
 	err := utils.CreateFolder(config.PathQrCode, config.PathSendItems, config.PathStorages)
 	if err != nil {
 		logrus.Errorln(err)
+	}
+
+	// Validate required configuration
+	if config.DatabaseURL == "" {
+		logrus.Fatal("DATABASE_URL is required. Set it to a PostgreSQL connection string.")
+	}
+	if len(config.WhatsAppClients) == 0 {
+		logrus.Fatal("WHATSAPP_CLIENTS is required. Set it to a comma-separated list of phone numbers.")
 	}
 
 	ctx := context.Background()
@@ -396,15 +367,10 @@ func initApp() {
 		logrus.Warn("S3 storage not configured - media download/upload features will be disabled")
 	}
 
-	// Check if multi-client mode is enabled
-	if isMultiClientMode() {
-		initMultiClientMode(ctx)
-	} else {
-		initSingleClientMode(ctx)
-	}
+	// Initialize multi-client mode
+	initClients(ctx)
 
-	// Initialize usecases (shared between modes)
-	// In multi-client mode, these will use the first client's chat storage for backward compatibility
+	// Initialize usecases
 	appUsecase = usecase.NewAppService(chatStorageRepo)
 	adminUsecase = usecase.NewAdminService(chatStorageRepo)
 	chatUsecase = usecase.NewChatService(chatStorageRepo)
@@ -416,34 +382,10 @@ func initApp() {
 	historyUsecase = usecase.NewHistoryService()
 }
 
-// initSingleClientMode initializes the application in legacy single-client mode
-func initSingleClientMode(ctx context.Context) {
-	logrus.Info("Initializing in single-client mode")
-
-	var err error
-	chatStorageDB, err = initChatStorage()
-	if err != nil {
-		logrus.Fatalf("failed to initialize chat storage: %v", err)
-	}
-
-	chatStorageRepo = chatstorage.NewStorageRepository(chatStorageDB)
-	if err := chatStorageRepo.InitializeSchema(); err != nil {
-		logrus.Fatalf("failed to initialize chat storage schema: %v", err)
-	}
-
-	whatsappDB := whatsapp.InitWaDB(ctx, config.DBURI)
-	var keysDB *sqlstore.Container
-	if config.DBKeysURI != "" {
-		keysDB = whatsapp.InitWaDB(ctx, config.DBKeysURI)
-	}
-
-	whatsappCli = whatsapp.InitWaCLI(ctx, whatsappDB, keysDB, chatStorageRepo)
-}
-
-// initMultiClientMode initializes the application in multi-client mode
-func initMultiClientMode(ctx context.Context) {
+// initClients initializes all WhatsApp clients
+func initClients(ctx context.Context) {
 	logrus.Info("========================================")
-	logrus.Info("  MULTI-CLIENT MODE ENABLED")
+	logrus.Info("  Multi-Client WhatsApp API")
 	logrus.Infof("  Clients: %v", config.WhatsAppClients)
 	logrus.Info("========================================")
 
@@ -459,14 +401,10 @@ func initMultiClientMode(ctx context.Context) {
 	}
 
 	// Initialize WhatsApp database (shared for all clients)
-	whatsappDB := whatsapp.InitWaDB(ctx, config.DBURI)
-	var keysDB *sqlstore.Container
-	if config.DBKeysURI != "" {
-		keysDB = whatsapp.InitWaDB(ctx, config.DBKeysURI)
-	}
+	whatsappDB := whatsapp.InitWaDB(ctx, config.DatabaseURL)
 
 	// Initialize the client registry
-	whatsapp.InitRegistry(whatsappDB, keysDB)
+	whatsapp.InitRegistry(whatsappDB, nil)
 	registry := whatsapp.GetRegistry()
 
 	// Register each client
@@ -477,14 +415,7 @@ func initMultiClientMode(ctx context.Context) {
 		}
 
 		// Create a device-specific chat storage repository
-		var clientChatStorageRepo domainChatStorage.IChatStorageRepository
-		if isPostgreSQLURI(config.ChatStorageURI) {
-			clientChatStorageRepo = chatstorage.NewPostgresRepository(chatStorageDB, phone)
-		} else {
-			// In SQLite mode with multi-client, all clients share the same storage
-			// (This is a limitation - PostgreSQL is recommended for multi-client)
-			clientChatStorageRepo = chatstorage.NewStorageRepository(chatStorageDB)
-		}
+		clientChatStorageRepo := chatstorage.NewPostgresRepository(chatStorageDB, phone)
 
 		// Initialize schema for this client
 		if err := clientChatStorageRepo.InitializeSchema(); err != nil {
@@ -501,7 +432,7 @@ func initMultiClientMode(ctx context.Context) {
 
 		logrus.Infof("Registered client: %s", phone)
 
-		// Set the first client's repo as the default for backward compatibility
+		// Set the first client's repo as the default
 		if chatStorageRepo == nil {
 			chatStorageRepo = clientChatStorageRepo
 		}
@@ -526,17 +457,13 @@ func initMultiClientMode(ctx context.Context) {
 
 	// Ensure we have at least a fallback chat storage repo
 	if chatStorageRepo == nil {
-		if isPostgreSQLURI(config.ChatStorageURI) {
-			chatStorageRepo = chatstorage.NewPostgresRepository(chatStorageDB, "default")
-		} else {
-			chatStorageRepo = chatstorage.NewStorageRepository(chatStorageDB)
-		}
+		chatStorageRepo = chatstorage.NewPostgresRepository(chatStorageDB, "default")
 		if err := chatStorageRepo.InitializeSchema(); err != nil {
 			logrus.Fatalf("failed to initialize fallback chat storage schema: %v", err)
 		}
 	}
 
-	logrus.Infof("Multi-client initialization complete. Registered %d clients", registry.GetClientCount())
+	logrus.Infof("Initialization complete. Registered %d clients", registry.GetClientCount())
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

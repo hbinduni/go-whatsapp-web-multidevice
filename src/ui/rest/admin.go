@@ -24,7 +24,7 @@ func InitRestAdmin(app fiber.Router, service domainAdmin.IAdminUsecase) Admin {
 	admin.Post("/storage/vacuum", rest.VacuumDatabase)
 	admin.Delete("/storage/chats", rest.DeleteChats)
 
-	// Multi-client management endpoints
+	// Client management endpoints
 	admin.Get("/clients", rest.ListClients)
 	admin.Get("/clients/:phone/status", rest.GetClientStatus)
 	admin.Post("/clients/:phone/connect", rest.ConnectClient)
@@ -79,9 +79,9 @@ func (controller *Admin) CleanupStorage(c *fiber.Ctx) error {
 	return helpers.HandleSuccess(c, message, response)
 }
 
-// VacuumDatabase runs SQLite VACUUM to optimize and reclaim space
+// VacuumDatabase runs VACUUM to optimize and reclaim space
 // @Summary Vacuum database
-// @Description Runs SQLite VACUUM to optimize the database and reclaim space
+// @Description Runs VACUUM to optimize the database and reclaim space
 // @Tags Admin
 // @Accept json
 // @Produce json
@@ -126,7 +126,7 @@ func (controller *Admin) DeleteChats(c *fiber.Ctx) error {
 }
 
 // ============================================================================
-// Multi-Client Management Endpoints
+// Client Management Endpoints
 // ============================================================================
 
 // ListClients returns all registered clients and their status
@@ -137,27 +137,12 @@ func (controller *Admin) DeleteChats(c *fiber.Ctx) error {
 // @Success 200 {object} map[string]interface{}
 // @Router /admin/clients [get]
 func (controller *Admin) ListClients(c *fiber.Ctx) error {
-	if !whatsapp.IsMultiClientMode() {
-		// Single client mode - return status of the single client
-		isConnected, isLoggedIn, deviceID := whatsapp.GetConnectionStatus()
-		return helpers.HandleSuccess(c, "Single-client mode", map[string]interface{}{
-			"mode": "single",
-			"client": map[string]interface{}{
-				"is_connected": isConnected,
-				"is_logged_in": isLoggedIn,
-				"device_id":    deviceID,
-			},
-		})
-	}
-
-	// Multi-client mode
 	statuses := whatsapp.GetAllClientStatuses()
 	if statuses == nil {
 		return helpers.HandleError(c, fiber.NewError(fiber.StatusInternalServerError, "Client registry not initialized"))
 	}
 
 	return helpers.HandleSuccess(c, "Client list retrieved", map[string]interface{}{
-		"mode":         "multi",
 		"client_count": len(statuses),
 		"clients":      statuses,
 	})
@@ -175,17 +160,6 @@ func (controller *Admin) GetClientStatus(c *fiber.Ctx) error {
 	phone := c.Params("phone")
 	if phone == "" {
 		return helpers.HandleBadRequest(c, "Phone number is required")
-	}
-
-	if !whatsapp.IsMultiClientMode() {
-		// Single client mode - return status of the single client
-		isConnected, isLoggedIn, deviceID := whatsapp.GetConnectionStatus()
-		return helpers.HandleSuccess(c, "Single-client mode", map[string]interface{}{
-			"mode":         "single",
-			"is_connected": isConnected,
-			"is_logged_in": isLoggedIn,
-			"device_id":    deviceID,
-		})
 	}
 
 	registry := whatsapp.GetRegistry()
@@ -220,10 +194,6 @@ func (controller *Admin) ConnectClient(c *fiber.Ctx) error {
 		return helpers.HandleBadRequest(c, "Phone number is required")
 	}
 
-	if !whatsapp.IsMultiClientMode() {
-		return helpers.HandleError(c, fiber.NewError(fiber.StatusBadRequest, "Connect endpoint is only available in multi-client mode"))
-	}
-
 	registry := whatsapp.GetRegistry()
 	if registry == nil {
 		return helpers.HandleError(c, fiber.NewError(fiber.StatusInternalServerError, "Client registry not initialized"))
@@ -251,10 +221,6 @@ func (controller *Admin) DisconnectClient(c *fiber.Ctx) error {
 	phone := c.Params("phone")
 	if phone == "" {
 		return helpers.HandleBadRequest(c, "Phone number is required")
-	}
-
-	if !whatsapp.IsMultiClientMode() {
-		return helpers.HandleError(c, fiber.NewError(fiber.StatusBadRequest, "Disconnect endpoint is only available in multi-client mode"))
 	}
 
 	registry := whatsapp.GetRegistry()
