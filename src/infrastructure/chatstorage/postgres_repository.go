@@ -1186,7 +1186,7 @@ func (r *PostgresRepository) DeleteChatsByPattern(pattern string) (chatsDeleted,
 		affected, _ := result.RowsAffected()
 		messagesDeleted += affected
 
-		tx.Exec("DELETE FROM chats WHERE device_id = $1 AND jid = $2", r.deviceID, jid)
+		_, _ = tx.Exec("DELETE FROM chats WHERE device_id = $1 AND jid = $2", r.deviceID, jid)
 		chatsDeleted++
 	}
 
@@ -1243,8 +1243,8 @@ func (r *PostgresRepository) GetDetailedStats() (*domainChatStorage.DetailedStat
 
 	stats.EmptyChats, _ = r.CountEmptyChats()
 
-	r.db.QueryRow("SELECT COUNT(*) FROM messages WHERE device_id = $1 AND media_type != ''", r.deviceID).Scan(&stats.MediaMessages)
-	r.db.QueryRow("SELECT COUNT(*) FROM messages WHERE device_id = $1 AND media_type = ''", r.deviceID).Scan(&stats.TextMessages)
+	_ = r.db.QueryRow("SELECT COUNT(*) FROM messages WHERE device_id = $1 AND media_type != ''", r.deviceID).Scan(&stats.MediaMessages)
+	_ = r.db.QueryRow("SELECT COUNT(*) FROM messages WHERE device_id = $1 AND media_type = ''", r.deviceID).Scan(&stats.TextMessages)
 
 	return stats, nil
 }
