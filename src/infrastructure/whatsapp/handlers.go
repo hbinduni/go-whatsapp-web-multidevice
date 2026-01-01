@@ -628,7 +628,9 @@ func handlePairSuccessMultiClient(ctx context.Context, evt *events.PairSuccess, 
 			logrus.Infof("[%s] Disconnecting mismatched device now", mc.Phone)
 
 			// Logout the mismatched device
-			mc.Client.Logout(context.Background())
+			if err := mc.Client.Logout(context.Background()); err != nil {
+				logrus.Warnf("[%s] Failed to logout mismatched device: %v", mc.Phone, err)
+			}
 			mc.SetStatus(StatusLoggedOut)
 
 			// Delete the device from database to clean up
