@@ -15,92 +15,45 @@ import (
 	"go.mau.fi/whatsmeow/store/sqlstore"
 )
 
-// CleanupDatabase removes the database file (SQLite) or deletes all devices (PostgreSQL)
+// CleanupDatabase deletes all devices from the PostgreSQL database
 func CleanupDatabase() error {
 	globalStateMu.RLock()
 	currentDB := db
 	currentKeysDB := keysDB
 	globalStateMu.RUnlock()
 
-	// Check if using PostgreSQL
-	if strings.HasPrefix(config.DBURI, "postgres:") {
-		if currentDB == nil {
-			return nil
-		}
-
-		ctx := context.Background()
-
-		// Get and delete all devices
-		devices, err := currentDB.GetAllDevices(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get devices: %v", err)
-		}
-
-		for _, device := range devices {
-			if err := currentDB.DeleteDevice(ctx, device); err != nil {
-				return fmt.Errorf("failed to delete device %s: %v", device.ID, err)
-			}
-		}
-
-		// Also clean up keysDB if it exists and is separate
-		if currentKeysDB != nil && currentKeysDB != currentDB {
-			keysDevices, err := currentKeysDB.GetAllDevices(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to get devices from keysDB: %v", err)
-			}
-
-			for _, device := range keysDevices {
-				if err := currentKeysDB.DeleteDevice(ctx, device); err != nil {
-					return fmt.Errorf("failed to delete device %s from keysDB: %v", device.ID, err)
-				}
-			}
-		}
-
+	if currentDB == nil {
 		return nil
 	}
 
-	// SQLite: Close database connections before removing the file
-	if db != nil {
-		if err := db.Close(); err != nil {
-			return fmt.Errorf("failed to close main database: %v", err)
+	ctx := context.Background()
+
+	// Get and delete all devices
+	devices, err := currentDB.GetAllDevices(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get devices: %v", err)
+	}
+
+	for _, device := range devices {
+		if err := currentDB.DeleteDevice(ctx, device); err != nil {
+			return fmt.Errorf("failed to delete device %s: %v", device.ID, err)
 		}
 	}
 
-	// Close keysDB if it exists and is separate from main db
-	if keysDB != nil && keysDB != db {
-		if err := keysDB.Close(); err != nil {
-			return fmt.Errorf("failed to close keysDB: %v", err)
+	// Also clean up keysDB if it exists and is separate
+	if currentKeysDB != nil && currentKeysDB != currentDB {
+		keysDevices, err := currentKeysDB.GetAllDevices(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get devices from keysDB: %v", err)
 		}
 
-		// Remove keysDB file if it's also SQLite
-		if config.DBKeysURI != "" && strings.HasPrefix(config.DBKeysURI, "file:") {
-			keysDBPath := strings.TrimPrefix(config.DBKeysURI, "file:")
-			if strings.Contains(keysDBPath, "?") {
-				keysDBPath = strings.Split(keysDBPath, "?")[0]
+		for _, device := range keysDevices {
+			if err := currentKeysDB.DeleteDevice(ctx, device); err != nil {
+				return fmt.Errorf("failed to delete device %s from keysDB: %v", device.ID, err)
 			}
-
-			if err := os.Remove(keysDBPath); err != nil && !os.IsNotExist(err) {
-				return fmt.Errorf("failed to remove keysDB file: %v", err)
-			}
 		}
 	}
 
-	// Now remove the main database file and its WAL/SHM files
-	dbPath := strings.TrimPrefix(config.DBURI, "file:")
-	if strings.Contains(dbPath, "?") {
-		dbPath = strings.Split(dbPath, "?")[0]
-	}
-
-	// Remove SQLite WAL and SHM files first (they can hold locks)
-	walPath := dbPath + "-wal"
-	shmPath := dbPath + "-shm"
-
-	_ = os.Remove(walPath) // Ignore errors - file may not exist
-	_ = os.Remove(shmPath) // Ignore errors - file may not exist
-
-	if err := os.Remove(dbPath); err != nil && !os.IsNotExist(err) {
-		return err
-	}
 	return nil
 }
 

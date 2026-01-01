@@ -37,10 +37,9 @@ var (
 	PathSendItems = "statics/senditems"
 	PathStorages  = "storages"
 
-	// Database configuration
-	// For PostgreSQL: "postgresql://user:password@localhost:5432/dbname"
-	// For SQLite: "file:storages/whatsapp.db?_foreign_keys=on"
-	DBURI     = "file:storages/whatsapp.db?_foreign_keys=on"
+	// Database configuration (PostgreSQL only)
+	// Example: "postgresql://user:password@localhost:5432/dbname"
+	DBURI     = ""
 	DBKeysURI = ""
 
 	// Multi-client configuration
@@ -68,12 +67,9 @@ var (
 	FFmpegCompressTimeout   = 120 // Timeout for video compression
 	FFmpegConvertTimeout    = 45  // Timeout for sticker/image conversion
 
-	// Chat storage database configuration
-	// For PostgreSQL: "postgresql://user:password@localhost:5432/dbname"
-	// For SQLite: "file:storages/chatstorage.db"
-	ChatStorageURI               = "file:storages/chatstorage.db"
-	ChatStorageEnableForeignKeys = true
-	ChatStorageEnableWAL         = true
+	// Chat storage database configuration (PostgreSQL only)
+	// Uses the same database as DatabaseURL
+	ChatStorageURI = ""
 
 	// DatabaseURL is the primary database URL for PostgreSQL in multi-client mode
 	// This replaces both DBURI and ChatStorageURI when using PostgreSQL

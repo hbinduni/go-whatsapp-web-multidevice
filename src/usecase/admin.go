@@ -120,7 +120,7 @@ func (s *serviceAdmin) CleanupStorage(ctx context.Context, request domainAdmin.C
 	return response, nil
 }
 
-// VacuumDatabase runs SQLite VACUUM to optimize and reclaim space
+// VacuumDatabase runs VACUUM to optimize and reclaim space
 func (s *serviceAdmin) VacuumDatabase(ctx context.Context) (response domainAdmin.VacuumResponse, err error) {
 	// Get size before vacuum
 	sizeBefore, err := s.chatStorageRepo.GetDatabaseSize()
