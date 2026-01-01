@@ -372,73 +372,110 @@ You can fork or edit this source code !
 
 ### HTTP REST API
 
-- [API Specification Document](https://bump.sh/aldinokemal/doc/go-whatsapp-web-multidevice).
 - Check [docs/openapi.yml](./docs/openapi.yaml) for detailed API specifications.
 - Use [SwaggerEditor](https://editor.swagger.io) to visualize the API.
-- Generate HTTP clients using [openapi-generator](https://openapi-generator.tech/#try).
 
-| Feature | Menu                                   | Method | URL                                 |
-|---------|----------------------------------------|--------|-------------------------------------|
-| ✅       | Login with Scan QR                     | GET    | /app/login                          |
-| ✅       | Login With Pair Code                   | GET    | /app/login-with-code                |
-| ✅       | Logout                                 | GET    | /app/logout                         |  
-| ✅       | Reconnect                              | GET    | /app/reconnect                      |
-| ✅       | Devices                                | GET    | /app/devices                        |
-| ✅       | User Info                              | GET    | /user/info                          |
-| ✅       | User Avatar                            | GET    | /user/avatar                        |
-| ✅       | User Change Avatar                     | POST   | /user/avatar                        |
-| ✅       | User Change PushName                   | POST   | /user/pushname                      |
-| ✅       | User My Groups                         | GET    | /user/my/groups                     |
-| ✅       | User My Newsletter                     | GET    | /user/my/newsletters                |
-| ✅       | User My Privacy Setting                | GET    | /user/my/privacy                    |
-| ✅       | User My Contacts                       | GET    | /user/my/contacts                   |
-| ✅       | User Check                             | GET    | /user/check                         |
-| ✅       | User Business Profile                  | GET    | /user/business-profile              |
-| ✅       | Send Message                           | POST   | /send/message                       |
-| ✅       | Send Image                             | POST   | /send/image                         |
-| ✅       | Send Audio                             | POST   | /send/audio                         |
-| ✅       | Send File                              | POST   | /send/file                          |
-| ✅       | Send Video                             | POST   | /send/video                         |
-| ✅       | Send Sticker                           | POST   | /send/sticker                       |
-| ✅       | Send Contact                           | POST   | /send/contact                       |
-| ✅       | Send Link                              | POST   | /send/link                          |
-| ✅       | Send Location                          | POST   | /send/location                      |
-| ✅       | Send Poll / Vote                       | POST   | /send/poll                          |
-| ✅       | Send Presence                          | POST   | /send/presence                      |
-| ✅       | Send Chat Presence (Typing Indicator)  | POST   | /send/chat-presence                 |
-| ✅       | Revoke Message                         | POST   | /message/:message_id/revoke         |
-| ✅       | React Message                          | POST   | /message/:message_id/reaction       |
-| ✅       | Delete Message                         | POST   | /message/:message_id/delete         |
-| ✅       | Edit Message                           | POST   | /message/:message_id/update         |
-| ✅       | Read Message (DM)                      | POST   | /message/:message_id/read           |
-| ✅       | Star Message                           | POST   | /message/:message_id/star           |
-| ✅       | Unstar Message                         | POST   | /message/:message_id/unstar         |
-| ✅       | Join Group With Link                   | POST   | /group/join-with-link               |
-| ✅       | Group Info From Link                   | GET    | /group/info-from-link               |
-| ✅       | Group Info                             | GET    | /group/info                         |
-| ✅       | Leave Group                            | POST   | /group/leave                        |
-| ✅       | Create Group                           | POST   | /group                              |
-| ✅       | List Participants in Group             | GET    | /group/participants                 |
-| ✅       | Add Participants in Group              | POST   | /group/participants                 |
-| ✅       | Remove Participant in Group            | POST   | /group/participants/remove          |
-| ✅       | Promote Participant in Group           | POST   | /group/participants/promote         |
-| ✅       | Demote Participant in Group            | POST   | /group/participants/demote          |
-| ✅       | Export Group Participants (CSV)        | GET    | /group/participants/export          |
-| ✅       | List Requested Participants in Group   | GET    | /group/participant-requests         |
-| ✅       | Approve Requested Participant in Group | POST   | /group/participant-requests/approve |
-| ✅       | Reject Requested Participant in Group  | POST   | /group/participant-requests/reject  |
-| ✅       | Set Group Photo                        | POST   | /group/photo                        |
-| ✅       | Set Group Name                         | POST   | /group/name                         |
-| ✅       | Set Group Locked                       | POST   | /group/locked                       |
-| ✅       | Set Group Announce                     | POST   | /group/announce                     |
-| ✅       | Set Group Topic                        | POST   | /group/topic                        |
-| ✅       | Get Group Invite Link                  | GET    | /group/invite-link                  |
-| ✅       | Unfollow Newsletter                    | POST   | /newsletter/unfollow                |
-| ✅       | Get Chat List                          | GET    | /chats                              |
-| ✅       | Get Chat Messages                      | GET    | /chat/:chat_jid/messages            |
-| ✅       | Label Chat                             | POST   | /chat/:chat_jid/label               |
-| ✅       | Pin Chat                               | POST   | /chat/:chat_jid/pin                 |
-| ✅       | Set Disappearing Messages              | POST   | /chat/:chat_jid/disappearing        |
+### Multi-Client Architecture
+
+All WhatsApp operations require a phone number in the URL path:
+
+```
+/api/{phone_number}/{endpoint}
+```
+
+Example: To send a message via client `628192191202`:
+```bash
+POST /api/628192191202/send/message
+```
+
+### Authentication Routes
+
+| Method | URL              | Description                    |
+|--------|------------------|--------------------------------|
+| POST   | /auth/login      | Login with username/password   |
+| POST   | /auth/refresh    | Refresh access token           |
+| POST   | /auth/logout     | Invalidate session             |
+
+### Admin Routes
+
+| Method | URL                             | Description                    |
+|--------|---------------------------------|--------------------------------|
+| GET    | /admin/storage/stats            | Get database statistics        |
+| POST   | /admin/storage/cleanup          | Clean old messages/chats       |
+| POST   | /admin/storage/vacuum           | Optimize database              |
+| DELETE | /admin/storage/chats            | Delete chats by pattern/JID    |
+| GET    | /admin/clients                  | List all WhatsApp clients      |
+| GET    | /admin/clients/:phone/status    | Get client connection status   |
+| POST   | /admin/clients/:phone/connect   | Connect a client               |
+| POST   | /admin/clients/:phone/disconnect| Disconnect a client            |
+
+### WhatsApp API Routes (`/api/:phone/...`)
+
+| Feature | Menu                           | Method | URL                                      |
+|---------|--------------------------------|--------|------------------------------------------|
+| ✅      | Login with Scan QR             | GET    | /api/:phone/app/login                    |
+| ✅      | Login With Pair Code           | GET    | /api/:phone/app/login-with-code          |
+| ✅      | Logout                         | GET    | /api/:phone/app/logout                   |
+| ✅      | Reconnect                      | GET    | /api/:phone/app/reconnect                |
+| ✅      | Devices                        | GET    | /api/:phone/app/devices                  |
+| ✅      | Connection Status              | GET    | /api/:phone/app/status                   |
+| ✅      | User Info                      | GET    | /api/:phone/user/info                    |
+| ✅      | User Avatar                    | GET    | /api/:phone/user/avatar                  |
+| ✅      | User Change Avatar             | POST   | /api/:phone/user/avatar                  |
+| ✅      | User Change PushName           | POST   | /api/:phone/user/pushname                |
+| ✅      | User My Groups                 | GET    | /api/:phone/user/my/groups               |
+| ✅      | User My Newsletter             | GET    | /api/:phone/user/my/newsletters          |
+| ✅      | User My Privacy Setting        | GET    | /api/:phone/user/my/privacy              |
+| ✅      | User My Contacts               | GET    | /api/:phone/user/my/contacts             |
+| ✅      | User Check                     | GET    | /api/:phone/user/check                   |
+| ✅      | User Business Profile          | GET    | /api/:phone/user/business-profile        |
+| ✅      | Send Message                   | POST   | /api/:phone/send/message                 |
+| ✅      | Send Image                     | POST   | /api/:phone/send/image                   |
+| ✅      | Send Audio                     | POST   | /api/:phone/send/audio                   |
+| ✅      | Send File                      | POST   | /api/:phone/send/file                    |
+| ✅      | Send Video                     | POST   | /api/:phone/send/video                   |
+| ✅      | Send Sticker                   | POST   | /api/:phone/send/sticker                 |
+| ✅      | Send Contact                   | POST   | /api/:phone/send/contact                 |
+| ✅      | Send Link                      | POST   | /api/:phone/send/link                    |
+| ✅      | Send Location                  | POST   | /api/:phone/send/location                |
+| ✅      | Send Poll / Vote               | POST   | /api/:phone/send/poll                    |
+| ✅      | Send Presence                  | POST   | /api/:phone/send/presence                |
+| ✅      | Send Typing Indicator          | POST   | /api/:phone/send/chat-presence           |
+| ✅      | Revoke Message                 | POST   | /api/:phone/message/:id/revoke           |
+| ✅      | React Message                  | POST   | /api/:phone/message/:id/reaction         |
+| ✅      | Delete Message                 | POST   | /api/:phone/message/:id/delete           |
+| ✅      | Edit Message                   | POST   | /api/:phone/message/:id/update           |
+| ✅      | Mark as Read                   | POST   | /api/:phone/message/:id/read             |
+| ✅      | Star Message                   | POST   | /api/:phone/message/:id/star             |
+| ✅      | Unstar Message                 | POST   | /api/:phone/message/:id/unstar           |
+| ✅      | Download Media                 | GET    | /api/:phone/message/:id/download         |
+| ✅      | Get Chat List                  | GET    | /api/:phone/chats                        |
+| ✅      | Get Chat Messages              | GET    | /api/:phone/chat/:jid/messages           |
+| ✅      | Pin Chat                       | POST   | /api/:phone/chat/:jid/pin                |
+| ✅      | Set Disappearing Messages      | POST   | /api/:phone/chat/:jid/disappearing       |
+| ✅      | Create Group                   | POST   | /api/:phone/group                        |
+| ✅      | Join Group With Link           | POST   | /api/:phone/group/join-with-link         |
+| ✅      | Group Info From Link           | GET    | /api/:phone/group/info-from-link         |
+| ✅      | Group Info                     | GET    | /api/:phone/group/info                   |
+| ✅      | Leave Group                    | POST   | /api/:phone/group/leave                  |
+| ✅      | List Participants              | GET    | /api/:phone/group/participants           |
+| ✅      | Export Participants (CSV)      | GET    | /api/:phone/group/participants/export    |
+| ✅      | Add Participants               | POST   | /api/:phone/group/participants           |
+| ✅      | Remove Participants            | POST   | /api/:phone/group/participants/remove    |
+| ✅      | Promote Participants           | POST   | /api/:phone/group/participants/promote   |
+| ✅      | Demote Participants            | POST   | /api/:phone/group/participants/demote    |
+| ✅      | List Join Requests             | GET    | /api/:phone/group/participant-requests   |
+| ✅      | Approve Join Request           | POST   | /api/:phone/group/participant-requests/approve |
+| ✅      | Reject Join Request            | POST   | /api/:phone/group/participant-requests/reject  |
+| ✅      | Set Group Photo                | POST   | /api/:phone/group/photo                  |
+| ✅      | Set Group Name                 | POST   | /api/:phone/group/name                   |
+| ✅      | Set Group Locked               | POST   | /api/:phone/group/locked                 |
+| ✅      | Set Group Announce             | POST   | /api/:phone/group/announce               |
+| ✅      | Set Group Topic                | POST   | /api/:phone/group/topic                  |
+| ✅      | Get Group Invite Link          | GET    | /api/:phone/group/invite-link            |
+| ✅      | Unfollow Newsletter            | POST   | /api/:phone/newsletter/unfollow          |
+| ✅      | Trigger History Sync           | POST   | /api/:phone/history/sync                 |
+| ✅      | Get History Sync Status        | GET    | /api/:phone/history/status               |
 
 ```txt
 ✅ = Available
