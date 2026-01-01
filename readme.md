@@ -137,7 +137,7 @@ To use environment variables:
 | `AUTH_SECRET`                 | JWT secret for authentication               | -         | `AUTH_SECRET=your-secret-key`               |
 | `AUTH_USERNAME`               | Admin username                              | `admin`   | `AUTH_USERNAME=admin`                       |
 | `AUTH_PASSWORD_HASH`          | Bcrypt hash of admin password               | -         | (use hash-password script)                  |
-| `WHATSAPP_CLIENTS`            | Comma-separated phone numbers               | -         | `WHATSAPP_CLIENTS=6281234567890`            |
+| `WHATSAPP_CLIENTS`            | Comma-separated phone numbers (see [Phone Requirements](#phone-number-requirements)) | - | `WHATSAPP_CLIENTS=6281234567890` |
 | `WHATSAPP_AUTO_REPLY`         | Auto-reply message                          | -         | `WHATSAPP_AUTO_REPLY="Auto reply message"`  |
 | `WHATSAPP_AUTO_MARK_READ`     | Auto-mark incoming messages as read         | `false`   | `WHATSAPP_AUTO_MARK_READ=true`              |
 | `WHATSAPP_AUTO_DOWNLOAD_MEDIA`| Auto-download media from incoming messages  | `true`    | `WHATSAPP_AUTO_DOWNLOAD_MEDIA=false`        |
@@ -387,6 +387,51 @@ Example: To send a message via client `628192191202`:
 ```bash
 POST /api/628192191202/send/message
 ```
+
+### Phone Number Requirements
+
+Client IDs in `WHATSAPP_CLIENTS` must be **valid phone numbers** that match the WhatsApp account you'll scan with.
+
+#### Validation Rules
+
+| Rule | Requirement |
+|------|-------------|
+| Format | Digits only (after normalization) |
+| Minimum | 7 digits |
+| Maximum | 15 digits (E.164 standard) |
+| Normalization | `+`, spaces, dashes are stripped automatically |
+
+#### Valid Examples
+
+```bash
+# All these formats are accepted and normalized to digits:
+WHATSAPP_CLIENTS=6281234567890              # Without +
+WHATSAPP_CLIENTS=+6281234567890             # With +
+WHATSAPP_CLIENTS=+62 812-3456-7890          # With formatting
+WHATSAPP_CLIENTS=6281234567890,6289876543210  # Multiple clients
+```
+
+#### Invalid Examples (Will Fail on Startup)
+
+```bash
+WHATSAPP_CLIENTS=b1,b2                      # ❌ Not phone numbers
+WHATSAPP_CLIENTS=client-1                   # ❌ Contains letters
+WHATSAPP_CLIENTS=123456                     # ❌ Too short (< 7 digits)
+```
+
+#### Phone Mismatch Protection
+
+When scanning the QR code, the system verifies that the scanned WhatsApp account matches the configured client ID:
+
+```
+Config: WHATSAPP_CLIENTS=6281234567890
+User scans with: 6289999999999
+
+Result: ❌ LOGIN_REJECTED
+Message: "Phone mismatch: configured client 6281234567890 but scanned with 6289999999999"
+```
+
+This prevents session loss from misconfigured client IDs. If you need to use a different phone number, update `WHATSAPP_CLIENTS` first.
 
 ### Authentication Routes
 
