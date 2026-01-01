@@ -31,6 +31,7 @@ const (
 	// Connection events
 	EventConnectionStatus EventType = "connection_status"
 	EventLoginSuccess     EventType = "login_success"
+	EventLoginFailed      EventType = "login_failed"
 	EventLogoutComplete   EventType = "logout_complete"
 	EventQRCode           EventType = "qr_code"
 

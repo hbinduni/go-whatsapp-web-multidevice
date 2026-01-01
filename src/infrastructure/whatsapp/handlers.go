@@ -587,6 +587,52 @@ func handleAppStateSyncCompleteMultiClient(_ context.Context, evt *events.AppSta
 }
 
 func handlePairSuccessMultiClient(ctx context.Context, evt *events.PairSuccess, mc *ManagedClient) {
+	// Check if the scanned phone matches the configured client ID
+	scannedPhone := evt.ID.User
+	configuredPhone := normalizePhone(mc.Phone)
+
+	if normalizePhone(scannedPhone) != configuredPhone {
+		// Phone mismatch - reject the login
+		logrus.Errorf("[%s] Phone mismatch! Configured: %s, Scanned: %s. Logging out.",
+			mc.Phone, configuredPhone, scannedPhone)
+
+		// Broadcast error to clients
+		errorMsg := fmt.Sprintf("Phone mismatch: configured client %s but scanned with %s. "+
+			"Please scan with the correct phone or update WHATSAPP_CLIENTS configuration.",
+			mc.Phone, scannedPhone)
+
+		websocket.Broadcast <- websocket.BroadcastMessage{
+			Code:    "LOGIN_REJECTED",
+			Message: errorMsg,
+			Result: map[string]any{
+				"configured_phone": mc.Phone,
+				"scanned_phone":    scannedPhone,
+				"reason":           "phone_mismatch",
+			},
+		}
+
+		sse.BroadcastMessage(sse.EventLoginFailed, "LOGIN_REJECTED", errorMsg,
+			map[string]any{
+				"configured_phone": mc.Phone,
+				"scanned_phone":    scannedPhone,
+				"reason":           "phone_mismatch",
+			})
+
+		// Logout the mismatched device
+		mc.Client.Logout(ctx)
+		mc.SetStatus(StatusLoggedOut)
+
+		// Delete the device from database to clean up
+		if mc.Client.Store != nil {
+			if err := mc.Client.Store.Delete(ctx); err != nil {
+				logrus.Warnf("[%s] Failed to delete mismatched device: %v", mc.Phone, err)
+			}
+		}
+
+		return
+	}
+
+	// Phone matches - proceed with successful login
 	mc.SetStatus(StatusLoggedIn)
 	mc.DeviceID = evt.ID.String()
 
