@@ -44,7 +44,43 @@
         </h1>
     </div>
 
-    <div class="ui success message" v-if="connected_devices != null">
+    <!-- Multi-Client Selector -->
+    {{ if .IsMultiClient }}
+    <div class="ui segment" style="margin-bottom: 1em;">
+        <div class="ui grid">
+            <div class="eight wide column">
+                <div class="ui labeled input fluid">
+                    <div class="ui label">
+                        <i class="mobile alternate icon"></i>
+                        Active Client
+                    </div>
+                    <select class="ui dropdown" id="clientSelector" v-model="selectedClient" @change="handleClientChange">
+                        <option value="">Select a client...</option>
+                        {{ range .Clients }}
+                        <option value="{{ . }}">{{ . }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+            </div>
+            <div class="eight wide column right aligned">
+                <div class="ui label" :class="clientStatus.connected ? 'green' : 'red'">
+                    <i :class="clientStatus.connected ? 'check circle icon' : 'times circle icon'"></i>
+                    [[ clientStatus.connected ? 'Connected' : 'Disconnected' ]]
+                </div>
+                <div class="ui label blue" v-if="selectedClient">
+                    <i class="phone icon"></i>
+                    [[ selectedClient ]]
+                </div>
+            </div>
+        </div>
+        <div class="ui warning message" v-if="!selectedClient">
+            <i class="info circle icon"></i>
+            Please select a client to continue. All API operations will use the selected client.
+        </div>
+    </div>
+    {{ end }}
+
+    <div class="ui success message" v-if="connected_devices != null && connected_devices.length > 0">
         <div class="header">
             <i class="check circle icon"></i>
             Device Connected Successfully
@@ -188,9 +224,34 @@
     }
 
 
+    // Multi-client configuration
+    window.isMultiClient = {{ if .IsMultiClient }}true{{ else }}false{{ end }};
+    window.configuredClients = [{{ range $i, $c := .Clients }}{{ if $i }},{{ end }}"{{ $c }}"{{ end }}];
+    window.selectedClient = null;
+    window.appBasePath = '{{ .AppBasePath }}';
+
+    // Build base URL - in multi-client mode, this will be updated when client is selected
+    const buildBaseURL = (phone) => {
+        const base = `${window.location.protocol}//${window.location.hostname}${window.location.port ? ':' + window.location.port : ''}${window.appBasePath}`;
+        if (window.isMultiClient && phone) {
+            // Remove leading + from phone number for URL
+            const cleanPhone = phone.replace(/^\+/, '');
+            return `${base}/api/${cleanPhone}`;
+        }
+        return base;
+    };
+
     window.http = axios.create({
-        baseURL: `${window.location.protocol}//${window.location.hostname}${window.location.port ? ':' + window.location.port : ''}{{ .AppBasePath }}`
+        baseURL: buildBaseURL(null)
     });
+
+    // Function to update axios baseURL when client changes
+    window.updateHttpClient = (phone) => {
+        window.selectedClient = phone;
+        window.http.defaults.baseURL = buildBaseURL(phone);
+        console.log('[Multi-Client] Updated baseURL to:', window.http.defaults.baseURL);
+    };
+
     {{ if isEnableBasicAuth .BasicAuthToken }}
     window.http.defaults.headers.common['Authorization'] = "{{ .BasicAuthToken }}";
     {{ end }}
@@ -287,17 +348,65 @@
             return {
                 app_ws: null,
                 connected_devices: null,
+                // Multi-client support
+                isMultiClient: window.isMultiClient || false,
+                selectedClient: '',
+                clientStatus: { connected: false, device: null },
             }
         },
         methods: {
             handleReloadDevice() {
                 this.app_ws.send(JSON.stringify({"code": "FETCH_DEVICES"}))
+            },
+            async handleClientChange() {
+                if (!this.selectedClient) {
+                    this.clientStatus = { connected: false, device: null };
+                    return;
+                }
+
+                // Update the axios baseURL
+                window.updateHttpClient(this.selectedClient);
+
+                // Fetch client status
+                await this.fetchClientStatus();
+
+                // Reload devices for this client
+                this.handleReloadDevice();
+
+                showSuccessInfo(`Switched to client: ${this.selectedClient}`);
+            },
+            async fetchClientStatus() {
+                if (!this.selectedClient) return;
+
+                try {
+                    const cleanPhone = this.selectedClient.replace(/^\+/, '');
+                    const response = await axios.get(`${window.appBasePath}/admin/clients/${cleanPhone}/status`, {
+                        headers: window.http.defaults.headers.common
+                    });
+                    if (response.data && response.data.results) {
+                        this.clientStatus = {
+                            connected: response.data.results.connected || false,
+                            device: response.data.results.device || null
+                        };
+                    }
+                } catch (err) {
+                    console.error('Failed to fetch client status:', err);
+                    this.clientStatus = { connected: false, device: null };
+                }
             }
         },
         mounted() {
             // Initialize app container as hidden
             document.getElementById('app').style.display = 'none';
-            
+
+            // Multi-client: auto-select first client if available
+            if (window.isMultiClient && window.configuredClients.length > 0) {
+                this.selectedClient = window.configuredClients[0];
+                window.updateHttpClient(this.selectedClient);
+                this.fetchClientStatus();
+                console.log('[Multi-Client] Auto-selected first client:', this.selectedClient);
+            }
+
             if (window["WebSocket"]) {
                 this.app_ws = new WebSocket(constructWebSocketURL());
 
@@ -306,7 +415,7 @@
                         "code": "FETCH_DEVICES",
                         "message": "List device"
                     }));
-                    
+
                     // Show app container and hide splash screen with a slight delay
                     setTimeout(() => {
                         document.getElementById('app').style.display = 'block';

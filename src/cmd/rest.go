@@ -143,6 +143,8 @@ func restServer(_ *cobra.Command, _ []string) {
 			"BasicAuthToken": c.UserContext().Value(middleware.AuthorizationValue("BASIC_AUTH")),
 			"MaxFileSize":    humanize.Bytes(uint64(config.WhatsappSettingMaxFileSize)),
 			"MaxVideoSize":   humanize.Bytes(uint64(config.WhatsappSettingMaxVideoSize)),
+			"IsMultiClient":  isMultiClientMode(),
+			"Clients":        config.WhatsAppClients,
 		})
 	})
 
