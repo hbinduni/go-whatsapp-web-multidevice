@@ -361,17 +361,19 @@
             async handleClientChange() {
                 if (!this.selectedClient) {
                     this.clientStatus = { connected: false, device: null };
+                    this.connected_devices = null;
                     return;
                 }
+
+                // Clear previous client's state
+                this.connected_devices = null;
+                this.clientStatus = { connected: false, device: null };
 
                 // Update the axios baseURL
                 window.updateHttpClient(this.selectedClient);
 
-                // Fetch client status
+                // Fetch client status for the new client
                 await this.fetchClientStatus();
-
-                // Reload devices for this client
-                this.handleReloadDevice();
 
                 showSuccessInfo(`Switched to client: ${this.selectedClient}`);
             },
@@ -384,14 +386,26 @@
                         headers: window.http.defaults.headers.common
                     });
                     if (response.data && response.data.results) {
+                        const result = response.data.results;
                         this.clientStatus = {
-                            connected: response.data.results.connected || false,
-                            device: response.data.results.device || null
+                            connected: result.is_connected || false,
+                            device: result.device_id || null
                         };
+
+                        // Update connected_devices based on status
+                        if (result.is_logged_in && result.device_id) {
+                            this.connected_devices = [{
+                                device: result.device_id,
+                                name: result.phone || cleanPhone
+                            }];
+                        } else {
+                            this.connected_devices = null;
+                        }
                     }
                 } catch (err) {
                     console.error('Failed to fetch client status:', err);
                     this.clientStatus = { connected: false, device: null };
+                    this.connected_devices = null;
                 }
             }
         },
@@ -403,7 +417,10 @@
             if (window.isMultiClient && window.configuredClients.length > 0) {
                 this.selectedClient = window.configuredClients[0];
                 window.updateHttpClient(this.selectedClient);
-                this.fetchClientStatus();
+                // Fetch status after a short delay to ensure everything is initialized
+                setTimeout(() => {
+                    this.fetchClientStatus();
+                }, 500);
                 console.log('[Multi-Client] Auto-selected first client:', this.selectedClient);
             }
 
@@ -440,18 +457,30 @@
                             showSuccessInfo(message.message)
                             $('#modalLogin').modal('hide');
 
-                            // fetch devices
-                            this.handleReloadDevice()
+                            // In multi-client mode, refresh from API; otherwise use WebSocket
+                            if (window.isMultiClient) {
+                                this.fetchClientStatus();
+                            } else {
+                                this.handleReloadDevice();
+                            }
                             break;
                         case 'LIST_DEVICES':
-                            this.connected_devices = message.result
+                            // Only update from WebSocket in single-client mode
+                            // In multi-client mode, we use REST API for per-client status
+                            if (!window.isMultiClient) {
+                                this.connected_devices = message.result;
+                            }
                             break;
                         case 'LOGOUT_COMPLETE':
                             // Handle successful cleanup after remote logout
                             showSuccessInfo('✅ ' + message.message)
                             console.log('[LOGOUT_COMPLETE] Remote logout cleanup completed:', message)
-                            // Optionally refresh the device list
-                            this.handleReloadDevice()
+                            // Refresh status
+                            if (window.isMultiClient) {
+                                this.fetchClientStatus();
+                            } else {
+                                this.handleReloadDevice();
+                            }
                             break;
                         default:
                             console.log(message)
