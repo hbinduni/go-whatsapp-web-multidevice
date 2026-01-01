@@ -42,7 +42,7 @@ func restServer(_ *cobra.Command, _ []string) {
 		logrus.Warn("⚠️  AUTH_PASSWORD_HASH not set - authentication disabled. Generate with: ./whatsapp hash-password")
 	}
 
-	engine := html.NewFileSystem(http.FS(EmbedIndex), ".html")
+	engine := html.NewFileSystem(http.FS(EmbedViews), ".html")
 	engine.AddFunc("isAuthenticated", func(username any) bool {
 		return username != nil && username != ""
 	})
@@ -81,7 +81,9 @@ func restServer(_ *cobra.Command, _ []string) {
 		app.Use(logger.New())
 	}
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     "*",
+		AllowOriginsFunc: func(origin string) bool {
+			return true // Allow all origins dynamically (required for credentials)
+		},
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
 		AllowCredentials: true,
 	}))
