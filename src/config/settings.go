@@ -22,7 +22,7 @@ var (
 	AuthUsername     = "admin"
 	AuthPasswordHash = "" // bcrypt hash of password
 	// Token expiry durations
-	AuthAccessTokenExpiry  = "1h"  // Access token validity (e.g., "1h", "30m")
+	AuthAccessTokenExpiry  = "1h"   // Access token validity (e.g., "1h", "30m")
 	AuthRefreshTokenExpiry = "168h" // Refresh token validity (7 days)
 
 	PathQrCode    = "statics/qrcode"
