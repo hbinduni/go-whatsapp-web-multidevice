@@ -28,12 +28,12 @@ var (
 
 func handleRegister(conn *websocket.Conn) {
 	Clients[conn] = client{}
-	logrus.Println("connection registered")
+	logrus.Infof("[WebSocket] Client connected from %s (total: %d)", conn.RemoteAddr(), len(Clients))
 }
 
 func handleUnregister(conn *websocket.Conn) {
 	delete(Clients, conn)
-	logrus.Println("connection unregistered")
+	logrus.Infof("[WebSocket] Client disconnected from %s (total: %d)", conn.RemoteAddr(), len(Clients))
 }
 
 func broadcastMessage(message BroadcastMessage) {
