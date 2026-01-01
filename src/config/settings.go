@@ -16,6 +16,14 @@ var (
 	AppBasePath       = ""
 	AppTrustedProxies []string // Trusted proxy IP ranges (e.g., "0.0.0.0/0" for all, or specific CIDRs)
 
+	// CORS configuration
+	// Comma-separated list of allowed origins (e.g., "https://app.example.com,http://localhost:5173")
+	// If empty, allows all origins (not recommended for production)
+	CorsAllowedOrigins []string
+
+	// Graceful shutdown timeout in seconds
+	ShutdownTimeout = 30
+
 	// Authentication configuration
 	// AuthSecret is used to sign JWT tokens (generate with: openssl rand -base64 32)
 	AuthSecret       = ""

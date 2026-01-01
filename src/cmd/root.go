@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
@@ -108,11 +110,29 @@ func runServer(_ *cobra.Command, _ []string) {
 	}
 	app.Use(cors.New(cors.Config{
 		AllowOriginsFunc: func(origin string) bool {
-			return true // Allow all origins dynamically (required for credentials)
+			// If no origins configured, allow all (development mode)
+			if len(config.CorsAllowedOrigins) == 0 {
+				return true
+			}
+			// Check against whitelist
+			for _, allowed := range config.CorsAllowedOrigins {
+				if origin == allowed {
+					return true
+				}
+			}
+			logrus.Warnf("[CORS] Blocked origin: %s", origin)
+			return false
 		},
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
 		AllowCredentials: true,
 	}))
+
+	// Log CORS configuration
+	if len(config.CorsAllowedOrigins) == 0 {
+		logrus.Warn("⚠️  CORS_ALLOWED_ORIGINS not set - allowing all origins (not recommended for production)")
+	} else {
+		logrus.Infof("CORS allowed origins: %v", config.CorsAllowedOrigins)
+	}
 
 	// Create base path group
 	var baseGroup fiber.Router = app
@@ -166,10 +186,48 @@ func runServer(_ *cobra.Command, _ []string) {
 	go helpers.SetAutoConnectAfterBooting(appUsecase)
 	startAutoReconnectCheckerIfClientAvailable()
 
+	// Setup graceful shutdown
+	shutdownChan := make(chan struct{})
+	go func() {
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+		sig := <-sigChan
+		logrus.Infof("Received signal %v, initiating graceful shutdown...", sig)
+
+		// Create shutdown context with timeout
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(config.ShutdownTimeout)*time.Second)
+		defer cancel()
+
+		// Stop accepting new connections and wait for existing ones
+		if err := app.ShutdownWithContext(ctx); err != nil {
+			logrus.Errorf("Server shutdown error: %v", err)
+		}
+
+		// Stop background services
+		logrus.Info("Stopping background services...")
+		websocket.StopHub()
+		sse.GetHub().Stop()
+		helpers.StopAutoReconnectChecking()
+
+		// Close database connections
+		if chatStorageDB != nil {
+			logrus.Info("Closing database connections...")
+			if err := chatStorageDB.Close(); err != nil {
+				logrus.Errorf("Error closing database: %v", err)
+			}
+		}
+
+		logrus.Info("Graceful shutdown complete")
+		close(shutdownChan)
+	}()
+
 	logrus.Infof("🌐 Server listening on port %s", config.AppPort)
 	if err := app.Listen(":" + config.AppPort); err != nil {
 		logrus.Fatalln("Failed to start: ", err.Error())
 	}
+
+	// Wait for shutdown to complete
+	<-shutdownChan
 }
 
 func init() {
@@ -245,6 +303,20 @@ func initEnvConfig() {
 			clients[i] = strings.TrimSpace(c)
 		}
 		config.WhatsAppClients = clients
+	}
+
+	// CORS settings
+	if envCorsOrigins := viper.GetString("cors_allowed_origins"); envCorsOrigins != "" {
+		origins := strings.Split(envCorsOrigins, ",")
+		for i, o := range origins {
+			origins[i] = strings.TrimSpace(o)
+		}
+		config.CorsAllowedOrigins = origins
+	}
+
+	// Shutdown timeout
+	if viper.IsSet("shutdown_timeout") {
+		config.ShutdownTimeout = viper.GetInt("shutdown_timeout")
 	}
 
 	// WhatsApp settings

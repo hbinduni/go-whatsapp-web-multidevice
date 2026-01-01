@@ -187,7 +187,10 @@ func (service serviceSend) SendFile(ctx context.Context, request domainSend.File
 		return response, err
 	}
 
-	fileBytes := helpers.MultipartFormFileHeaderToBytes(request.File)
+	fileBytes, err := helpers.MultipartFormFileHeaderToBytes(request.File)
+	if err != nil {
+		return response, pkgError.InternalServerError(fmt.Sprintf("failed to read file: %v", err))
+	}
 	fileMimeType := resolveDocumentMIME(request.File.Filename, fileBytes)
 
 	uploadedFile, err := service.uploadMedia(ctx, whatsmeow.MediaDocument, fileBytes, dataWaRecipient)
@@ -430,7 +433,10 @@ func (service serviceSend) SendAudio(ctx context.Context, request domainSend.Aud
 		}
 		audioMimeType = http.DetectContentType(audioBytes)
 	} else if request.Audio != nil {
-		audioBytes = helpers.MultipartFormFileHeaderToBytes(request.Audio)
+		audioBytes, err = helpers.MultipartFormFileHeaderToBytes(request.Audio)
+		if err != nil {
+			return response, pkgError.InternalServerError(fmt.Sprintf("failed to read audio file: %v", err))
+		}
 		audioMimeType = http.DetectContentType(audioBytes)
 	}
 

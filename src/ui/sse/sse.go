@@ -65,6 +65,8 @@ type Hub struct {
 	register   chan *Client
 	unregister chan string
 	broadcast  chan Event
+	stop       chan struct{}
+	stopped    chan struct{}
 	mu         sync.RWMutex
 }
 
@@ -82,6 +84,8 @@ func GetHub() *Hub {
 			register:   make(chan *Client),
 			unregister: make(chan string),
 			broadcast:  make(chan Event, 100), // buffered channel for non-blocking broadcast
+			stop:       make(chan struct{}),
+			stopped:    make(chan struct{}),
 		}
 	})
 	return sseHub
@@ -89,7 +93,9 @@ func GetHub() *Hub {
 
 // Run starts the SSE hub event loop
 func (h *Hub) Run() {
-	logrus.Debug("[SSE] Hub started")
+	logrus.Info("[SSE] Hub started")
+	defer close(h.stopped)
+
 	for {
 		select {
 		case client := <-h.register:
@@ -118,7 +124,29 @@ func (h *Hub) Run() {
 				}
 			}
 			h.mu.RUnlock()
+
+		case <-h.stop:
+			logrus.Info("[SSE] Hub shutting down")
+			h.mu.Lock()
+			for _, client := range h.clients {
+				close(client.Channel)
+			}
+			h.clients = make(map[string]*Client)
+			h.mu.Unlock()
+			return
 		}
+	}
+}
+
+// Stop gracefully stops the SSE hub
+func (h *Hub) Stop() {
+	close(h.stop)
+	// Wait for hub to stop with timeout
+	select {
+	case <-h.stopped:
+		logrus.Debug("[SSE] Hub stopped")
+	case <-time.After(5 * time.Second):
+		logrus.Warn("[SSE] Hub stop timeout")
 	}
 }
 
