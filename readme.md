@@ -126,22 +126,24 @@ To use environment variables:
 
 #### Available Environment Variables
 
-| Variable                      | Description                                 | Default                                      | Example                                     |
-|-------------------------------|---------------------------------------------|----------------------------------------------|---------------------------------------------|
-| `APP_PORT`                    | Application port                            | `3000`                                       | `APP_PORT=8080`                             |
-| `APP_DEBUG`                   | Enable debug logging                        | `false`                                      | `APP_DEBUG=true`                            |
-| `APP_OS`                      | OS name (device name in WhatsApp)           | `Chrome`                                     | `APP_OS=MyApp`                              |
-| `APP_BASIC_AUTH`              | Basic authentication credentials            | -                                            | `APP_BASIC_AUTH=user1:pass1,user2:pass2`    |
-| `APP_BASE_PATH`               | Base path for subpath deployment            | -                                            | `APP_BASE_PATH=/gowa`                       |
-| `APP_TRUSTED_PROXIES`         | Trusted proxy IP ranges for reverse proxy   | -                                            | `APP_TRUSTED_PROXIES=0.0.0.0/0`             |
-| `DB_URI`                      | Database connection URI                     | `file:storages/whatsapp.db?_foreign_keys=on` | `DB_URI=postgres://user:pass@host/db`       |
-| `WHATSAPP_AUTO_REPLY`         | Auto-reply message                          | -                                            | `WHATSAPP_AUTO_REPLY="Auto reply message"`  |
-| `WHATSAPP_AUTO_MARK_READ`     | Auto-mark incoming messages as read         | `false`                                      | `WHATSAPP_AUTO_MARK_READ=true`              |
-| `WHATSAPP_AUTO_DOWNLOAD_MEDIA`| Auto-download media from incoming messages  | `true`                                       | `WHATSAPP_AUTO_DOWNLOAD_MEDIA=false`        |
-| `WHATSAPP_WEBHOOK`            | Webhook URL(s) for events (comma-separated) | -                                            | `WHATSAPP_WEBHOOK=https://webhook.site/xxx` |
-| `WHATSAPP_WEBHOOK_SECRET`     | Webhook secret for validation               | `secret`                                     | `WHATSAPP_WEBHOOK_SECRET=super-secret-key`  |
-| `WHATSAPP_WEBHOOK_INSECURE_SKIP_VERIFY` | Skip TLS verification for webhooks (insecure) | `false` | `WHATSAPP_WEBHOOK_INSECURE_SKIP_VERIFY=true` |
-| `WHATSAPP_ACCOUNT_VALIDATION` | Enable account validation                   | `true`                                       | `WHATSAPP_ACCOUNT_VALIDATION=false`         |
+| Variable                      | Description                                 | Default   | Example                                     |
+|-------------------------------|---------------------------------------------|-----------|---------------------------------------------|
+| `APP_PORT`                    | Application port                            | `3000`    | `APP_PORT=8080`                             |
+| `APP_DEBUG`                   | Enable debug logging                        | `false`   | `APP_DEBUG=true`                            |
+| `APP_OS`                      | OS name (device name in WhatsApp)           | `Chrome`  | `APP_OS=MyApp`                              |
+| `APP_BASE_PATH`               | Base path for subpath deployment            | -         | `APP_BASE_PATH=/gowa`                       |
+| `APP_TRUSTED_PROXIES`         | Trusted proxy IP ranges for reverse proxy   | -         | `APP_TRUSTED_PROXIES=0.0.0.0/0`             |
+| `DATABASE_URL`                | PostgreSQL connection URI (**required**)    | -         | `DATABASE_URL=postgres://user:pass@host:5432/db` |
+| `AUTH_SECRET`                 | JWT secret for authentication               | -         | `AUTH_SECRET=your-secret-key`               |
+| `AUTH_USERNAME`               | Admin username                              | `admin`   | `AUTH_USERNAME=admin`                       |
+| `AUTH_PASSWORD_HASH`          | Bcrypt hash of admin password               | -         | (use hash-password script)                  |
+| `WHATSAPP_CLIENTS`            | Comma-separated phone numbers               | -         | `WHATSAPP_CLIENTS=6281234567890`            |
+| `WHATSAPP_AUTO_REPLY`         | Auto-reply message                          | -         | `WHATSAPP_AUTO_REPLY="Auto reply message"`  |
+| `WHATSAPP_AUTO_MARK_READ`     | Auto-mark incoming messages as read         | `false`   | `WHATSAPP_AUTO_MARK_READ=true`              |
+| `WHATSAPP_AUTO_DOWNLOAD_MEDIA`| Auto-download media from incoming messages  | `true`    | `WHATSAPP_AUTO_DOWNLOAD_MEDIA=false`        |
+| `WHATSAPP_WEBHOOK`            | Webhook URL(s) for events (comma-separated) | -         | `WHATSAPP_WEBHOOK=https://webhook.site/xxx` |
+| `WHATSAPP_WEBHOOK_SECRET`     | Webhook secret for validation               | `secret`  | `WHATSAPP_WEBHOOK_SECRET=super-secret-key`  |
+| `WHATSAPP_ACCOUNT_VALIDATION` | Enable account validation                   | `true`    | `WHATSAPP_ACCOUNT_VALIDATION=false`         |
 
 Note: Command-line flags will override any values set in environment variables or `.env` file.
 
@@ -151,8 +153,23 @@ Note: Command-line flags will override any values set in environment variables o
 
 ### System Requirements
 
+- **PostgreSQL 14+** (required for data storage)
 - **Go 1.24.0 or higher** (for building from source)
 - **FFmpeg** (for media processing)
+
+### Database Setup
+
+This application requires PostgreSQL. Create a database and configure the connection:
+
+```bash
+# Create database
+createdb whatsapp
+
+# Set environment variable
+export DATABASE_URL="postgres://user:password@localhost:5432/whatsapp?sslmode=disable"
+```
+
+The application will automatically create the required tables on first run.
 
 ### Platform Support
 
@@ -163,14 +180,14 @@ Note: Command-line flags will override any values set in environment variables o
 ### Dependencies (without docker)
 
 - Mac OS:
-  - `brew install ffmpeg`
-  - `export CGO_CFLAGS_ALLOW="-Xpreprocessor"`
+  - `brew install postgresql ffmpeg`
 - Linux:
   - `sudo apt update`
-  - `sudo apt install ffmpeg`
-- Windows (not recomended, prefer using [WSL](https://docs.microsoft.com/en-us/windows/wsl/install)):
-  - install ffmpeg, [download here](https://www.ffmpeg.org/download.html#build-windows)
-  - add to ffmpeg to [environment variable](https://www.google.com/search?q=windows+add+to+environment+path)
+  - `sudo apt install postgresql ffmpeg`
+- Windows (not recommended, prefer using [WSL](https://docs.microsoft.com/en-us/windows/wsl/install)):
+  - Install PostgreSQL: [download here](https://www.postgresql.org/download/windows/)
+  - Install FFmpeg: [download here](https://www.ffmpeg.org/download.html#build-windows)
+  - Add both to your PATH environment variable
 
 ## How to use
 
@@ -303,50 +320,46 @@ volumes:
   whatsapp:
 ```
 
-or with env file (Docker Hub):
+### Production with PostgreSQL (Recommended)
 
 ```yml
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: whatsapp-db
+    restart: always
+    environment:
+      POSTGRES_USER: whatsapp
+      POSTGRES_PASSWORD: secretpassword
+      POSTGRES_DB: whatsapp
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U whatsapp"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   whatsapp:
     image: aldinokemal2104/go-whatsapp-web-multidevice
     container_name: whatsapp
     restart: always
     ports:
       - "3000:3000"
-    volumes:
-      - whatsapp:/app/storages
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
-      - APP_BASIC_AUTH=admin:admin
+      - DATABASE_URL=postgres://whatsapp:secretpassword@postgres:5432/whatsapp?sslmode=disable
+      - AUTH_SECRET=your-jwt-secret-here
+      - AUTH_USERNAME=admin
+      - AUTH_PASSWORD_HASH=your-bcrypt-hash-here
+      - WHATSAPP_CLIENTS=6281234567890
       - APP_PORT=3000
-      - APP_DEBUG=true
-      - APP_OS=Chrome
-      - APP_ACCOUNT_VALIDATION=false
+      - APP_DEBUG=false
 
 volumes:
-  whatsapp:
-```
-
-or with env file (GitHub Container Registry):
-
-```yml
-services:
-  whatsapp:
-    image: ghcr.io/aldinokemal/go-whatsapp-web-multidevice
-    container_name: whatsapp
-    restart: always
-    ports:
-      - "3000:3000"
-    volumes:
-      - whatsapp:/app/storages
-    environment:
-      - APP_BASIC_AUTH=admin:admin
-      - APP_PORT=3000
-      - APP_DEBUG=true
-      - APP_OS=Chrome
-      - APP_ACCOUNT_VALIDATION=false
-
-volumes:
-  whatsapp:
+  postgres_data:
 ```
 
 ### Production Mode (binary)
@@ -460,11 +473,6 @@ You can fork or edit this source code !
 | My Newsletter        | ![My Newsletter](./gallery/newsletter-list.png)               |
 | My Contacts          | ![My Contacts](./gallery/contact-list.png)                    |
 | Business Profile     | ![Business Profile](./gallery/business-profile.png)           |
-
-### Mac OS NOTE
-
-- Please do this if you have an error (invalid flag in pkg-config --cflags: -Xpreprocessor)
-  `export CGO_CFLAGS_ALLOW="-Xpreprocessor"`
 
 ## Important
 
