@@ -337,6 +337,75 @@ func (r *ClientRegistry) DisconnectClient(phone string) error {
 	return nil
 }
 
+// ReinitializeClient reinitializes a client after logout
+// This creates a fresh whatsmeow client for the phone number
+func (r *ClientRegistry) ReinitializeClient(ctx context.Context, phone string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	mc, ok := r.clients[phone]
+	if !ok {
+		return fmt.Errorf("client not found: %s", phone)
+	}
+
+	// Disconnect old client if connected
+	if mc.Client != nil && mc.Client.IsConnected() {
+		mc.Client.Disconnect()
+	}
+
+	// Wait for disconnect to complete
+	time.Sleep(500 * time.Millisecond)
+
+	// Get or create a fresh device
+	device, err := r.getOrCreateDevice(ctx, phone)
+	if err != nil {
+		return fmt.Errorf("failed to get/create device for %s: %w", phone, err)
+	}
+
+	// Configure device properties
+	osName := fmt.Sprintf("%s %s", config.AppOs, config.AppVersion)
+	store.DeviceProps.PlatformType = &config.AppPlatform
+	store.DeviceProps.Os = &osName
+
+	// Configure keys database if available
+	if r.keysDB != nil && device.ID != nil {
+		innerStore := sqlstore.NewSQLStore(r.keysDB, *device.ID)
+		device.Identities = innerStore
+		device.Sessions = innerStore
+		device.PreKeys = innerStore
+		device.SenderKeys = innerStore
+		device.MsgSecrets = innerStore
+		device.PrivacyTokens = innerStore
+	}
+
+	// Create new WhatsApp client
+	baseLogger := waLog.Stdout(fmt.Sprintf("Client[%s]", phone), config.WhatsappLogLevel, true)
+	newClient := whatsmeow.NewClient(device, newFilteredLogger(baseLogger))
+	newClient.EnableAutoReconnect = true
+	newClient.AutoTrustIdentity = true
+
+	// Update managed client with new whatsmeow client
+	mc.mu.Lock()
+	mc.Client = newClient
+	mc.Status = StatusDisconnected
+	mc.LastActivity = time.Now()
+	if device.ID != nil {
+		mc.DeviceID = device.ID.String()
+	} else {
+		mc.DeviceID = ""
+	}
+	mc.mu.Unlock()
+
+	// Add event handler for new client
+	newClient.AddEventHandler(func(rawEvt interface{}) {
+		handlerMultiClient(ctx, rawEvt, mc)
+	})
+
+	r.log.Infof("Reinitialized client for phone: %s", phone)
+
+	return nil
+}
+
 // ConnectAll connects all registered clients
 func (r *ClientRegistry) ConnectAll() []error {
 	clients := r.GetAllClients()

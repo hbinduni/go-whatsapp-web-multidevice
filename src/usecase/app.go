@@ -149,15 +149,8 @@ func (service *serviceApp) Logout(ctx context.Context) (err error) {
 		return pkgError.ErrWaCLI
 	}
 
-	db := whatsapp.GetDB()
-	if db != nil {
-		devices, dbErr := db.GetAllDevices(ctx)
-		if dbErr != nil {
-			logrus.Debugf("Error getting devices before logout: %v", dbErr)
-		} else {
-			logrus.Debugf("Devices before logout: %d found", len(devices))
-		}
-	}
+	// Get the phone number from context for registry operations
+	phone := whatsapp.GetDeviceIDFromContext(ctx)
 
 	// Call WhatsApp client logout first to disconnect from server
 	err = client.Logout(ctx)
@@ -166,18 +159,26 @@ func (service *serviceApp) Logout(ctx context.Context) (err error) {
 		// Continue with cleanup even if logout fails - the client may already be disconnected
 	}
 
-	// Wait for logout to fully propagate before checking device state
-	time.Sleep(500 * time.Millisecond)
-
-	// Perform complete cleanup with global client synchronization
-	newDB, newCli, err := whatsapp.PerformCleanupAndUpdateGlobals(ctx, "MANUAL_LOGOUT", service.chatStorageRepo)
-	if err != nil {
-		logrus.Errorf("Cleanup failed: %v", err)
-		return err
+	// Truncate chat storage for this client
+	if service.chatStorageRepo != nil {
+		if truncErr := service.chatStorageRepo.TruncateAllDataWithLogging("MANUAL_LOGOUT"); truncErr != nil {
+			logrus.Errorf("Failed to truncate chat storage: %v", truncErr)
+		}
 	}
 
-	// Update service references
-	whatsapp.UpdateGlobalClient(newCli, newDB)
+	// Reinitialize the client in the registry with a fresh state
+	registry := whatsapp.GetRegistry()
+	if registry != nil && phone != "" {
+		if reinitErr := registry.ReinitializeClient(ctx, phone); reinitErr != nil {
+			logrus.Errorf("Failed to reinitialize client: %v", reinitErr)
+			return reinitErr
+		}
+
+		// Reconnect the reinitialized client
+		if connectErr := registry.ConnectClient(phone); connectErr != nil {
+			logrus.Warnf("Failed to reconnect client after logout: %v", connectErr)
+		}
+	}
 
 	logrus.Debug("Logout process completed successfully")
 	return nil

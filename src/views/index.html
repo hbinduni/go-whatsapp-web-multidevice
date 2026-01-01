@@ -233,9 +233,9 @@
                 async fetchClientStatuses() {
                     try {
                         const response = await http.get('/admin/clients');
-                        if (response.data?.data?.clients) {
+                        if (response.data?.results?.clients) {
                             const statuses = {};
-                            for (const [phone, status] of Object.entries(response.data.data.clients)) {
+                            for (const [phone, status] of Object.entries(response.data.results.clients)) {
                                 statuses[phone] = {
                                     connected: status.is_connected,
                                     loggedIn: status.is_logged_in,
@@ -255,8 +255,8 @@
                     this.qrModal = { show: true, phone, image: '' };
                     try {
                         const response = await http.get(`/api/${phone}/app/login`);
-                        if (response.data?.data?.image_path) {
-                            this.qrModal.image = basePath + response.data.data.image_path;
+                        if (response.data?.results?.qr_link) {
+                            this.qrModal.image = response.data.results.qr_link;
                         }
                     } catch (error) {
                         this.showNotification('error', 'Failed to generate QR code');
@@ -268,7 +268,7 @@
                 },
                 async logoutClient(phone) {
                     try {
-                        await http.post(`/api/${phone}/app/logout`);
+                        await http.get(`/api/${phone}/app/logout`);
                         this.showNotification('success', `Logged out ${phone}`);
                         this.fetchClientStatuses();
                     } catch (error) {
