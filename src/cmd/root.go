@@ -89,7 +89,7 @@ func runServer(_ *cobra.Command, _ []string) {
 		logrus.Warn("⚠️  AUTH_SECRET not set - authentication disabled. Generate with: openssl rand -base64 32")
 	}
 	if config.AuthPasswordHash == "" && config.AuthSecret != "" {
-		logrus.Warn("⚠️  AUTH_PASSWORD_HASH not set - authentication disabled. Generate with: ./whatsapp hash-password")
+		logrus.Warn("⚠️  AUTH_PASSWORD_HASH not set - authentication disabled")
 	}
 
 	engine := html.NewFileSystem(http.FS(EmbedViews), ".html")
@@ -394,7 +394,7 @@ func initFlags() {
 		&config.AuthPasswordHash,
 		"auth-password-hash", "",
 		config.AuthPasswordHash,
-		`bcrypt hash of admin password (generate with: ./whatsapp hash-password)`,
+		`bcrypt hash of admin password`,
 	)
 	rootCmd.PersistentFlags().StringSliceVarP(
 		&config.AppTrustedProxies,

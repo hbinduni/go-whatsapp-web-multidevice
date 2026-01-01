@@ -24,7 +24,6 @@ require (
 	go.mau.fi/whatsmeow v0.0.0-20251217143725-11cf47c62d32
 	golang.org/x/crypto v0.46.0
 	golang.org/x/image v0.34.0
-	golang.org/x/term v0.38.0
 	google.golang.org/protobuf v1.36.11
 )
 

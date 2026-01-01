@@ -20,7 +20,7 @@ var (
 	// AuthSecret is used to sign JWT tokens (generate with: openssl rand -base64 32)
 	AuthSecret       = ""
 	AuthUsername     = "admin"
-	AuthPasswordHash = "" // bcrypt hash of password (generate with: ./whatsapp hash-password)
+	AuthPasswordHash = "" // bcrypt hash of password
 	// Token expiry durations
 	AuthAccessTokenExpiry  = "1h"  // Access token validity (e.g., "1h", "30m")
 	AuthRefreshTokenExpiry = "168h" // Refresh token validity (7 days)
