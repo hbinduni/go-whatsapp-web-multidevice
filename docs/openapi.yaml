@@ -1,35 +1,301 @@
 openapi: "3.0.0"
 info:
   title: WhatsApp API MultiDevice
-  version: 6.13.1
-  description: This API is used for sending whatsapp via API
+  version: 7.0.0
+  description: |
+    Multi-client WhatsApp Web API with PostgreSQL storage.
+
+    ## Authentication
+    All protected routes require JWT Bearer token. Obtain tokens via `/auth/login`.
+
+    ## Multi-Client Architecture
+    WhatsApp API routes use the pattern `/api/{phone}/{endpoint}` where `{phone}` is the
+    registered client phone number (without + prefix).
+
+    Example: To send a message via client 628192191202:
+    ```
+    POST /api/628192191202/send/message
+    ```
 servers:
   - url: http://localhost:3000
 tags:
+  - name: auth
+    description: Authentication and token management
+  - name: admin
+    description: System administration and client management
   - name: app
-    description: Initial Connection to Whatsapp server
+    description: WhatsApp connection management (per client)
   - name: user
-    description: Getting information
+    description: User information and profile (per client)
   - name: send
-    description: Send Message (Text/Image/File/Video).
+    description: Send messages - text, image, file, video, etc. (per client)
   - name: message
-    description: Message manipulation (revoke/react/update).
+    description: Message operations - revoke, react, edit (per client)
   - name: chat
-    description: Chat conversations and messaging
+    description: Chat conversations and messaging (per client)
   - name: group
-    description: Group setting
+    description: Group management (per client)
   - name: newsletter
-    description: newsletter setting
-security:
-  - basicAuth: []
+    description: Newsletter/channel management (per client)
+  - name: history
+    description: Chat history synchronization (per client)
 
 paths:
-  /app/login:
+  # ============================================================================
+  # Authentication Routes (no auth required for login)
+  # ============================================================================
+  /auth/login:
+    post:
+      operationId: authLogin
+      tags:
+        - auth
+      summary: Login with username and password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  example: admin
+                password:
+                  type: string
+                  example: yourpassword
+              required:
+                - username
+                - password
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthLoginResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorUnauthorized'
+
+  /auth/refresh:
+    post:
+      operationId: authRefresh
+      tags:
+        - auth
+      summary: Refresh access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+              required:
+                - refresh_token
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthLoginResponse'
+        '401':
+          description: Invalid refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorUnauthorized'
+
+  /auth/logout:
+    post:
+      operationId: authLogout
+      tags:
+        - auth
+      summary: Logout and invalidate tokens
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericResponse'
+
+  # ============================================================================
+  # Admin Routes
+  # ============================================================================
+  /admin/storage/stats:
+    get:
+      operationId: adminStorageStats
+      tags:
+        - admin
+      summary: Get storage statistics
+      description: Returns database size, chat count, message count
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageStatsResponse'
+
+  /admin/storage/cleanup:
+    post:
+      operationId: adminStorageCleanup
+      tags:
+        - admin
+      summary: Cleanup old messages and chats
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pattern:
+                  type: string
+                  description: JID pattern to match (e.g., "%@g.us" for groups)
+                older_than_days:
+                  type: integer
+                  description: Delete messages older than N days
+                empty_chats:
+                  type: boolean
+                  description: Delete chats with no messages
+                dry_run:
+                  type: boolean
+                  default: false
+                  description: Preview changes without deleting
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CleanupResponse'
+
+  /admin/storage/vacuum:
+    post:
+      operationId: adminStorageVacuum
+      tags:
+        - admin
+      summary: Vacuum database to reclaim space
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VacuumResponse'
+
+  /admin/storage/chats:
+    delete:
+      operationId: adminDeleteChats
+      tags:
+        - admin
+      summary: Delete chats by pattern or JIDs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pattern:
+                  type: string
+                  description: JID pattern to match
+                jids:
+                  type: array
+                  items:
+                    type: string
+                  description: Specific JIDs to delete
+                dry_run:
+                  type: boolean
+                  default: false
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteChatsResponse'
+
+  /admin/clients:
+    get:
+      operationId: adminListClients
+      tags:
+        - admin
+      summary: List all WhatsApp clients
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientListResponse'
+
+  /admin/clients/{phone}/status:
+    get:
+      operationId: adminClientStatus
+      tags:
+        - admin
+      summary: Get client connection status
+      parameters:
+        - $ref: '#/components/parameters/AdminPhonePath'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientStatusResponse'
+
+  /admin/clients/{phone}/connect:
+    post:
+      operationId: adminConnectClient
+      tags:
+        - admin
+      summary: Connect a client
+      parameters:
+        - $ref: '#/components/parameters/AdminPhonePath'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericResponse'
+
+  /admin/clients/{phone}/disconnect:
+    post:
+      operationId: adminDisconnectClient
+      tags:
+        - admin
+      summary: Disconnect a client
+      parameters:
+        - $ref: '#/components/parameters/AdminPhonePath'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericResponse'
+
+  # ============================================================================
+  # App Routes (per client)
+  # ============================================================================
+  /api/{phone}/app/login:
     get:
       operationId: appLogin
       tags:
         - app
-      summary: Login to whatsapp server
+      summary: Get QR code for WhatsApp login
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       responses:
         '200':
           description: OK
@@ -37,25 +303,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LoginResponse'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /app/login-with-code:
+
+  /api/{phone}/app/login-with-code:
     get:
       operationId: appLoginWithCode
       tags:
         - app
-      summary: Login with pairing code
+      summary: Get pairing code for WhatsApp login
       parameters:
-        - name: phone
-          in: query
-          schema:
-            type: string
-          example: '628912344551'
-          description: Your phone number
+        - $ref: '#/components/parameters/PhonePath'
       responses:
         '200':
           description: OK
@@ -63,18 +319,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LoginWithCodeResponse'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /app/logout:
+
+  /api/{phone}/app/logout:
     get:
       operationId: appLogout
       tags:
         - app
-      summary: Remove database and logout
+      summary: Logout from WhatsApp
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       responses:
         '200':
           description: OK
@@ -82,18 +335,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GenericResponse'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /app/reconnect:
+
+  /api/{phone}/app/reconnect:
     get:
       operationId: appReconnect
       tags:
         - app
-      summary: Reconnecting to whatsapp server
+      summary: Reconnect to WhatsApp server
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       responses:
         '200':
           description: OK
@@ -101,18 +351,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GenericResponse'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /app/devices:
+
+  /api/{phone}/app/devices:
     get:
       operationId: appDevices
       tags:
         - app
-      summary: Get list connected devices
+      summary: List linked devices
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       responses:
         '200':
           description: OK
@@ -120,25 +367,40 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DeviceResponse'
-        '500':
-          description: Internal Server Error
+
+  /api/{phone}/app/status:
+    get:
+      operationId: appStatus
+      tags:
+        - app
+      summary: Get connection status
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
+      responses:
+        '200':
+          description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /user/info:
+                $ref: '#/components/schemas/ConnectionStatusResponse'
+
+  # ============================================================================
+  # User Routes (per client)
+  # ============================================================================
+  /api/{phone}/user/info:
     get:
       operationId: userInfo
       tags:
         - user
-      summary: User Info
+      summary: Get user profile info
       parameters:
+        - $ref: '#/components/parameters/PhonePath'
         - name: phone
           in: query
           schema:
             type: string
           example: '6289685028129@s.whatsapp.net'
-          description: Phone number with country code
+          description: Target phone number
       responses:
         '200':
           description: OK
@@ -146,43 +408,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserInfoResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /user/avatar:
+
+  /api/{phone}/user/avatar:
     get:
       operationId: userAvatar
       tags:
         - user
-      summary: User Avatar
+      summary: Get user avatar
       parameters:
+        - $ref: '#/components/parameters/PhonePath'
         - name: phone
           in: query
           schema:
             type: string
           example: '6289685028129@s.whatsapp.net'
-          description: Phone number with country code
         - name: is_preview
           in: query
           schema:
             type: boolean
           example: true
-          description: Whether to fetch a preview of the avatar
-        - name: is_community
-          in: query
-          schema:
-            type: boolean
-          example: false
-          description: Whether to fetch a community avatar
       responses:
         '200':
           description: OK
@@ -190,23 +434,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserAvatarResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
     post:
       operationId: userChangeAvatar
       tags:
         - user
-      summary: User Change Avatar
+      summary: Change your avatar
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       requestBody:
         content:
           multipart/form-data:
@@ -216,7 +450,6 @@ paths:
                 avatar:
                   type: string
                   format: binary
-                  description: Avatar to send
       responses:
         '200':
           description: OK
@@ -224,25 +457,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GenericResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /user/pushname:
+
+  /api/{phone}/user/pushname:
     post:
       operationId: userChangePushName
       tags:
         - user
-      summary: User Change Push Name
-      description: Update the display name (push name) shown to others in WhatsApp
+      summary: Change display name
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       requestBody:
         content:
           application/json:
@@ -252,7 +475,6 @@ paths:
                 push_name:
                   type: string
                   example: 'John Doe'
-                  description: The new display name to set
               required:
                 - push_name
       responses:
@@ -262,24 +484,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GenericResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /user/my/privacy:
+
+  /api/{phone}/user/my/privacy:
     get:
       operationId: userMyPrivacy
       tags:
         - user
-      summary: User My Privacy Setting
+      summary: Get privacy settings
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       responses:
         '200':
           description: OK
@@ -287,18 +500,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserPrivacyResponse'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /user/my/groups:
+
+  /api/{phone}/user/my/groups:
     get:
       operationId: userMyGroups
       tags:
         - user
-      summary: User My List Groups
+      summary: List my groups
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       responses:
         '200':
           description: OK
@@ -306,19 +516,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserGroupResponse'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
 
-  /user/my/newsletters:
+  /api/{phone}/user/my/newsletters:
     get:
-      operationId: userMyNewsletter
+      operationId: userMyNewsletters
       tags:
         - user
-      summary: User My List Groups
+      summary: List subscribed channels
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       responses:
         '200':
           description: OK
@@ -326,18 +532,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NewsletterResponse'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /user/my/contacts:
+
+  /api/{phone}/user/my/contacts:
     get:
       operationId: userMyContacts
       tags:
         - user
-      summary: Get list of user contacts
+      summary: List contacts
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       responses:
         '200':
           description: OK
@@ -345,25 +548,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MyListContactsResponse'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /user/check:
+
+  /api/{phone}/user/check:
     get:
       operationId: userCheck
       tags:
         - user
-      summary: Check if user is on WhatsApp
+      summary: Check if phone is on WhatsApp
       parameters:
+        - $ref: '#/components/parameters/PhonePath'
         - name: phone
           in: query
+          required: true
           schema:
             type: string
           example: '628912344551'
-          description: Phone number with country code
       responses:
         '200':
           description: OK
@@ -371,33 +570,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserCheckResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /user/business-profile:
+
+  /api/{phone}/user/business-profile:
     get:
       operationId: userBusinessProfile
       tags:
         - user
-      summary: Get Business Profile Information
-      description: Retrieve detailed business profile information for a WhatsApp business account
+      summary: Get business profile
       parameters:
+        - $ref: '#/components/parameters/PhonePath'
         - name: phone
           in: query
           required: true
           schema:
             type: string
           example: '6289685028129@s.whatsapp.net'
-          description: Phone number with country code of the business account
       responses:
         '200':
           description: OK
@@ -405,51 +592,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BusinessProfileResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  
-  /send/message:
+
+  # ============================================================================
+  # Send Routes (per client)
+  # ============================================================================
+  /api/{phone}/send/message:
     post:
       operationId: sendMessage
       tags:
         - send
-      summary: Send Message
+      summary: Send text message
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       requestBody:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                phone:
-                  type: string
-                  example: '6289685028129@s.whatsapp.net'
-                  description: Phone number with country code
-                message:
-                  type: string
-                  example: selamat malam
-                  description: Message to send
-                reply_message_id:
-                  type: string
-                  example: 3EB089B9D6ADD58153C561
-                  description: Message ID that you want reply
-                is_forwarded:
-                  type: boolean
-                  example: false
-                  description: Whether this is a forwarded message
-                duration:
-                  type: integer
-                  example: 3600
-                  description: Disappearing message duration in seconds (optional)
+              $ref: '#/components/schemas/SendMessageRequest'
       responses:
         '200':
           description: OK
@@ -457,62 +616,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SendResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /send/image:
+
+  /api/{phone}/send/image:
     post:
       operationId: sendImage
       tags:
         - send
-      summary: Send Image
+      summary: Send image
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       requestBody:
         content:
           multipart/form-data:
             schema:
-              type: object
-              properties:
-                phone:
-                  type: string
-                  example: '6289685028129@s.whatsapp.net'
-                  description: Phone number with country code
-                caption:
-                  type: string
-                  example: selamat malam
-                  description: Caption to send
-                view_once:
-                  type: boolean
-                  example: false
-                  description: View once
-                image:
-                  type: string
-                  format: binary
-                  description: Image to send
-                image_url:
-                  type: string
-                  example: https://example.com/image.jpg
-                  description: Image URL to send
-                compress:
-                  type: boolean
-                  example: false
-                  description: Compress image
-                duration:
-                  type: integer
-                  example: 3600
-                  description: Disappearing message duration in seconds (optional)
-                is_forwarded:
-                  type: boolean
-                  example: false
-                  description: Whether this is a forwarded message
+              $ref: '#/components/schemas/SendImageRequest'
       responses:
         '200':
           description: OK
@@ -520,101 +637,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SendResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /send/audio:
-    post:
-      operationId: sendAudio
-      tags:
-        - send
-      summary: Send Audio
-      requestBody:
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              properties:
-                phone:
-                  type: string
-                  example: '6289685028129@s.whatsapp.net'
-                  description: Phone number with country code
-                audio:
-                  type: string
-                  format: binary
-                  description: Audio to send
-                audio_url:
-                  type: string
-                  example: https://example.com/audio.mp3
-                  description: Audio URL to send
-                is_forwarded:
-                  type: boolean
-                  example: false
-                  description: Whether this is a forwarded message
-                duration:
-                  type: integer
-                  example: 3600
-                  description: Disappearing message duration in seconds (optional)
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SendResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /send/file:
+
+  /api/{phone}/send/file:
     post:
       operationId: sendFile
       tags:
         - send
-      summary: Send File
+      summary: Send file/document
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       requestBody:
         content:
           multipart/form-data:
             schema:
-              type: object
-              properties:
-                phone:
-                  type: string
-                  example: '6289685028129@s.whatsapp.net'
-                  description: Phone number with country code
-                caption:
-                  type: string
-                  example: selamat malam
-                  description: Caption to send
-                file:
-                  type: string
-                  format: binary
-                  description: File to send
-                is_forwarded:
-                  type: boolean
-                  example: false
-                  description: Whether this is a forwarded message
-                duration:
-                  type: integer
-                  example: 3600
-                  description: Disappearing message duration in seconds (optional)
+              $ref: '#/components/schemas/SendFileRequest'
       responses:
         '200':
           description: OK
@@ -622,114 +658,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SendResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /send/sticker:
-    post:
-      operationId: sendSticker
-      tags:
-        - send
-      summary: Send Sticker
-      description: Send sticker with automatic conversion to WebP format
-      requestBody:
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              properties:
-                phone:
-                  type: string
-                  example: '6289685028129@s.whatsapp.net'
-                  description: Phone number with country code
-                sticker:
-                  type: string
-                  format: binary
-                  description: Sticker image file (jpg/jpeg/png/webp/gif)
-                sticker_url:
-                  type: string
-                  example: https://example.com/sticker.png
-                  description: URL of sticker image to send
-                duration:
-                  type: integer
-                  example: 3600
-                  description: Disappearing message duration in seconds (optional)
-                is_forwarded:
-                  type: boolean
-                  example: false
-                  description: Whether this is a forwarded sticker
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SendResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /send/video:
+
+  /api/{phone}/send/video:
     post:
       operationId: sendVideo
       tags:
         - send
-      summary: Send Video
+      summary: Send video
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       requestBody:
         content:
           multipart/form-data:
             schema:
-              type: object
-              properties:
-                phone:
-                  type: string
-                  example: '6289685028129@s.whatsapp.net'
-                  description: Phone number with country code
-                caption:
-                  type: string
-                  example: ini contoh caption video
-                  description: Caption to send
-                view_once:
-                  type: boolean
-                  example: false
-                  description: View once
-                video:
-                  type: string
-                  format: binary
-                  description: Video to send
-                video_url:
-                  type: string
-                  example: https://example.com/sample.mp4
-                  description: Video URL to send
-                compress:
-                  type: boolean
-                  example: false
-                  description: Compress video
-                duration:
-                  type: integer
-                  example: 3600
-                  description: Disappearing message duration in seconds (optional)
-                is_forwarded:
-                  type: boolean
-                  example: false
-                  description: Whether this is a forwarded message
+              $ref: '#/components/schemas/SendVideoRequest'
       responses:
         '200':
           description: OK
@@ -737,50 +679,62 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SendResponse'
-        '400':
-          description: Bad Request
+
+  /api/{phone}/send/audio:
+    post:
+      operationId: sendAudio
+      tags:
+        - send
+      summary: Send audio/voice message
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SendAudioRequest'
+      responses:
+        '200':
+          description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
+                $ref: '#/components/schemas/SendResponse'
+
+  /api/{phone}/send/sticker:
+    post:
+      operationId: sendSticker
+      tags:
+        - send
+      summary: Send sticker (auto-converts to WebP)
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SendStickerRequest'
+      responses:
+        '200':
+          description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /send/contact:
+                $ref: '#/components/schemas/SendResponse'
+
+  /api/{phone}/send/contact:
     post:
       operationId: sendContact
       tags:
         - send
-      summary: Send Contact
+      summary: Send contact card
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       requestBody:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                phone:
-                  type: string
-                  example: '6289685024051@s.whatsapp.net'
-                  description: Phone number with country code
-                contact_name:
-                  type: string
-                  example: Aldino Kemal
-                  description: Contact name
-                contact_phone:
-                  type: string
-                  example: '6289685024992'
-                  description: Contact phone number
-                is_forwarded:
-                  type: boolean
-                  example: false
-                  description: Whether this is a forwarded message
-                duration:
-                  type: integer
-                  example: 3600
-                  description: Disappearing message duration in seconds (optional)
+              $ref: '#/components/schemas/SendContactRequest'
       responses:
         '200':
           description: OK
@@ -788,50 +742,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SendResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /send/link:
+
+  /api/{phone}/send/link:
     post:
       operationId: sendLink
       tags:
         - send
-      summary: Send Link
+      summary: Send link with preview
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       requestBody:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                phone:
-                  type: string
-                  example: '6289685024051@s.whatsapp.net'
-                  description: Phone number with country code
-                link:
-                  type: string
-                  example: "https://google.com"
-                  description: Link to send
-                caption:
-                  type: string
-                  example: 'Halo ini contoh caption'
-                  description: Caption to send
-                is_forwarded:
-                  type: boolean
-                  example: false
-                  description: Whether this is a forwarded message
-                duration:
-                  type: integer
-                  example: 3600
-                  description: Disappearing message duration in seconds (optional)
+              $ref: '#/components/schemas/SendLinkRequest'
       responses:
         '200':
           description: OK
@@ -839,50 +763,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SendResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /send/location:
+
+  /api/{phone}/send/location:
     post:
       operationId: sendLocation
       tags:
         - send
-      summary: Send Location
+      summary: Send location
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       requestBody:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                phone:
-                  type: string
-                  example: '6289685024051@s.whatsapp.net'
-                  description: Phone number with country code
-                latitude:
-                  type: string
-                  example: "-7.797068"
-                  description: Latitude coordinate
-                longitude:
-                  type: string
-                  example: '110.370529'
-                  description: Longitude coordinate
-                is_forwarded:
-                  type: boolean
-                  example: false
-                  description: Whether this is a forwarded message
-                duration:
-                  type: integer
-                  example: 3600
-                  description: Disappearing message duration in seconds (optional)
+              $ref: '#/components/schemas/SendLocationRequest'
       responses:
         '200':
           description: OK
@@ -890,58 +784,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SendResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /send/poll:
+
+  /api/{phone}/send/poll:
     post:
       operationId: sendPoll
       tags:
         - send
-      summary: Send Poll / Vote
+      summary: Send poll
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       requestBody:
-        required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                phone:
-                  type: string
-                  description: The WhatsApp phone number to send the poll to, including the '@s.whatsapp.net' suffix.
-                  example: '6289685024421@s.whatsapp.net'
-                question:
-                  type: string
-                  description: The question for the poll.
-                  example: 'Siapa Nama Avatar The Last Air Bender?'
-                options:
-                  type: array
-                  description: The options for the poll.
-                  items:
-                    type: string
-                  example: [ 'Zuko', 'Aang', 'Katara' ]
-                max_answer:
-                  type: integer
-                  description: The maximum number of answers allowed for the poll.
-                  example: 2
-                duration:
-                  type: integer
-                  example: 3600
-                  description: Disappearing message duration in seconds (optional)
-              required:
-                - phone
-                - question
-                - options
-                - max_answer
+              $ref: '#/components/schemas/SendPollRequest'
       responses:
         '200':
           description: OK
@@ -949,26 +805,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SendResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /send/presence:
+
+  /api/{phone}/send/presence:
     post:
       operationId: sendPresence
       tags:
         - send
-      summary: Send presence status
+      summary: Update presence status
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       requestBody:
-        required: true
         content:
           application/json:
             schema:
@@ -976,13 +822,7 @@ paths:
               properties:
                 type:
                   type: string
-                  description: The presence type to send
                   enum: [available, unavailable]
-                  example: 'available'
-                is_forwarded:
-                  type: boolean
-                  example: false
-                  description: Whether this is a forwarded message
               required:
                 - type
       responses:
@@ -992,27 +832,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SendResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /send/chat-presence:
+
+  /api/{phone}/send/chat-presence:
     post:
       operationId: sendChatPresence
       tags:
         - send
-      summary: Send chat presence (typing indicator)
-      description: Send typing indicator to start or stop showing that you are composing a message
+      summary: Send typing indicator
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       requestBody:
-        required: true
         content:
           application/json:
             schema:
@@ -1021,12 +850,9 @@ paths:
                 phone:
                   type: string
                   example: '6289685024051@s.whatsapp.net'
-                  description: Phone number with country code
                 action:
                   type: string
                   enum: [start, stop]
-                  example: 'start'
-                  description: Action to perform - "start" to begin typing indicator, "stop" to end typing indicator
               required:
                 - phone
                 - action
@@ -1037,31 +863,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SendResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /message/{message_id}/revoke:
+
+  # ============================================================================
+  # Message Routes (per client)
+  # ============================================================================
+  /api/{phone}/message/{message_id}/reaction:
     post:
-      operationId: revokeMessage
+      operationId: messageReaction
       tags:
         - message
-      summary: Revoke Message
+      summary: React to message
       parameters:
-        - in: path
-          name: message_id
-          schema:
-            type: string
-          required: true
-          description: Message ID
+        - $ref: '#/components/parameters/PhonePath'
+        - $ref: '#/components/parameters/MessageIdPath'
       requestBody:
         content:
           application/json:
@@ -1071,95 +885,9 @@ paths:
                 phone:
                   type: string
                   example: '6289685024051@s.whatsapp.net'
-                  description: Phone number with country code
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SendResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /message/{message_id}/delete:
-    post:
-      operationId: deleteMessage
-      tags:
-        - message
-      summary: Delete Message
-      parameters:
-        - in: path
-          name: message_id
-          schema:
-            type: string
-          required: true
-          description: Message ID
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                phone:
-                  type: string
-                  example: '6289685024051@s.whatsapp.net'
-                  description: Phone number with country code
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SendResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /message/{message_id}/reaction:
-    post:
-      operationId: reactMessage
-      tags:
-        - message
-      summary: Send reaction to message
-      parameters:
-        - in: path
-          name: message_id
-          schema:
-            type: string
-          required: true
-          description: Message ID
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                phone:
-                  type: string
-                  example: '6289685024051@s.whatsapp.net'
-                  description: Phone number with country code
                 emoji:
                   type: string
                   example: "🙏"
-                  description: Emoji to react
       responses:
         '200':
           description: OK
@@ -1167,31 +895,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SendResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /message/{message_id}/update:
+
+  /api/{phone}/message/{message_id}/revoke:
     post:
-      operationId: updateMessage
+      operationId: messageRevoke
       tags:
         - message
-      summary: Edit message by message ID before 15 minutes
+      summary: Revoke/unsend message
       parameters:
-        - in: path
-          name: message_id
-          schema:
-            type: string
-          required: true
-          description: Message ID
+        - $ref: '#/components/parameters/PhonePath'
+        - $ref: '#/components/parameters/MessageIdPath'
       requestBody:
         content:
           application/json:
@@ -1200,12 +913,62 @@ paths:
               properties:
                 phone:
                   type: string
-                  example: '62819273192397132@s.whatsapp.net'
-                  description: Phone number with country code
+                  example: '6289685024051@s.whatsapp.net'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendResponse'
+
+  /api/{phone}/message/{message_id}/delete:
+    post:
+      operationId: messageDelete
+      tags:
+        - message
+      summary: Delete message locally
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
+        - $ref: '#/components/parameters/MessageIdPath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                phone:
+                  type: string
+                  example: '6289685024051@s.whatsapp.net'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendResponse'
+
+  /api/{phone}/message/{message_id}/update:
+    post:
+      operationId: messageUpdate
+      tags:
+        - message
+      summary: Edit message (within 15 minutes)
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
+        - $ref: '#/components/parameters/MessageIdPath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                phone:
+                  type: string
+                  example: '6289685024051@s.whatsapp.net'
                 message:
                   type: string
-                  example: 'Hello World'
-                  description: New message to send
+                  example: 'Updated message'
               required:
                 - phone
                 - message
@@ -1216,31 +979,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SendResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /message/{message_id}/read:
+
+  /api/{phone}/message/{message_id}/read:
     post:
-      operationId: readMessage
+      operationId: messageRead
       tags:
         - message
-      summary: Mark as read message
+      summary: Mark message as read
       parameters:
-        - in: path
-          name: message_id
-          schema:
-            type: string
-          required: true
-          description: Message ID
+        - $ref: '#/components/parameters/PhonePath'
+        - $ref: '#/components/parameters/MessageIdPath'
       requestBody:
         content:
           application/json:
@@ -1249,8 +997,7 @@ paths:
               properties:
                 phone:
                   type: string
-                  example: '62819273192397132@s.whatsapp.net'
-                  description: Phone number with country code
+                  example: '6289685024051@s.whatsapp.net'
               required:
                 - phone
       responses:
@@ -1260,31 +1007,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SendResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /message/{message_id}/star:
+
+  /api/{phone}/message/{message_id}/star:
     post:
-      operationId: starMessage
+      operationId: messageStar
       tags:
         - message
       summary: Star message
       parameters:
-        - in: path
-          name: message_id
-          schema:
-            type: string
-          required: true
-          description: Message ID
+        - $ref: '#/components/parameters/PhonePath'
+        - $ref: '#/components/parameters/MessageIdPath'
       requestBody:
         content:
           application/json:
@@ -1293,8 +1025,6 @@ paths:
               properties:
                 phone:
                   type: string
-                  example: '62819273192397132@s.whatsapp.net'
-                  description: Phone number with country code
               required:
                 - phone
       responses:
@@ -1304,31 +1034,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GenericResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /message/{message_id}/unstar:
+
+  /api/{phone}/message/{message_id}/unstar:
     post:
-      operationId: unstarMessage
+      operationId: messageUnstar
       tags:
         - message
       summary: Unstar message
       parameters:
-        - in: path
-          name: message_id
-          schema:
-            type: string
-          required: true
-          description: Message ID
+        - $ref: '#/components/parameters/PhonePath'
+        - $ref: '#/components/parameters/MessageIdPath'
       requestBody:
         content:
           application/json:
@@ -1337,8 +1052,6 @@ paths:
               properties:
                 phone:
                   type: string
-                  example: '62819273192397132@s.whatsapp.net'
-                  description: Phone number with country code
               required:
                 - phone
       responses:
@@ -1348,51 +1061,53 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GenericResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  
-  /chats:
+
+  /api/{phone}/message/{message_id}/download:
     get:
-      operationId: listChats
+      operationId: messageDownload
+      tags:
+        - message
+      summary: Download media from message
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
+        - $ref: '#/components/parameters/MessageIdPath'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadMediaResponse'
+
+  # ============================================================================
+  # Chat Routes (per client)
+  # ============================================================================
+  /api/{phone}/chats:
+    get:
+      operationId: chatList
       tags:
         - chat
-      summary: Get list of chats
-      description: Retrieve a list of chat conversations with their basic information
+      summary: List chats
       parameters:
+        - $ref: '#/components/parameters/PhonePath'
         - name: limit
           in: query
           schema:
             type: integer
             default: 25
-            maximum: 100
-          description: Maximum number of chats to return
         - name: offset
           in: query
           schema:
             type: integer
             default: 0
-          description: Number of chats to skip (for pagination)
         - name: search
           in: query
           schema:
             type: string
-          description: Search chats by name
         - name: has_media
           in: query
           schema:
             type: boolean
-            default: false
-          description: Filter chats that contain media messages
       responses:
         '200':
           description: OK
@@ -1400,80 +1115,48 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChatListResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorUnauthorized'
-  /chat/{chat_jid}/messages:
+
+  /api/{phone}/chat/{chat_jid}/messages:
     get:
-      operationId: getChatMessages
+      operationId: chatMessages
       tags:
         - chat
-      summary: Get messages from a specific chat
-      description: Retrieve messages from a specific chat conversation with filtering options
+      summary: Get messages from chat
       parameters:
-        - in: path
-          name: chat_jid
-          schema:
-            type: string
-          required: true
-          description: Chat JID (e.g., phone@s.whatsapp.net for individual or groupid@g.us for group)
-          example: '6289685028129@s.whatsapp.net'
+        - $ref: '#/components/parameters/PhonePath'
+        - $ref: '#/components/parameters/ChatJidPath'
         - name: limit
           in: query
           schema:
             type: integer
             default: 50
-            maximum: 100
-          description: Maximum number of messages to return
         - name: offset
           in: query
           schema:
             type: integer
             default: 0
-          description: Number of messages to skip (for pagination)
+        - name: media_only
+          in: query
+          schema:
+            type: boolean
+        - name: search
+          in: query
+          schema:
+            type: string
         - name: start_time
           in: query
           schema:
             type: string
             format: date-time
-          description: Filter messages from this timestamp (ISO 8601 format)
         - name: end_time
           in: query
           schema:
             type: string
             format: date-time
-          description: Filter messages until this timestamp (ISO 8601 format)
-        - name: media_only
-          in: query
-          schema:
-            type: boolean
-            default: false
-          description: Only return messages with media content
         - name: is_from_me
           in: query
           schema:
             type: boolean
-          description: Filter messages by sender (true for messages sent by you, false for received messages). When both media_only=true and isFromMe=false are provided, media_only takes precedence and will return all media messages regardless of sender.
-        - name: search
-          in: query
-          schema:
-            type: string
-          description: Search messages by content text
       responses:
         '200':
           description: OK
@@ -1481,113 +1164,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChatMessagesResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorUnauthorized'
-        '404':
-          description: Chat Not Found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorNotFound'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /chat/{chat_jid}/label:
+
+  /api/{phone}/chat/{chat_jid}/pin:
     post:
-      operationId: labelChat
+      operationId: chatPin
       tags:
         - chat
-      summary: Label or unlabel a chat
-      description: Apply or remove a label from a chat conversation
+      summary: Pin or unpin chat
       parameters:
-        - in: path
-          name: chat_jid
-          schema:
-            type: string
-          required: true
-          description: Chat JID (e.g., phone@s.whatsapp.net for individual or groupid@g.us for group)
-          example: '6289685028129@s.whatsapp.net'
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                label_id:
-                  type: string
-                  example: 'label_123'
-                  description: Unique identifier for the label
-                label_name:
-                  type: string
-                  example: 'Important'
-                  description: Display name for the label
-                labeled:
-                  type: boolean
-                  example: true
-                  description: Whether to apply (true) or remove (false) the label
-              required:
-                - label_id
-                - label_name
-                - labeled
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/LabelChatResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorUnauthorized'
-        '404':
-          description: Chat Not Found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorNotFound'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /chat/{chat_jid}/pin:
-    post:
-      operationId: pinChat
-      tags:
-        - chat
-      summary: Pin or unpin a chat
-      description: Pin or unpin a chat conversation to the top of the chat list
-      parameters:
-        - in: path
-          name: chat_jid
-          schema:
-            type: string
-          required: true
-          description: Chat JID (e.g., phone@s.whatsapp.net for individual or groupid@g.us for group)
-          example: '6289685028129@s.whatsapp.net'
+        - $ref: '#/components/parameters/PhonePath'
+        - $ref: '#/components/parameters/ChatJidPath'
       requestBody:
         content:
           application/json:
@@ -1596,8 +1182,6 @@ paths:
               properties:
                 pinned:
                   type: boolean
-                  example: true
-                  description: Whether to pin (true) or unpin (false) the chat
               required:
                 - pinned
       responses:
@@ -1607,46 +1191,17 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PinChatResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorUnauthorized'
-        '404':
-          description: Chat Not Found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorNotFound'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  
-  /chat/{chat_jid}/disappearing:
+
+  /api/{phone}/chat/{chat_jid}/disappearing:
     post:
-      operationId: setDisappearingTimer
+      operationId: chatDisappearing
       tags:
         - chat
       summary: Set disappearing messages timer
-      description: Set or disable disappearing messages for a chat. Valid timer values are 0 (off), 86400 (24h), 604800 (7d), 7776000 (90d).
+      description: "Valid values: 0 (off), 86400 (24h), 604800 (7d), 7776000 (90d)"
       parameters:
-        - in: path
-          name: chat_jid
-          schema:
-            type: string
-          required: true
-          description: Chat JID (e.g., phone@s.whatsapp.net for individual or groupid@g.us for group)
-          example: '6289685028129@s.whatsapp.net'
+        - $ref: '#/components/parameters/PhonePath'
+        - $ref: '#/components/parameters/ChatJidPath'
       requestBody:
         content:
           application/json:
@@ -1656,7 +1211,6 @@ paths:
                 timer_seconds:
                   type: integer
                   example: 86400
-                  description: 'Timer in seconds: 0 (off), 86400 (24h), 604800 (7d), 7776000 (90d)'
               required:
                 - timer_seconds
       responses:
@@ -1666,57 +1220,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SetDisappearingTimerResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  
-  /group/info:
-    get:
-      operationId: groupInfo
-      tags:
-        - group
-      summary: Group Info
-      parameters:
-        - name: group_id
-          in: query
-          schema:
-            type: string
-          example: '120363025982934543@g.us'
-          description: WhatsApp Group ID
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GroupInfoResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /group:
+
+  # ============================================================================
+  # Group Routes (per client)
+  # ============================================================================
+  /api/{phone}/group:
     post:
-      operationId: createGroup
+      operationId: groupCreate
       tags:
         - group
-      summary: Create group and add participant
+      summary: Create group
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       requestBody:
         content:
           application/json:
@@ -1725,19 +1240,13 @@ paths:
               properties:
                 title:
                   type: string
-                  example: 'Example Group Title'
                 participants:
                   type: array
                   items:
                     type: string
-                    example:
-                      - '6819241294719274'
-                      - '6829241294719274'
-                      - '6839241294719274'
-                  example:
-                    - '6819241294719274'
-                    - '6829241294719274'
-                    - '6839241294719274'
+              required:
+                - title
+                - participants
       responses:
         '200':
           description: OK
@@ -1745,210 +1254,59 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CreateGroupResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /group/participants:
+
+  /api/{phone}/group/info:
     get:
-      operationId: getGroupParticipants
+      operationId: groupInfo
       tags:
         - group
-      summary: Get list of participants in a group
+      summary: Get group info
       parameters:
+        - $ref: '#/components/parameters/PhonePath'
         - name: group_id
           in: query
           required: true
           schema:
             type: string
-          example: '120363024512399999@g.us'
-          description: The group ID to fetch participants for
+          example: '120363025982934543@g.us'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GroupParticipantsResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-    post:
-      operationId: addParticipantToGroup
-      tags:
-        - group
-      summary: Adding more participants to group
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ManageParticipantRequest'
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ManageParticipantResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /group/participants/export:
+                $ref: '#/components/schemas/GroupInfoResponse'
+
+  /api/{phone}/group/info-from-link:
     get:
-      operationId: exportGroupParticipants
+      operationId: groupInfoFromLink
       tags:
         - group
-      summary: Export group participants as CSV
+      summary: Get group info from invite link
       parameters:
-        - name: group_id
+        - $ref: '#/components/parameters/PhonePath'
+        - name: link
           in: query
           required: true
           schema:
             type: string
-          example: '120363024512399999@g.us'
-          description: The group ID to export participants for
-      responses:
-        '200':
-          description: CSV stream containing the participants list
-          content:
-            text/csv:
-              schema:
-                type: string
-                format: binary
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /group/participants/remove:
-    post:
-      operationId: removeParticipantFromGroup
-      tags:
-        - group
-      summary: Remove participants from group
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ManageParticipantRequest'
+          example: 'https://chat.whatsapp.com/ABC123'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ManageParticipantResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /group/participants/promote:
+                $ref: '#/components/schemas/GroupInfoFromLinkResponse'
+
+  /api/{phone}/group/join-with-link:
     post:
-      operationId: promoteParticipantToAdmin
+      operationId: groupJoinWithLink
       tags:
         - group
-      summary: Promote participants to admin
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ManageParticipantRequest'
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ManageParticipantResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /group/participants/demote:
-    post:
-      operationId: demoteParticipantToMember
-      tags:
-        - group
-      summary: Demote participants to member
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ManageParticipantRequest'
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ManageParticipantResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /group/join-with-link:
-    post:
-      operationId: joinGroupWithLink
-      tags:
-        - group
-      summary: Join group with link
+      summary: Join group via invite link
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       requestBody:
         content:
           application/json:
@@ -1957,7 +1315,8 @@ paths:
               properties:
                 link:
                   type: string
-                  example: 'https://chat.whatsapp.com/whatsappKeyJoinGroup'
+              required:
+                - link
       responses:
         '200':
           description: OK
@@ -1965,66 +1324,171 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GenericResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /group/info-from-link:
-    get:
-      operationId: getGroupInfoFromLink
+
+  /api/{phone}/group/leave:
+    post:
+      operationId: groupLeave
       tags:
         - group
-      summary: Get group information from invitation link
-      description: Retrieve group information without joining the group using its invitation link
+      summary: Leave group
       parameters:
-        - name: link
-          in: query
-          required: true
-          schema:
-            type: string
-          example: 'https://chat.whatsapp.com/whatsappKeyJoinGroup'
-          description: WhatsApp group invitation link
+        - $ref: '#/components/parameters/PhonePath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                group_id:
+                  type: string
+              required:
+                - group_id
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GroupInfoFromLinkResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /group/participant-requests:
+                $ref: '#/components/schemas/GenericResponse'
+
+  /api/{phone}/group/participants:
     get:
-      operationId: getGroupParticipantRequests
+      operationId: groupParticipantsList
       tags:
         - group
-      summary: Get list of participant requests to join group
+      summary: List group participants
       parameters:
+        - $ref: '#/components/parameters/PhonePath'
         - name: group_id
           in: query
           required: true
           schema:
             type: string
-          example: '120363024512399999@g.us'
-          description: The group ID to get participant requests for
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupParticipantsResponse'
+    post:
+      operationId: groupParticipantsAdd
+      tags:
+        - group
+      summary: Add participants to group
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManageParticipantRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManageParticipantResponse'
+
+  /api/{phone}/group/participants/export:
+    get:
+      operationId: groupParticipantsExport
+      tags:
+        - group
+      summary: Export participants as CSV
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
+        - name: group_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+
+  /api/{phone}/group/participants/remove:
+    post:
+      operationId: groupParticipantsRemove
+      tags:
+        - group
+      summary: Remove participants
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManageParticipantRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManageParticipantResponse'
+
+  /api/{phone}/group/participants/promote:
+    post:
+      operationId: groupParticipantsPromote
+      tags:
+        - group
+      summary: Promote to admin
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManageParticipantRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManageParticipantResponse'
+
+  /api/{phone}/group/participants/demote:
+    post:
+      operationId: groupParticipantsDemote
+      tags:
+        - group
+      summary: Demote from admin
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManageParticipantRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManageParticipantResponse'
+
+  /api/{phone}/group/participant-requests:
+    get:
+      operationId: groupParticipantRequests
+      tags:
+        - group
+      summary: List join requests
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
+        - name: group_id
+          in: query
+          required: true
+          schema:
+            type: string
       responses:
         '200':
           description: OK
@@ -2032,24 +1496,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GroupParticipantRequestListResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /group/participant-requests/approve:
+
+  /api/{phone}/group/participant-requests/approve:
     post:
-      operationId: approveGroupParticipantRequest
+      operationId: groupParticipantRequestsApprove
       tags:
         - group
-      summary: Approve participant request to join group
+      summary: Approve join request
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       requestBody:
         content:
           application/json:
@@ -2058,14 +1513,10 @@ paths:
               properties:
                 group_id:
                   type: string
-                  example: '120363024512399999@g.us'
-                  description: The group ID
                 participants:
                   type: array
                   items:
                     type: string
-                  example: ['6281234567890']
-                  description: Array of participant WhatsApp IDs to approve
               required:
                 - group_id
                 - participants
@@ -2076,24 +1527,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GenericResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /group/participant-requests/reject:
+
+  /api/{phone}/group/participant-requests/reject:
     post:
-      operationId: rejectGroupParticipantRequest
+      operationId: groupParticipantRequestsReject
       tags:
         - group
-      summary: Reject participant request to join group
+      summary: Reject join request
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       requestBody:
         content:
           application/json:
@@ -2102,14 +1544,10 @@ paths:
               properties:
                 group_id:
                   type: string
-                  example: '120363024512399999@g.us'
-                  description: The group ID
                 participants:
                   type: array
                   items:
                     type: string
-                  example: ['6281234567890']
-                  description: Array of participant WhatsApp IDs to reject
               required:
                 - group_id
                 - participants
@@ -2120,58 +1558,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GenericResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /group/leave:
+
+  /api/{phone}/group/photo:
     post:
-      operationId: leaveGroup
-      tags:
-        - group
-      summary: Leave group
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                group_id:
-                  type: string
-                  example: '120363024512399999@g.us'
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GenericResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /group/photo:
-    post:
-      operationId: setGroupPhoto
+      operationId: groupPhoto
       tags:
         - group
       summary: Set group photo
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       requestBody:
         content:
           multipart/form-data:
@@ -2180,12 +1575,9 @@ paths:
               properties:
                 group_id:
                   type: string
-                  example: '120363024512399999@g.us'
-                  description: The group ID
                 photo:
                   type: string
                   format: binary
-                  description: Group photo to upload (JPEG format recommended). Leave empty to remove photo.
               required:
                 - group_id
       responses:
@@ -2195,24 +1587,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SetGroupPhotoResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /group/name:
+
+  /api/{phone}/group/name:
     post:
-      operationId: setGroupName
+      operationId: groupName
       tags:
         - group
       summary: Set group name
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       requestBody:
         content:
           application/json:
@@ -2221,12 +1604,8 @@ paths:
               properties:
                 group_id:
                   type: string
-                  example: '120363024512399999@g.us'
-                  description: The group ID
                 name:
                   type: string
-                  example: 'New Group Name'
-                  description: The new group name (max 25 characters)
                   maxLength: 25
               required:
                 - group_id
@@ -2238,25 +1617,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GenericResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /group/locked:
+
+  /api/{phone}/group/locked:
     post:
-      operationId: setGroupLocked
+      operationId: groupLocked
       tags:
         - group
-      summary: Set group locked status
-      description: Lock/unlock group so only admins can modify group info
+      summary: Lock/unlock group settings
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       requestBody:
         content:
           application/json:
@@ -2265,12 +1634,8 @@ paths:
               properties:
                 group_id:
                   type: string
-                  example: '120363024512399999@g.us'
-                  description: The group ID
                 locked:
                   type: boolean
-                  example: true
-                  description: Whether to lock the group (true) or unlock it (false)
               required:
                 - group_id
                 - locked
@@ -2281,25 +1646,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GenericResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /group/announce:
+
+  /api/{phone}/group/announce:
     post:
-      operationId: setGroupAnnounce
+      operationId: groupAnnounce
       tags:
         - group
-      summary: Set group announce mode
-      description: Enable/disable announce mode so only admins can send messages
+      summary: Set announce-only mode
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       requestBody:
         content:
           application/json:
@@ -2308,12 +1663,8 @@ paths:
               properties:
                 group_id:
                   type: string
-                  example: '120363024512399999@g.us'
-                  description: The group ID
                 announce:
                   type: boolean
-                  example: true
-                  description: Whether to enable announce mode (true) or disable it (false)
               required:
                 - group_id
                 - announce
@@ -2324,25 +1675,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GenericResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /group/topic:
+
+  /api/{phone}/group/topic:
     post:
-      operationId: setGroupTopic
+      operationId: groupTopic
       tags:
         - group
-      summary: Set group topic
-      description: Set or remove group topic/description
+      summary: Set group description
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       requestBody:
         content:
           application/json:
@@ -2351,12 +1692,8 @@ paths:
               properties:
                 group_id:
                   type: string
-                  example: '120363024512399999@g.us'
-                  description: The group ID
                 topic:
                   type: string
-                  example: 'Welcome to our group! Please follow the rules.'
-                  description: The group topic/description. Leave empty to remove the topic.
               required:
                 - group_id
       responses:
@@ -2366,38 +1703,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GenericResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /group/invite-link:
+
+  /api/{phone}/group/invite-link:
     get:
       operationId: groupInviteLink
       tags:
         - group
-      summary: Group Invite Link
+      summary: Get group invite link
       parameters:
+        - $ref: '#/components/parameters/PhonePath'
         - name: group_id
           in: query
+          required: true
           schema:
             type: string
-          required: true
-          description: WhatsApp Group ID
         - name: reset
           in: query
           schema:
             type: boolean
             default: false
-          example: false
-          description: Reset existing invite link
       responses:
         '200':
           description: OK
@@ -2405,24 +1729,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GetGroupInviteLinkResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
-  /newsletter/unfollow:
+
+  # ============================================================================
+  # Newsletter Routes (per client)
+  # ============================================================================
+  /api/{phone}/newsletter/unfollow:
     post:
-      operationId: unfollowNewsletter
+      operationId: newsletterUnfollow
       tags:
         - newsletter
-      summary: Unfollow newsletter
+      summary: Unfollow newsletter/channel
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
       requestBody:
         content:
           application/json:
@@ -2431,7 +1749,8 @@ paths:
               properties:
                 newsletter_id:
                   type: string
-                  example: '120363024512399999@newsletter'
+              required:
+                - newsletter_id
       responses:
         '200':
           description: OK
@@ -2439,26 +1758,89 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GenericResponse'
-        '400':
-          description: Bad Request
+
+  # ============================================================================
+  # History Routes (per client)
+  # ============================================================================
+  /api/{phone}/history/sync:
+    post:
+      operationId: historySync
+      tags:
+        - history
+      summary: Trigger history sync
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
+      responses:
+        '200':
+          description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorBadRequest'
-        '500':
-          description: Internal Server Error
+                $ref: '#/components/schemas/GenericResponse'
+
+  /api/{phone}/history/status:
+    get:
+      operationId: historyStatus
+      tags:
+        - history
+      summary: Get sync status
+      parameters:
+        - $ref: '#/components/parameters/PhonePath'
+      responses:
+        '200':
+          description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorInternalServer'
+                $ref: '#/components/schemas/HistoryStatusResponse'
 
 components:
   securitySchemes:
-    basicAuth:
+    bearerAuth:
       type: http
-      scheme: basic
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    PhonePath:
+      name: phone
+      in: path
+      required: true
+      schema:
+        type: string
+      description: WhatsApp client phone number (without + prefix)
+      example: '628192191202'
+
+    AdminPhonePath:
+      name: phone
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Client phone number
+      example: '628192191202'
+
+    MessageIdPath:
+      name: message_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Message ID
+      example: '3EB0B430B6F8F1D0E053AC120E0A9E5C'
+
+    ChatJidPath:
+      name: chat_jid
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Chat JID
+      example: '6289685028129@s.whatsapp.net'
+
   schemas:
-    CreateGroupResponse:
+    # Auth Schemas
+    AuthLoginResponse:
       type: object
       properties:
         code:
@@ -2466,380 +1848,298 @@ components:
           example: SUCCESS
         message:
           type: string
-          example: Success get list groups
+          example: Login successful
         results:
           type: object
           properties:
-            group_id:
+            access_token:
               type: string
-              example: 1203632782168851111@g.us
-    GroupInfoFromLinkResponse:
-      type: object
-      properties:
-        code:
-          type: string
-          example: SUCCESS
-        message:
-          type: string
-          example: Success get group info from link
-        results:
-          type: object
-          properties:
-            group_id:
+            refresh_token:
               type: string
-              example: '120363024512399999@g.us'
-              description: The group ID
-            name:
-              type: string
-              example: 'Example Group Name'
-              description: The group name
-            topic:
-              type: string
-              example: 'Welcome to our group! Please follow the rules.'
-              description: The group topic/description
-            created_at:
-              type: string
-              format: date-time
-              example: '2024-01-15T10:30:00Z'
-              description: When the group was created
-            participant_count:
+            expires_in:
               type: integer
-              example: 25
-              description: Number of participants in the group
-            is_locked:
-              type: boolean
-              example: false
-              description: Whether the group is locked (only admins can modify group info)
-            is_announce:
-              type: boolean
-              example: false
-              description: Whether the group is in announce mode (only admins can send messages)
-            is_ephemeral:
-              type: boolean
-              example: false
-              description: Whether the group has disappearing messages enabled
-            description:
-              type: string
-              example: 'This group is for discussing project updates'
-              description: Additional description of the group
-    ManageParticipantRequest:
-      type: object
-      properties:
-        group_id:
-          type: string
-          example: 1203632782168851111@g.us
-        participants:
-          type: array
-          items:
-            type: string
-          example:
-            - '6819241294719274'
-            - '6829241294719274'
-            - '6839241294719274'
-    ManageParticipantResponse:
-      type: object
-      additionalProperties: false
-      properties:
-        code:
-          type: string
-          example: SUCCESS
-        message:
-          type: string
-          example: Success get list groups
-        results:
-          type: array
-          items:
-            type: object
-            additionalProperties: false
-            properties:
-              participant:
-                type: string
-                example: '6289987391723@s.whatsapp.net'
-              status:
-                type: string
-                example: success
-              message:
-                type: string
-                example: Participant added
-    GroupParticipantsResponse:
-      type: object
-      additionalProperties: false
-      properties:
-        code:
-          type: string
-          example: SUCCESS
-        message:
-          type: string
-          example: Success getting group participants
-        results:
-          $ref: '#/components/schemas/GroupParticipantsResult'
-    GroupParticipantsResult:
-      type: object
-      additionalProperties: false
-      properties:
-        group_id:
-          type: string
-          example: '120363024512399999@g.us'
-        name:
-          type: string
-          example: My Awesome Group
-        participants:
-          type: array
-          items:
-            $ref: '#/components/schemas/GroupParticipantItem'
-    GroupParticipantItem:
-      type: object
-      additionalProperties: false
-      properties:
-        jid:
-          type: string
-          example: '6289987391723@s.whatsapp.net'
-        phone_number:
-          type: string
-          example: '6289987391723@s.whatsapp.net'
-        lid:
-          type: string
-          nullable: true
-          example: '12345@lid'
-        display_name:
-          type: string
-          nullable: true
-          example: Anonymous Member
-        is_admin:
-          type: boolean
-          example: true
-        is_super_admin:
-          type: boolean
-          example: false
-    SetGroupPhotoResponse:
-      type: object
-      properties:
-        code:
-          type: string
-          example: SUCCESS
-        message:
-          type: string
-          example: Success update group photo
-        results:
-          type: object
-          properties:
-            picture_id:
-              type: string
-              example: "1647874123"
-              description: The ID of the uploaded picture, or 'remove' if photo was removed
-            message:
-              type: string
-              example: Success update group photo
+              example: 3600
 
-    UserGroupResponse:
+    # Admin Schemas
+    StorageStatsResponse:
       type: object
       properties:
         code:
           type: string
-          example: SUCCESS
         message:
           type: string
-          example: Success get list groups
         results:
           type: object
           properties:
-            data:
-              type: array
-              items:
+            database_size:
+              type: string
+            database_size_bytes:
+              type: integer
+            total_chats:
+              type: integer
+            total_messages:
+              type: integer
+
+    CleanupResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        results:
+          type: object
+          properties:
+            chats_deleted:
+              type: integer
+            messages_deleted:
+              type: integer
+
+    VacuumResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        results:
+          type: object
+          properties:
+            size_before:
+              type: string
+            size_after:
+              type: string
+            reclaimed:
+              type: string
+
+    DeleteChatsResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        results:
+          type: object
+          properties:
+            chats_deleted:
+              type: integer
+            messages_deleted:
+              type: integer
+
+    ClientListResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        results:
+          type: object
+          properties:
+            client_count:
+              type: integer
+            clients:
+              type: object
+              additionalProperties:
                 type: object
-                properties:
-                  JID:
-                    type: string
-                  OwnerJID:
-                    type: string
-                  Name:
-                    type: string
-                  NameSetAt:
-                    type: string
-                  NameSetBy:
-                    type: string
-                  GroupCreated:
-                    type: string
-                  ParticipantVersionID:
-                    type: string
-                  Participants:
-                    type: array
-                    items:
-                      properties:
-                        JID:
-                          type: string
-                        IsAdmin:
-                          type: boolean
-                        IsSuperAdmin:
-                          type: boolean
-                        Error:
-                          type: number
 
-
-    UserInfoResponse:
+    ClientStatusResponse:
       type: object
-      required:
-        - code
-        - message
-        - results
       properties:
         code:
           type: string
-          example: SUCCESS
         message:
           type: string
-          example: Success
         results:
           type: object
           properties:
-            verified_name:
+            phone:
               type: string
-              example: Aldino Kemal
+            is_connected:
+              type: boolean
+            is_logged_in:
+              type: boolean
+            device_id:
+              type: string
+
+    ConnectionStatusResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        results:
+          type: object
+          properties:
+            is_connected:
+              type: boolean
+            is_logged_in:
+              type: boolean
+
+    HistoryStatusResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        results:
+          type: object
+          properties:
             status:
               type: string
-              example: Hello World
-            picture_id:
+            last_sync:
               type: string
-              example: 1651459152
-            devices:
-              type: array
-              items:
-                type: object
-                properties:
-                  User:
-                    type: string
-                    example: 6289685021291
-                  Agent:
-                    type: integer
-                    example: 0
-                  Device:
-                    type: string
-                    example: UNKNOWN
-                  Server:
-                    type: string
-                    example: s.whatsapp.net
-                  AD:
-                    type: boolean
-                    example: true
-    UserAvatarResponse:
+
+    DownloadMediaResponse:
       type: object
       properties:
         code:
           type: string
-          example: SUCCESS
         message:
           type: string
-          example: Success
         results:
           type: object
           properties:
             url:
               type: string
-              example: 'https://pps.whatsapp.net/v/t61.24694-24/181358562_385581386633509_6230178822944778044_n.jpg?ccb=11-4&oh=df36c5b990497b8a5758a0f1ad8118a8&oe=620AA726'
-            id:
+            filename:
               type: string
-              example: '1635239861'
-            type:
+            mime_type:
               type: string
-              example: 'image'
-    UserPrivacyResponse:
+
+    # Send Request Schemas
+    SendMessageRequest:
       type: object
       properties:
-        code:
+        phone:
           type: string
-          example: SUCCESS
+          example: '6289685028129@s.whatsapp.net'
         message:
           type: string
-          example: Success get privacy
-        results:
-          type: object
-          properties:
-            group_add:
-              type: string
-              example: all
-            last_seen:
-              type: string
-              example: null
-            status:
-              type: string
-              example: all
-            profile:
-              type: string
-              example: all
-            read_receipts:
-              type: string
-              example: all
-    SendResponse:
+          example: 'Hello World'
+        reply_message_id:
+          type: string
+        is_forwarded:
+          type: boolean
+        duration:
+          type: integer
+          description: Disappearing message duration in seconds
+
+    SendImageRequest:
       type: object
       properties:
-        code:
+        phone:
           type: string
-          example: SUCCESS
-        message:
+        caption:
           type: string
-          example: Success
-        results:
-          type: object
-          properties:
-            message_id:
-              type: string
-              example: '3EB0B430B6F8F1D0E053AC120E0A9E5C'
-            status:
-              type: string
-              example: '<feature> success ....'
-    DeviceResponse:
+        view_once:
+          type: boolean
+        image:
+          type: string
+          format: binary
+        image_url:
+          type: string
+        compress:
+          type: boolean
+
+    SendFileRequest:
       type: object
       properties:
-        code:
+        phone:
           type: string
-          example: SUCCESS
-        message:
+        caption:
           type: string
-          example: Fetch device success
-        results:
+        file:
+          type: string
+          format: binary
+
+    SendVideoRequest:
+      type: object
+      properties:
+        phone:
+          type: string
+        caption:
+          type: string
+        view_once:
+          type: boolean
+        video:
+          type: string
+          format: binary
+        video_url:
+          type: string
+        compress:
+          type: boolean
+
+    SendAudioRequest:
+      type: object
+      properties:
+        phone:
+          type: string
+        audio:
+          type: string
+          format: binary
+        audio_url:
+          type: string
+
+    SendStickerRequest:
+      type: object
+      properties:
+        phone:
+          type: string
+        sticker:
+          type: string
+          format: binary
+        sticker_url:
+          type: string
+
+    SendContactRequest:
+      type: object
+      properties:
+        phone:
+          type: string
+        contact_name:
+          type: string
+        contact_phone:
+          type: string
+
+    SendLinkRequest:
+      type: object
+      properties:
+        phone:
+          type: string
+        link:
+          type: string
+        caption:
+          type: string
+
+    SendLocationRequest:
+      type: object
+      properties:
+        phone:
+          type: string
+        latitude:
+          type: string
+        longitude:
+          type: string
+
+    SendPollRequest:
+      type: object
+      properties:
+        phone:
+          type: string
+        question:
+          type: string
+        options:
           type: array
           items:
-            type: object
-            properties:
-              name:
-                type: string
-                example: 'Aldino Kemal'
-              device:
-                type: string
-                example: '628960561XXX.0:64@s.whatsapp.net'
-    LoginWithCodeResponse:
-      type: object
-      properties:
-        code:
-          type: string
-          example: SUCCESS
-        message:
-          type: string
-          example: Success
-        results:
-          type: object
-          properties:
-            pair_code:
-              type: string
-              example: ABCD-1234
-    LoginResponse:
-      type: object
-      properties:
-        code:
-          type: string
-          example: SUCCESS
-        message:
-          type: string
-          example: Success
-        results:
-          type: object
-          properties:
-            qr_duration:
-              type: integer
-              example: 30
-            qr_link:
-              type: string
-              example: 'http://localhost:3000/statics/images/qrcode/scan-qr-b0b7bb43-9a22-455a-814f-5a225c743310.png'
+            type: string
+        max_answer:
+          type: integer
+
+    # Response Schemas
     GenericResponse:
       type: object
       properties:
@@ -2848,343 +2148,161 @@ components:
           example: SUCCESS
         message:
           type: string
-          example: Success
         results:
-          type: string
-          example: null
-    ErrorInternalServer:
+          type: object
+          nullable: true
+
+    SendResponse:
       type: object
       properties:
         code:
           type: string
-          example: INTERNAL_SERVER_ERROR
-          description: 'SYSTEM_CODE_ERROR'
+          example: SUCCESS
         message:
           type: string
-          example: you are not loggin
-          description: 'Detail error message'
         results:
           type: object
-          example: null
-          description: 'additional data'
-    ErrorBadRequest:
+          properties:
+            message_id:
+              type: string
+            status:
+              type: string
+
+    LoginResponse:
       type: object
       properties:
         code:
           type: string
-          example: 400
-          description: 'HTTP Status Code'
         message:
           type: string
-          example: field cannot be blank
-          description: 'Detail error message'
         results:
           type: object
-          example: null
-          description: 'additional data'
-    ErrorUnauthorized:
+          properties:
+            qr_duration:
+              type: integer
+            qr_link:
+              type: string
+
+    LoginWithCodeResponse:
       type: object
       properties:
         code:
           type: string
-          example: 401
-          description: 'HTTP Status Code'
         message:
           type: string
-          example: Unauthorized access
-          description: 'Detail error message'
         results:
           type: object
-          example: null
-          description: 'additional data'
-    ErrorNotFound:
+          properties:
+            pair_code:
+              type: string
+
+    DeviceResponse:
       type: object
       properties:
         code:
           type: string
-          example: 404
-          description: 'HTTP Status Code'
         message:
           type: string
-          example: Chat not found
-          description: 'Detail error message'
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              device:
+                type: string
+
+    UserInfoResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
         results:
           type: object
-          example: null
-          description: 'additional data'
+          properties:
+            verified_name:
+              type: string
+            status:
+              type: string
+            picture_id:
+              type: string
+
+    UserAvatarResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        results:
+          type: object
+          properties:
+            url:
+              type: string
+            id:
+              type: string
+
+    UserPrivacyResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        results:
+          type: object
+          properties:
+            group_add:
+              type: string
+            last_seen:
+              type: string
+            status:
+              type: string
+            profile:
+              type: string
+            read_receipts:
+              type: string
+
+    UserGroupResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        results:
+          type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: object
+
     NewsletterResponse:
       type: object
       properties:
         code:
           type: string
-          example: "SUCCESS"
         message:
           type: string
-          example: "Success get list newsletter"
         results:
           type: object
           properties:
             data:
               type: array
               items:
-                $ref: '#/components/schemas/Newsletter'
-    Newsletter:
-      type: object
-      properties:
-        id:
-          type: string
-          example: "120363144038483540@newsletter"
-        state:
-          type: object
-          properties:
-            type:
-              type: string
-              example: "active"
-        thread_metadata:
-          type: object
-          properties:
-            creation_time:
-              type: string
-              example: "1688746895"
-            invite:
-              type: string
-              example: "0029Va4K0PZ5a245NkngBA2M"
-            name:
-              type: object
-              properties:
-                text:
-                  type: string
-                  example: "WhatsApp"
-                id:
-                  type: string
-                  example: "1688746895480511"
-                update_time:
-                  type: string
-                  example: "1688746895480511"
-            description:
-              type: object
-              properties:
-                text:
-                  type: string
-                  example: "WhatsApp's official channel. Follow for our latest feature launches, updates, exclusive drops and more."
-                id:
-                  type: string
-                  example: "1689653839450668"
-                update_time:
-                  type: string
-                  example: "1689653839450668"
-            subscribers_count:
-              type: string
-              example: "0"
-            verification:
-              type: string
-              example: "verified"
-            picture:
-              type: object
-              properties:
-                url:
-                  type: string
-                  example: ""
-                id:
-                  type: string
-                  example: "1707950960975554"
-                type:
-                  type: string
-                  example: "IMAGE"
-                direct_path:
-                  type: string
-                  example: "/v/t61.24694-24/416962407_970228831134395_8869146381947923973_n.jpg?ccb=11-4&oh=01_Q5AaIIvOIeu3l0HCZWILrmr-dGR_vXFqnhUeytw0-ojPc4hL&oe=670D95B1&_nc_sid=5e03e0&_nc_cat=110"
-            preview:
-              type: object
-              properties:
-                url:
-                  type: string
-                  example: ""
-                id:
-                  type: string
-                  example: "1707950960975554"
-                type:
-                  type: string
-                  example: "PREVIEW"
-                direct_path:
-                  type: string
-                  example: "/v/t61.24694-24/416962407_970228831134395_8869146381947923973_n.jpg?stp=dst-jpg_s192x192&ccb=11-4&oh=01_Q5AaIHO-DQklqm3q3awF7xwji_WAn9DkgZASQA0B2Ct0qbSa&oe=670D95B1&_nc_sid=5e03e0&_nc_cat=110"
-            settings:
-              type: object
-              properties:
-                reaction_codes:
-                  type: object
-                  properties:
-                    value:
-                      type: string
-                      example: "ALL"
-        viewer_metadata:
-          type: object
-          properties:
-            mute:
-              type: string
-              example: "off"
-            role:
-              type: string
-              example: "subscriber"
+                type: object
+
     MyListContactsResponse:
       type: object
       properties:
         code:
           type: string
-          example: "SUCCESS"
         message:
           type: string
-          example: "Success get list contacts"
-        results:
-          type: object
-          properties:
-            data:
-              type: array
-              items:
-                $ref: '#/components/schemas/MyListContacts'
-    MyListContacts:
-      type: object
-      properties:
-        jid:
-          type: string
-          example: "628123123123123@s.whatsapp.net"
-        name:
-          type: string
-          example: "Aldino Kemal"
-    GroupResponse:
-      type: object
-      properties:
-        code:
-          type: string
-          example: "SUCCESS"
-        message:
-          type: string
-          example: "Success get list groups"
-        results:
-          type: object
-          properties:
-            data:
-              type: array
-              items:
-                $ref: '#/components/schemas/Group'
-    Group:
-      type: object
-      properties:
-        JID:
-          type: string
-          example: "120363347168689807@g.us"
-        OwnerJID:
-          type: string
-          example: "6288228744537@s.whatsapp.net"
-        Name:
-          type: string
-          example: "Example Group"
-        NameSetAt:
-          type: string
-          format: date-time
-          example: "2024-10-11T21:27:29+07:00"
-        NameSetBy:
-          type: string
-          example: "6288228744537@s.whatsapp.net"
-        Topic:
-          type: string
-          example: ""
-        TopicID:
-          type: string
-          example: ""
-        TopicSetAt:
-          type: string
-          format: date-time
-          example: "0001-01-01T00:00:00Z"
-        TopicSetBy:
-          type: string
-          example: ""
-        TopicDeleted:
-          type: boolean
-          example: false
-        IsLocked:
-          type: boolean
-          example: false
-        IsAnnounce:
-          type: boolean
-          example: false
-        AnnounceVersionID:
-          type: string
-          example: "1728656849439709"
-        IsEphemeral:
-          type: boolean
-          example: false
-        DisappearingTimer:
-          type: integer
-          example: 0
-        IsIncognito:
-          type: boolean
-          example: false
-        IsParent:
-          type: boolean
-          example: false
-        DefaultMembershipApprovalMode:
-          type: string
-          example: ""
-        LinkedParentJID:
-          type: string
-          example: ""
-        IsDefaultSubGroup:
-          type: boolean
-          example: false
-        IsJoinApprovalRequired:
-          type: boolean
-          example: false
-        GroupCreated:
-          type: string
-          format: date-time
-          example: "2024-10-11T21:27:29+07:00"
-        ParticipantVersionID:
-          type: string
-          example: "1728656849439790"
-        Participants:
-          type: array
-          items:
-            $ref: '#/components/schemas/Participant'
-        MemberAddMode:
-          type: string
-          example: "admin_add"
-
-    Participant:
-      type: object
-      properties:
-        JID:
-          type: string
-          example: "6288228744537@s.whatsapp.net"
-        LID:
-          type: string
-          example: "20036609675500@lid"
-        IsAdmin:
-          type: boolean
-          example: true
-        IsSuperAdmin:
-          type: boolean
-          example: true
-        DisplayName:
-          type: string
-          example: ""
-        Error:
-          type: integer
-          example: 0
-        AddRequest:
-          type: string
-          example: null
-    
-    GroupParticipantRequestListResponse:
-      type: object
-      properties:
-        code:
-          type: string
-          example: "SUCCESS"
-        message:
-          type: string
-          example: "Success getting list requested participants"
         results:
           type: object
           properties:
@@ -3195,106 +2313,46 @@ components:
                 properties:
                   jid:
                     type: string
-                    example: "6289685024091@s.whatsapp.net"
-                  phone_number:
+                  name:
                     type: string
-                    example: "6289685024091"
-                  display_name:
-                    type: string
-                    example: "John Doe"
-                  requested_at:
-                    type: string
-                    format: date-time
-                    example: "2024-10-11T21:27:29+07:00"
+
     UserCheckResponse:
       type: object
       properties:
         code:
           type: string
-          example: SUCCESS
         message:
           type: string
-          example: Success check user
         results:
           type: object
           properties:
             is_on_whatsapp:
               type: boolean
-              example: true
+
     BusinessProfileResponse:
       type: object
       properties:
         code:
           type: string
-          example: SUCCESS
         message:
           type: string
-          example: Success get business profile
         results:
           type: object
           properties:
             jid:
               type: string
-              example: '6289685028129@s.whatsapp.net'
-              description: Business account JID
             email:
               type: string
-              example: 'business@example.com'
-              description: Business email address
             address:
               type: string
-              example: '123 Business Street, City, Country'
-              description: Business physical address
-            categories:
-              type: array
-              description: Business categories
-              items:
-                type: object
-                properties:
-                  id:
-                    type: string
-                    example: 'retail'
-                  name:
-                    type: string
-                    example: 'Retail Store'
-            profile_options:
-              type: object
-              description: Additional profile options
-              example:
-                website: 'https://example.com'
-                description: 'Business description'
-            business_hours_timezone:
-              type: string
-              example: 'Asia/Jakarta'
-              description: Business hours timezone
-            business_hours:
-              type: array
-              description: Business operating hours
-              items:
-                type: object
-                properties:
-                  day_of_week:
-                    type: string
-                    example: 'monday'
-                  mode:
-                    type: string
-                    example: 'open'
-                  open_time:
-                    type: string
-                    example: '09:00'
-                  close_time:
-                    type: string
-                    example: '18:00'
-    
+
     ChatListResponse:
       type: object
       properties:
         code:
           type: string
-          example: SUCCESS
         message:
           type: string
-          example: Success get chat list
         results:
           type: object
           properties:
@@ -3303,58 +2361,27 @@ components:
               items:
                 $ref: '#/components/schemas/Chat'
             pagination:
-              type: object
-              properties:
-                limit:
-                  type: integer
-                  example: 25
-                offset:
-                  type: integer
-                  example: 0
-                total:
-                  type: integer
-                  example: 150
+              $ref: '#/components/schemas/Pagination'
 
     Chat:
       type: object
       properties:
         jid:
           type: string
-          example: '6289685028129@s.whatsapp.net'
-          description: Chat JID identifier
         name:
           type: string
-          example: 'John Doe'
-          description: Chat display name
         last_message_time:
           type: string
-          format: date-time
-          example: '2024-01-15T10:30:00Z'
-          description: Timestamp of the last message
         ephemeral_expiration:
           type: integer
-          example: 0
-          description: Ephemeral message expiration time in seconds (0 = disabled)
-        created_at:
-          type: string
-          format: date-time
-          example: '2024-01-10T08:00:00Z'
-          description: Chat creation timestamp
-        updated_at:
-          type: string
-          format: date-time
-          example: '2024-01-15T10:30:00Z'
-          description: Chat last update timestamp
 
     ChatMessagesResponse:
       type: object
       properties:
         code:
           type: string
-          example: SUCCESS
         message:
           type: string
-          example: Success get chat messages
         results:
           type: object
           properties:
@@ -3363,17 +2390,7 @@ components:
               items:
                 $ref: '#/components/schemas/ChatMessage'
             pagination:
-              type: object
-              properties:
-                limit:
-                  type: integer
-                  example: 50
-                offset:
-                  type: integer
-                  example: 0
-                total:
-                  type: integer
-                  example: 1250
+              $ref: '#/components/schemas/Pagination'
             chat_info:
               $ref: '#/components/schemas/Chat'
 
@@ -3382,188 +2399,262 @@ components:
       properties:
         id:
           type: string
-          example: '3EB0B430B6F8F1D0E053AC120E0A9E5C'
-          description: Message ID
         chat_jid:
           type: string
-          example: '6289685028129@s.whatsapp.net'
-          description: Chat JID this message belongs to
         sender_jid:
           type: string
-          example: '6289685028129@s.whatsapp.net'
-          description: Sender JID
         content:
           type: string
-          example: 'Hello, how are you?'
-          description: Message text content
         timestamp:
           type: string
-          format: date-time
-          example: '2024-01-15T10:30:00Z'
-          description: Message timestamp
         is_from_me:
           type: boolean
-          example: false
-          description: Whether this message was sent by the current user
         media_type:
           type: string
-          example: 'image'
-          nullable: true
-          description: Type of media (image, video, audio, document, etc.)
         filename:
           type: string
-          example: 'photo.jpg'
-          nullable: true
-          description: Original filename for media messages
         url:
           type: string
-          example: 'https://media.example.com/file.jpg'
-          nullable: true
-          description: Media file URL
-        file_length:
-          type: integer
-          example: 1024768
-          nullable: true
-          description: File size in bytes for media messages
-        created_at:
-          type: string
-          format: date-time
-          example: '2024-01-15T10:30:00Z'
-          description: Record creation timestamp
-        updated_at:
-          type: string
-          format: date-time
-          example: '2024-01-15T10:30:00Z'
-          description: Record last update timestamp
 
-    LabelChatResponse:
+    Pagination:
       type: object
       properties:
-        code:
-          type: string
-          example: SUCCESS
-        message:
-          type: string
-          example: Chat labeled successfully with label 'Important'
-        results:
-          type: object
-          properties:
-            status:
-              type: string
-              example: success
-            message:
-              type: string
-              example: Chat labeled successfully with label 'Important'
-            chat_jid:
-              type: string
-              example: '6289685028129@s.whatsapp.net'
-            label_id:
-              type: string
-              example: 'label_123'
-            labeled:
-              type: boolean
-              example: true
+        limit:
+          type: integer
+        offset:
+          type: integer
+        total:
+          type: integer
 
     PinChatResponse:
       type: object
       properties:
         code:
           type: string
-          example: SUCCESS
         message:
           type: string
-          example: Chat pinned successfully
         results:
           type: object
           properties:
             status:
               type: string
-              example: success
-            message:
-              type: string
-              example: Chat pinned successfully
             chat_jid:
               type: string
-              example: '6289685028129@s.whatsapp.net'
             pinned:
               type: boolean
-              example: true
+
     SetDisappearingTimerResponse:
       type: object
       properties:
-        status:
-          type: integer
-          example: 200
         code:
           type: string
-          example: SUCCESS
         message:
           type: string
-          example: Disappearing messages set to 86400 seconds
         results:
           type: object
           properties:
             status:
               type: string
-              example: success
-            message:
-              type: string
-              example: Disappearing messages set to 86400 seconds
             chat_jid:
               type: string
-              example: '6289685028129@s.whatsapp.net'
             timer_seconds:
               type: integer
-              example: 86400
+
+    CreateGroupResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        results:
+          type: object
+          properties:
+            group_id:
+              type: string
+
     GroupInfoResponse:
       type: object
       properties:
-        status:
-          type: integer
-          example: 200
         code:
           type: string
-          example: SUCCESS
         message:
           type: string
-          example: Success get group info
         results:
           type: object
-          description: Group information object (structure may vary)
-          additionalProperties: true
-    UserGroupInfoResponse:
+
+    GroupInfoFromLinkResponse:
       type: object
       properties:
-        status:
-          type: integer
-          example: 200
         code:
           type: string
-          example: SUCCESS
         message:
           type: string
-          example: Success get group info
         results:
           type: object
-          description: Group information object (structure may vary)
-          additionalProperties: true
+          properties:
+            group_id:
+              type: string
+            name:
+              type: string
+            topic:
+              type: string
+            participant_count:
+              type: integer
+
+    GroupParticipantsResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        results:
+          type: object
+          properties:
+            group_id:
+              type: string
+            name:
+              type: string
+            participants:
+              type: array
+              items:
+                type: object
+                properties:
+                  jid:
+                    type: string
+                  is_admin:
+                    type: boolean
+                  is_super_admin:
+                    type: boolean
+
+    ManageParticipantRequest:
+      type: object
+      properties:
+        group_id:
+          type: string
+        participants:
+          type: array
+          items:
+            type: string
+
+    ManageParticipantResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              participant:
+                type: string
+              status:
+                type: string
+              message:
+                type: string
+
+    GroupParticipantRequestListResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        results:
+          type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: object
+                properties:
+                  jid:
+                    type: string
+                  phone_number:
+                    type: string
+                  display_name:
+                    type: string
+                  requested_at:
+                    type: string
+
+    SetGroupPhotoResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        results:
+          type: object
+          properties:
+            picture_id:
+              type: string
+
     GetGroupInviteLinkResponse:
       type: object
       properties:
         code:
           type: string
-          example: SUCCESS
         message:
           type: string
-          example: Success get group invite link
         results:
           type: object
           properties:
             invite_link:
               type: string
-              example: 'https://chat.whatsapp.com/ABC123...'
-              description: The group invite link
             group_id:
               type: string
-              example: '120363025982934543@g.us'
-              description: The group ID
+
+    # Error Schemas
+    ErrorBadRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          example: "400"
+        message:
+          type: string
+        results:
+          type: object
+          nullable: true
+
+    ErrorUnauthorized:
+      type: object
+      properties:
+        code:
+          type: string
+          example: "401"
+        message:
+          type: string
+          example: Unauthorized
+        results:
+          type: object
+          nullable: true
+
+    ErrorNotFound:
+      type: object
+      properties:
+        code:
+          type: string
+          example: "404"
+        message:
+          type: string
+        results:
+          type: object
+          nullable: true
+
+    ErrorInternalServer:
+      type: object
+      properties:
+        code:
+          type: string
+          example: INTERNAL_SERVER_ERROR
+        message:
+          type: string
+        results:
+          type: object
+          nullable: true
