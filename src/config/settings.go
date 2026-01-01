@@ -7,15 +7,23 @@ import (
 var (
 	// Project version - independent fork of aldinokemal/go-whatsapp-web-multidevice
 	// Diverged at upstream v7.11.0, now maintained independently with different architecture
-	AppVersion             = "v3.0.0" // Major version bump for multi-client architecture
-	AppPort                = "3000"
-	AppHost                = "0.0.0.0"
-	AppDebug               = false
-	AppOs                  = "GoWA-SSE" // Identifies this as the SSE-enabled fork
-	AppPlatform            = waCompanionReg.DeviceProps_PlatformType(1)
-	AppBasicAuthCredential []string
-	AppBasePath            = ""
-	AppTrustedProxies      []string // Trusted proxy IP ranges (e.g., "0.0.0.0/0" for all, or specific CIDRs)
+	AppVersion        = "v3.0.0" // Major version bump for multi-client architecture
+	AppPort           = "3000"
+	AppHost           = "0.0.0.0"
+	AppDebug          = false
+	AppOs             = "GoWA-SSE" // Identifies this as the SSE-enabled fork
+	AppPlatform       = waCompanionReg.DeviceProps_PlatformType(1)
+	AppBasePath       = ""
+	AppTrustedProxies []string // Trusted proxy IP ranges (e.g., "0.0.0.0/0" for all, or specific CIDRs)
+
+	// Authentication configuration
+	// AuthSecret is used to sign JWT tokens (generate with: openssl rand -base64 32)
+	AuthSecret       = ""
+	AuthUsername     = "admin"
+	AuthPasswordHash = "" // bcrypt hash of password (generate with: ./whatsapp hash-password)
+	// Token expiry durations
+	AuthAccessTokenExpiry  = "1h"  // Access token validity (e.g., "1h", "30m")
+	AuthRefreshTokenExpiry = "168h" // Refresh token validity (7 days)
 
 	PathQrCode    = "statics/qrcode"
 	PathSendItems = "statics/senditems"

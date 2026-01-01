@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/ui/rest"
@@ -13,7 +12,6 @@ import (
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/ui/websocket"
 	"github.com/dustin/go-humanize"
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/basicauth"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/filesystem"
 	"github.com/gofiber/fiber/v2/middleware/logger"
@@ -22,7 +20,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// rootCmd represents the base command when called without any subcommands
 var restCmd = &cobra.Command{
 	Use:   "rest",
 	Short: "Start REST API server for WhatsApp Web",
@@ -33,13 +30,23 @@ var restCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(restCmd)
 }
+
 func restServer(_ *cobra.Command, _ []string) {
 	logrus.Infof("🚀 Starting REST API mode (%s)...", config.AppVersion)
 
+	// Validate auth configuration
+	if config.AuthSecret == "" {
+		logrus.Warn("⚠️  AUTH_SECRET not set - authentication disabled. Generate with: openssl rand -base64 32")
+	}
+	if config.AuthPasswordHash == "" && config.AuthSecret != "" {
+		logrus.Warn("⚠️  AUTH_PASSWORD_HASH not set - authentication disabled. Generate with: ./whatsapp hash-password")
+	}
+
 	engine := html.NewFileSystem(http.FS(EmbedIndex), ".html")
-	engine.AddFunc("isEnableBasicAuth", func(token any) bool {
-		return token != nil
+	engine.AddFunc("isAuthenticated", func(username any) bool {
+		return username != nil && username != ""
 	})
+
 	fiberConfig := fiber.Config{
 		Views:                   engine,
 		EnableTrustedProxyCheck: true,
@@ -55,6 +62,7 @@ func restServer(_ *cobra.Command, _ []string) {
 
 	app := fiber.New(fiberConfig)
 
+	// Static assets (public)
 	app.Static(config.AppBasePath+"/statics", "./statics")
 	app.Use(config.AppBasePath+"/components", filesystem.New(filesystem.Config{
 		Root:       http.FS(EmbedViews),
@@ -67,47 +75,62 @@ func restServer(_ *cobra.Command, _ []string) {
 		Browse:     true,
 	}))
 
+	// Global middleware
 	app.Use(middleware.Recovery())
-	app.Use(middleware.BasicAuth())
 	if config.AppDebug {
 		app.Use(logger.New())
 	}
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "*",
-		AllowHeaders: "Origin, Content-Type, Accept",
+		AllowOrigins:     "*",
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
+		AllowCredentials: true,
 	}))
 
-	if len(config.AppBasicAuthCredential) > 0 {
-		account := make(map[string]string)
-		for _, basicAuth := range config.AppBasicAuthCredential {
-			ba := strings.Split(basicAuth, ":")
-			if len(ba) != 2 {
-				logrus.Fatalln("Basic auth is not valid, please this following format <user>:<secret>")
-			}
-			account[ba[0]] = ba[1]
-		}
-
-		app.Use(basicauth.New(basicauth.Config{
-			Users: account,
-		}))
-	}
-
-	// Create base path group or use app directly
-	var apiGroup fiber.Router = app
+	// Create base path group
+	var baseGroup fiber.Router = app
 	if config.AppBasePath != "" {
-		apiGroup = app.Group(config.AppBasePath)
+		baseGroup = app.Group(config.AppBasePath)
 	}
 
-	// Register routes - all routes are prefixed with /api/:phone/
+	// Public routes (no auth required)
+	// Login page
+	baseGroup.Get("/login", func(c *fiber.Ctx) error {
+		// If already authenticated, redirect to dashboard
+		if c.Cookies("access_token") != "" {
+			return c.Redirect(config.AppBasePath + "/")
+		}
+		return c.Render("views/login", fiber.Map{
+			"AppVersion":  config.AppVersion,
+			"AppBasePath": config.AppBasePath,
+		})
+	})
+
+	// Auth endpoints (public)
+	rest.InitRestAuth(baseGroup)
+
+	// Protected routes (JWT auth required)
+	protectedGroup := baseGroup.Group("", middleware.JWTAuth())
+
+	// Dashboard (main page)
+	protectedGroup.Get("/", func(c *fiber.Ctx) error {
+		return c.Render("views/index", fiber.Map{
+			"AppHost":     fmt.Sprintf("%s://%s", c.Protocol(), c.Hostname()),
+			"AppVersion":  config.AppVersion,
+			"AppBasePath": config.AppBasePath,
+			"Username":    middleware.GetAuthUsername(c),
+			"MaxFileSize": humanize.Bytes(uint64(config.WhatsappSettingMaxFileSize)),
+			"MaxVideoSize": humanize.Bytes(uint64(config.WhatsappSettingMaxVideoSize)),
+			"Clients":     config.WhatsAppClients,
+		})
+	})
+
+	// Admin routes (protected)
+	rest.InitRestAdmin(protectedGroup, adminUsecase)
+
+	// API routes (protected, per-phone)
 	logrus.Info("Registering routes with /api/:phone/ prefix")
+	phoneGroup := protectedGroup.Group("/api/:phone", middleware.MultiClientMiddleware())
 
-	// Admin routes (not per-phone, manage all clients)
-	rest.InitRestAdmin(apiGroup, adminUsecase)
-
-	// Create per-phone route group with middleware
-	phoneGroup := apiGroup.Group("/api/:phone", middleware.MultiClientMiddleware())
-
-	// Register all per-phone routes
 	rest.InitRestApp(phoneGroup, appUsecase)
 	rest.InitRestChat(phoneGroup, chatUsecase)
 	rest.InitRestSend(phoneGroup, sendUsecase)
@@ -116,34 +139,22 @@ func restServer(_ *cobra.Command, _ []string) {
 	rest.InitRestGroup(phoneGroup, groupUsecase)
 	rest.InitRestNewsletter(phoneGroup, newsletterUsecase)
 	rest.InitRestHistory(phoneGroup, historyUsecase)
-	rest.InitRestMedia(phoneGroup) // Media download endpoint for private S3 buckets
+	rest.InitRestMedia(phoneGroup)
 
-	apiGroup.Get("/", func(c *fiber.Ctx) error {
-		return c.Render("views/index", fiber.Map{
-			"AppHost":        fmt.Sprintf("%s://%s", c.Protocol(), c.Hostname()),
-			"AppVersion":     config.AppVersion,
-			"AppBasePath":    config.AppBasePath,
-			"BasicAuthToken": c.UserContext().Value(middleware.AuthorizationValue("BASIC_AUTH")),
-			"MaxFileSize":    humanize.Bytes(uint64(config.WhatsappSettingMaxFileSize)),
-			"MaxVideoSize":   humanize.Bytes(uint64(config.WhatsappSettingMaxVideoSize)),
-			"Clients":        config.WhatsAppClients,
-		})
-	})
-
-	websocket.RegisterRoutes(apiGroup, appUsecase)
+	// WebSocket routes (with optional auth for backward compatibility)
+	websocket.RegisterRoutes(baseGroup, appUsecase)
 	go websocket.RunHub()
 
-	// SSE (Server-Sent Events) for real-time updates
-	sse.RegisterRoutes(apiGroup)
+	// SSE routes
+	sse.RegisterRoutes(baseGroup)
 	go sse.GetHub().Run()
 	logrus.Info("SSE hub started - endpoint: /events")
 
-	// Set auto reconnect to whatsapp server after booting
+	// Auto-connect after booting
 	go helpers.SetAutoConnectAfterBooting(appUsecase)
-
-	// Set auto reconnect checking with a guaranteed client instance
 	startAutoReconnectCheckerIfClientAvailable()
 
+	logrus.Infof("🌐 Server listening on port %s", config.AppPort)
 	if err := app.Listen(":" + config.AppPort); err != nil {
 		logrus.Fatalln("Failed to start: ", err.Error())
 	}

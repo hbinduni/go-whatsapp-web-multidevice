@@ -99,16 +99,29 @@ func initEnvConfig() {
 	if envOs := viper.GetString("app_os"); envOs != "" {
 		config.AppOs = envOs
 	}
-	if envBasicAuth := viper.GetString("app_basic_auth"); envBasicAuth != "" {
-		credential := strings.Split(envBasicAuth, ",")
-		config.AppBasicAuthCredential = credential
-	}
 	if envBasePath := viper.GetString("app_base_path"); envBasePath != "" {
 		config.AppBasePath = envBasePath
 	}
 	if envTrustedProxies := viper.GetString("app_trusted_proxies"); envTrustedProxies != "" {
 		proxies := strings.Split(envTrustedProxies, ",")
 		config.AppTrustedProxies = proxies
+	}
+
+	// Authentication settings
+	if envAuthSecret := viper.GetString("auth_secret"); envAuthSecret != "" {
+		config.AuthSecret = envAuthSecret
+	}
+	if envAuthUsername := viper.GetString("auth_username"); envAuthUsername != "" {
+		config.AuthUsername = envAuthUsername
+	}
+	if envAuthPasswordHash := viper.GetString("auth_password_hash"); envAuthPasswordHash != "" {
+		config.AuthPasswordHash = envAuthPasswordHash
+	}
+	if envAccessExpiry := viper.GetString("auth_access_token_expiry"); envAccessExpiry != "" {
+		config.AuthAccessTokenExpiry = envAccessExpiry
+	}
+	if envRefreshExpiry := viper.GetString("auth_refresh_token_expiry"); envRefreshExpiry != "" {
+		config.AuthRefreshTokenExpiry = envRefreshExpiry
 	}
 
 	// Database settings
@@ -217,17 +230,31 @@ func initFlags() {
 		config.AppOs,
 		`os name --os <string> | example: --os="Chrome"`,
 	)
-	rootCmd.PersistentFlags().StringSliceVarP(
-		&config.AppBasicAuthCredential,
-		"basic-auth", "b",
-		config.AppBasicAuthCredential,
-		"basic auth credential | -b=yourUsername:yourPassword",
-	)
 	rootCmd.PersistentFlags().StringVarP(
 		&config.AppBasePath,
 		"base-path", "",
 		config.AppBasePath,
 		`base path for subpath deployment --base-path <string> | example: --base-path="/gowa"`,
+	)
+
+	// Authentication flags
+	rootCmd.PersistentFlags().StringVarP(
+		&config.AuthSecret,
+		"auth-secret", "",
+		config.AuthSecret,
+		`JWT signing secret (generate with: openssl rand -base64 32)`,
+	)
+	rootCmd.PersistentFlags().StringVarP(
+		&config.AuthUsername,
+		"auth-username", "",
+		config.AuthUsername,
+		`admin username for login`,
+	)
+	rootCmd.PersistentFlags().StringVarP(
+		&config.AuthPasswordHash,
+		"auth-password-hash", "",
+		config.AuthPasswordHash,
+		`bcrypt hash of admin password (generate with: ./whatsapp hash-password)`,
 	)
 	rootCmd.PersistentFlags().StringSliceVarP(
 		&config.AppTrustedProxies,

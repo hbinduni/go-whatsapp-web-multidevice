@@ -1,480 +1,336 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-    <!-- Required meta tags -->
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <!-- Bootstrap CSS -->
-    <link rel="stylesheet" type="text/css"
-          href="https://cdnjs.cloudflare.com/ajax/libs/fomantic-ui/2.8.8/semantic.min.css">
-    <link rel="stylesheet" href="https://cdn.datatables.net/1.11.4/css/dataTables.semanticui.min.css">
-    <link rel="stylesheet" href="{{ .AppBasePath }}/assets/app.css">
-    <script src="https://code.jquery.com/jquery-3.1.1.min.js"></script>
-    <script src="https://cdn.datatables.net/1.11.4/js/jquery.dataTables.min.js"></script>
-    <script src="https://cdn.datatables.net/1.11.4/js/dataTables.semanticui.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/fomantic-ui/2.8.8/semantic.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp API {{ .AppVersion }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://unpkg.com/axios@1.1.2/dist/axios.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
-    <title>GoWA-SSE {{ .AppVersion }} - WhatsApp API</title>
-</head>
-<body>
-<div id="splash-screen">
-    <!-- Clean squircle logo without background wrapper -->
-    <img src="{{ .AppBasePath }}/assets/gowa.svg" alt="GoWA Logo" class="splash-icon" id="main-logo">
-    
-    <h2 class="splash-title">WhatsApp API</h2>
-    <div class="ui active large inline loader splash-spinner"></div>
-</div>
-
-<div class="ui container" id="app" style="display: none;">
-    <div class="main-header">
-        <h1 class="ui header center aligned">
-            <div class="title-container">
-                <img src="{{ .AppBasePath }}/assets/gowa.svg" alt="GoWA Logo">
-
-                <span>WhatsApp API</span>
-
-                <div class="version-container">
-                    <div class="version-label fork-version">
-                        {{ .AppVersion }}
-                    </div>
-                </div>
-            </div>
-        </h1>
-    </div>
-
-    <!-- Client Selector -->
-    <div class="ui segment" style="margin-bottom: 1em;">
-        <div class="ui grid">
-            <div class="eight wide column">
-                <div class="ui labeled input fluid">
-                    <div class="ui label">
-                        <i class="mobile alternate icon"></i>
-                        Active Client
-                    </div>
-                    <select class="ui dropdown" id="clientSelector" v-model="selectedClient" @change="handleClientChange">
-                        <option value="">Select a client...</option>
-                        {{ range .Clients }}
-                        <option value="{{ . }}">{{ . }}</option>
-                        {{ end }}
-                    </select>
-                </div>
-            </div>
-            <div class="eight wide column right aligned">
-                <div class="ui label" :class="clientStatus.connected ? 'green' : 'red'">
-                    <i :class="clientStatus.connected ? 'check circle icon' : 'times circle icon'"></i>
-                    [[ clientStatus.connected ? 'Connected' : 'Disconnected' ]]
-                </div>
-                <div class="ui label blue" v-if="selectedClient">
-                    <i class="phone icon"></i>
-                    [[ selectedClient ]]
-                </div>
-            </div>
-        </div>
-        <div class="ui warning message" v-if="!selectedClient">
-            <i class="info circle icon"></i>
-            Please select a client to continue. All API operations will use the selected client.
-        </div>
-    </div>
-
-    <div class="ui success message" v-if="connected_devices != null && connected_devices.length > 0">
-        <div class="header">
-            <i class="check circle icon"></i>
-            Device Connected Successfully
-        </div>
-        <p>
-            Device ID: <b>[[ connected_devices[0].device ]]</b>
-        </p>
-    </div>
-
-    <div class="ui horizontal divider">
-        App
-    </div>
-
-    <div class="ui three column stackable grid cards">
-        <app-login :connected="connected_devices"></app-login>
-        <app-logout @reload-devices="handleReloadDevice"></app-logout>
-        <app-reconnect @reload-devices="handleReloadDevice"></app-reconnect>
-        <app-login-with-code :connected="connected_devices"></app-login-with-code>
-    </div>
-
-    <div class="ui horizontal divider">
-        Send
-    </div>
-
-    <div class="ui three column doubling grid cards">
-        <send-message></send-message>
-        <send-image></send-image>
-        <send-file max-file-size="{{ .MaxFileSize }}"></send-file>
-
-        <send-video max-video-size="{{ .MaxVideoSize }}"></send-video>
-        <send-sticker></send-sticker>
-        <send-contact></send-contact>
-
-        <send-location></send-location>
-        <send-audio></send-audio>
-        <send-poll></send-poll>
-        
-        <send-presence></send-presence>
-        
-        <send-chat-presence></send-chat-presence>
-        <send-link></send-link>
-    </div>
-
-    <div class="ui horizontal divider">
-        Message
-    </div>
-
-    <div class="ui three column doubling grid cards">
-        <message-delete></message-delete>
-        <message-revoke></message-revoke>
-        <message-react></message-react>
-        <message-update></message-update>
-        <message-read></message-read>
-    </div>
-
-    <div class="ui horizontal divider">
-        Group
-    </div>
-
-    <div class="ui three column doubling grid cards">
-        <group-list :connected="connected_devices"></group-list>
-        <group-create></group-create>
-        <group-join-with-link></group-join-with-link>
-        <group-info-from-link></group-info-from-link>
-        <group-add-participants></group-add-participants>
-        <group-set-photo></group-set-photo>
-        <group-set-name></group-set-name>
-        <group-set-locked></group-set-locked>
-        <group-set-announce></group-set-announce>
-        <group-set-topic></group-set-topic>
-        <group-get-invite-link></group-get-invite-link>
-        <group-info></group-info>
-    </div>
-
-    <div class="ui horizontal divider">
-        Newsletter
-    </div>
-
-    <div class="ui three column doubling grid cards">
-        <newsletter-list></newsletter-list>
-    </div>
-
-    <div class="ui horizontal divider">
-        Account
-    </div>
-
-    <div class="ui three column doubling grid cards">
-        <account-avatar></account-avatar>
-        <account-change-avatar></account-change-avatar>
-        <account-change-push-name></account-change-push-name>
-        <account-user-info></account-user-info>
-        <account-business-profile></account-business-profile>
-        <account-privacy></account-privacy>
-        <account-contact></account-contact>
-        <account-user-check></account-user-check>
-    </div>
-
-    <div class="ui horizontal divider">
-        Chat Management
-    </div>
-
-    <div class="ui three column doubling grid cards">
-        <chat-pin-manager></chat-pin-manager>
-        <chat-disappearing-manager></chat-disappearing-manager>
-        <chat-list></chat-list>
-        <chat-messages></chat-messages>
-        <chat-storage-backup></chat-storage-backup>
-    </div>
-
-    <div class="ui horizontal divider">
-        Admin
-    </div>
-
-    <div class="ui three column doubling grid cards">
-        <admin-storage></admin-storage>
-    </div>
-
-</div>
-<script>
-    window.TYPEGROUP = "@g.us";
-    window.TYPEUSER = "@s.whatsapp.net";
-    window.TYPENEWSLETTER = "@newsletter";
-    window.TYPESTATUS = "status@broadcast";
-    window.showErrorInfo = (message) => {
-        $('body').toast({
-            position: 'bottom right',
-            title: 'Error',
-            message: message,
-            showProgress: 'bottom',
-            classProgress: 'red'
-        });
-    }
-    window.showSuccessInfo = (message) => {
-        $('body').toast({
-            position: 'bottom right',
-            title: 'Success',
-            message: message,
-            showProgress: 'bottom',
-            classProgress: 'green'
-        });
-    }
-
-
-    // Client configuration
-    window.configuredClients = [{{ range $i, $c := .Clients }}{{ if $i }},{{ end }}"{{ $c }}"{{ end }}];
-    window.selectedClient = null;
-    window.appBasePath = '{{ .AppBasePath }}';
-
-    // Build base URL with phone prefix for API calls
-    const buildBaseURL = (phone) => {
-        const base = `${window.location.protocol}//${window.location.hostname}${window.location.port ? ':' + window.location.port : ''}${window.appBasePath}`;
-        if (phone) {
-            // Remove leading + from phone number for URL
-            const cleanPhone = phone.replace(/^\+/, '');
-            return `${base}/api/${cleanPhone}`;
-        }
-        return base;
-    };
-
-    window.http = axios.create({
-        baseURL: buildBaseURL(null)
-    });
-
-    // Function to update axios baseURL when client changes
-    window.updateHttpClient = (phone) => {
-        window.selectedClient = phone;
-        window.http.defaults.baseURL = buildBaseURL(phone);
-        console.log('Updated baseURL to:', window.http.defaults.baseURL);
-    };
-
-    {{ if isEnableBasicAuth .BasicAuthToken }}
-    window.http.defaults.headers.common['Authorization'] = "{{ .BasicAuthToken }}";
-    {{ end }}
-</script>
-<script type="module">
-    import AppLogin from "{{ .AppBasePath }}/components/AppLogin.js";
-    import AppLoginWithCode from "{{ .AppBasePath }}/components/AppLoginWithCode.js";
-    import AppLogout from "{{ .AppBasePath }}/components/AppLogout.js";
-    import AppReconnect from "{{ .AppBasePath }}/components/AppReconnect.js";
-    import SendMessage from "{{ .AppBasePath }}/components/SendMessage.js";
-    import SendImage from "{{ .AppBasePath }}/components/SendImage.js";
-    import SendFile from "{{ .AppBasePath }}/components/SendFile.js";
-    import SendVideo from "{{ .AppBasePath }}/components/SendVideo.js";
-    import SendSticker from "{{ .AppBasePath }}/components/SendSticker.js";
-    import SendLink from "{{ .AppBasePath }}/components/SendLink.js";
-    import SendContact from "{{ .AppBasePath }}/components/SendContact.js";
-    import SendLocation from "{{ .AppBasePath }}/components/SendLocation.js";
-    import SendAudio from "{{ .AppBasePath }}/components/SendAudio.js";
-    import SendPoll from "{{ .AppBasePath }}/components/SendPoll.js";
-    import SendPresence from "{{ .AppBasePath }}/components/SendPresence.js";
-    import SendChatPresence from "{{ .AppBasePath }}/components/SendChatPresence.js";
-    import MessageDelete from "{{ .AppBasePath }}/components/MessageDelete.js";
-    import MessageUpdate from "{{ .AppBasePath }}/components/MessageUpdate.js";
-    import MessageReact from "{{ .AppBasePath }}/components/MessageReact.js";
-    import MessageRevoke from "{{ .AppBasePath }}/components/MessageRevoke.js";
-    import MessageRead from "{{ .AppBasePath }}/components/MessageRead.js";
-    import GroupList from "{{ .AppBasePath }}/components/GroupList.js";
-    import GroupCreate from "{{ .AppBasePath }}/components/GroupCreate.js";
-    import GroupJoinWithLink from "{{ .AppBasePath }}/components/GroupJoinWithLink.js";
-    import GroupInfoFromLink from "{{ .AppBasePath }}/components/GroupInfoFromLink.js";
-    import GroupAddParticipants from "{{ .AppBasePath }}/components/GroupManageParticipants.js";
-    import GroupSetPhoto from "{{ .AppBasePath }}/components/GroupSetPhoto.js";
-    import GroupSetName from "{{ .AppBasePath }}/components/GroupSetName.js";
-    import GroupSetLocked from "{{ .AppBasePath }}/components/GroupSetLocked.js";
-    import GroupSetAnnounce from "{{ .AppBasePath }}/components/GroupSetAnnounce.js";
-    import GroupSetTopic from "{{ .AppBasePath }}/components/GroupSetTopic.js";
-    import GroupGetInviteLink from "{{ .AppBasePath }}/components/GroupGetInviteLink.js";
-    import GroupInfo from "{{ .AppBasePath }}/components/GroupInfo.js";
-    import NewsletterList from "{{ .AppBasePath }}/components/NewsletterList.js";
-    import AccountAvatar from "{{ .AppBasePath }}/components/AccountAvatar.js";
-    import AccountChangeAvatar from "{{ .AppBasePath }}/components/AccountChangeAvatar.js";
-    import AccountChangePushName from "{{ .AppBasePath }}/components/AccountChangePushName.js";
-    import AccountUserInfo from "{{ .AppBasePath }}/components/AccountUserInfo.js";
-    import AccountPrivacy from "{{ .AppBasePath }}/components/AccountPrivacy.js";
-    import AccountContact from "{{ .AppBasePath }}/components/AccountContact.js";
-    import AccountUserCheck from "{{ .AppBasePath }}/components/AccountUserCheck.js";
-    import AccountBusinessProfile from "{{ .AppBasePath }}/components/AccountBusinessProfile.js";
-    import ChatPinManager from "{{ .AppBasePath }}/components/ChatPinManager.js";
-    import ChatDisappearingManager from "{{ .AppBasePath }}/components/ChatDisappearingManager.js";
-    import ChatList from "{{ .AppBasePath }}/components/ChatList.js";
-    import ChatMessages from "{{ .AppBasePath }}/components/ChatMessages.js";
-    import ChatStorageBackup from "{{ .AppBasePath }}/components/ChatStorageBackup.js";
-    import AdminStorage from "{{ .AppBasePath }}/components/AdminStorage.js";
-
-    const showErrorInfo = (message) => {
-        $('body').toast({
-            position: 'bottom right',
-            title: 'Error',
-            message: message,
-            showProgress: 'bottom',
-            classProgress: 'red'
-        });
-    }
-    const showSuccessInfo = (message) => {
-        $('body').toast({
-            position: 'bottom right',
-            title: 'Success',
-            message: message,
-            showProgress: 'bottom',
-            classProgress: 'green'
-        });
-    }
-
-    const constructWebSocketURL = () => {
-        const protocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
-        const basePath = '{{ .AppBasePath }}';
-        
-        return `${protocol}${location.host}${basePath}/ws`;
-    };
-
-    Vue.createApp({
-        components: {
-            AppLogin, AppLoginWithCode, AppLogout, AppReconnect,
-            SendMessage, SendImage, SendFile, SendVideo, SendSticker, SendLink, SendContact, SendLocation, SendAudio, SendPoll, SendPresence, SendChatPresence,
-            MessageDelete, MessageUpdate, MessageReact, MessageRevoke, MessageRead,
-            GroupList, GroupCreate, GroupJoinWithLink, GroupInfoFromLink, GroupAddParticipants, GroupSetPhoto, GroupSetName, GroupSetLocked, GroupSetAnnounce, GroupSetTopic, GroupGetInviteLink, GroupInfo,
-            NewsletterList,
-            AccountAvatar, AccountUserInfo, AccountPrivacy, AccountChangeAvatar, AccountContact, AccountChangePushName, AccountUserCheck, AccountBusinessProfile,
-            ChatPinManager, ChatDisappearingManager, ChatList, ChatMessages, ChatStorageBackup,
-            AdminStorage
-        },
-        delimiters: ['[[', ']]'],
-        data() {
-            return {
-                app_ws: null,
-                connected_devices: null,
-                selectedClient: '',
-                clientStatus: { connected: false, device: null },
-            }
-        },
-        methods: {
-            handleReloadDevice() {
-                this.app_ws.send(JSON.stringify({"code": "FETCH_DEVICES"}))
-            },
-            async handleClientChange() {
-                if (!this.selectedClient) {
-                    this.clientStatus = { connected: false, device: null };
-                    this.connected_devices = null;
-                    return;
-                }
-
-                // Clear previous client's state
-                this.connected_devices = null;
-                this.clientStatus = { connected: false, device: null };
-
-                // Update the axios baseURL
-                window.updateHttpClient(this.selectedClient);
-
-                // Fetch client status for the new client
-                await this.fetchClientStatus();
-
-                showSuccessInfo(`Switched to client: ${this.selectedClient}`);
-            },
-            async fetchClientStatus() {
-                if (!this.selectedClient) return;
-
-                try {
-                    const cleanPhone = this.selectedClient.replace(/^\+/, '');
-                    const response = await axios.get(`${window.appBasePath}/admin/clients/${cleanPhone}/status`, {
-                        headers: window.http.defaults.headers.common
-                    });
-                    if (response.data && response.data.results) {
-                        const result = response.data.results;
-                        this.clientStatus = {
-                            connected: result.is_connected || false,
-                            device: result.device_id || null
-                        };
-
-                        // Update connected_devices based on status
-                        if (result.is_logged_in && result.device_id) {
-                            this.connected_devices = [{
-                                device: result.device_id,
-                                name: result.phone || cleanPhone
-                            }];
-                        } else {
-                            this.connected_devices = null;
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        whatsapp: {
+                            light: '#25D366',
+                            dark: '#128C7E',
+                            darker: '#075E54'
                         }
                     }
-                } catch (err) {
-                    console.error('Failed to fetch client status:', err);
-                    this.clientStatus = { connected: false, device: null };
-                    this.connected_devices = null;
                 }
             }
-        },
-        mounted() {
-            // Initialize app container as hidden
-            document.getElementById('app').style.display = 'none';
+        }
+    </script>
+    <style>
+        [v-cloak] { display: none; }
+        .fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
+        .fade-enter-from, .fade-leave-to { opacity: 0; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="app" v-cloak>
+        <!-- Header -->
+        <header class="bg-whatsapp-darker text-white shadow-lg">
+            <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
+                        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-semibold">WhatsApp API</h1>
+                        <p class="text-xs text-white/70">{{ .AppVersion }}</p>
+                    </div>
+                </div>
+                <button @click="logout" class="flex items-center space-x-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                    </svg>
+                    <span class="text-sm">Logout</span>
+                </button>
+            </div>
+        </header>
 
-            // Auto-select first client if available
-            if (window.configuredClients.length > 0) {
-                this.selectedClient = window.configuredClients[0];
-                window.updateHttpClient(this.selectedClient);
-                // Fetch status after a short delay to ensure everything is initialized
-                setTimeout(() => {
-                    this.fetchClientStatus();
-                }, 500);
-                console.log('Auto-selected first client:', this.selectedClient);
-            }
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 py-6">
+            <!-- Notification -->
+            <div v-if="notification.show"
+                 :class="['mb-4 p-4 rounded-lg flex items-center justify-between', notification.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800']">
+                <span>[[ notification.message ]]</span>
+                <button @click="notification.show = false" class="text-current opacity-50 hover:opacity-100">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
 
-            if (window["WebSocket"]) {
-                this.app_ws = new WebSocket(constructWebSocketURL());
+            <!-- Client Cards -->
+            <section class="mb-8">
+                <h2 class="text-lg font-semibold text-gray-800 mb-4">Clients</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div v-for="phone in clients" :key="phone"
+                         class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition-shadow">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center space-x-3">
+                                <div :class="['w-3 h-3 rounded-full', getClientStatus(phone).connected ? 'bg-green-500' : 'bg-gray-300']"></div>
+                                <span class="font-medium text-gray-800">[[ phone ]]</span>
+                            </div>
+                            <span :class="['text-xs px-2 py-1 rounded-full', getClientStatus(phone).loggedIn ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600']">
+                                [[ getClientStatus(phone).loggedIn ? 'Logged In' : 'Not Logged In' ]]
+                            </span>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button v-if="!getClientStatus(phone).loggedIn"
+                                    @click="showQR(phone)"
+                                    class="flex-1 py-2 px-3 bg-whatsapp-dark hover:bg-whatsapp-darker text-white text-sm rounded-lg transition-colors flex items-center justify-center space-x-1">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
+                                </svg>
+                                <span>Login with QR</span>
+                            </button>
+                            <button v-else
+                                    @click="logoutClient(phone)"
+                                    class="flex-1 py-2 px-3 bg-red-500 hover:bg-red-600 text-white text-sm rounded-lg transition-colors">
+                                Logout
+                            </button>
+                            <button @click="selectClient(phone)"
+                                    :class="['py-2 px-3 text-sm rounded-lg transition-colors', selectedClient === phone ? 'bg-whatsapp-dark text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700']">
+                                [[ selectedClient === phone ? 'Selected' : 'Select' ]]
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
 
-                this.app_ws.onopen = (evt) => {
-                    this.app_ws.send(JSON.stringify({
-                        "code": "FETCH_DEVICES",
-                        "message": "List device"
-                    }));
+            <!-- Quick Send (only show when client selected and logged in) -->
+            <section v-if="selectedClient && getClientStatus(selectedClient).loggedIn" class="mb-8">
+                <h2 class="text-lg font-semibold text-gray-800 mb-4">Quick Send</h2>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                    <form @submit.prevent="sendMessage" class="space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+                                <input v-model="sendForm.phone" type="text" required
+                                       placeholder="628123456789"
+                                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-whatsapp-dark focus:border-transparent outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                                <input v-model="sendForm.message" type="text" required
+                                       placeholder="Hello from WhatsApp API!"
+                                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-whatsapp-dark focus:border-transparent outline-none">
+                            </div>
+                        </div>
+                        <button type="submit" :disabled="sending"
+                                class="py-2 px-6 bg-whatsapp-dark hover:bg-whatsapp-darker disabled:opacity-50 text-white rounded-lg transition-colors flex items-center space-x-2">
+                            <svg v-if="sending" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                            </svg>
+                            <span>[[ sending ? 'Sending...' : 'Send Message' ]]</span>
+                        </button>
+                    </form>
+                </div>
+            </section>
 
-                    // Show app container and hide splash screen with a slight delay
-                    setTimeout(() => {
-                        document.getElementById('app').style.display = 'block';
-                        document.getElementById('splash-screen').classList.add('fade-out');
-                    }, 1000);
-                };
+            <!-- API Info -->
+            <section v-if="selectedClient">
+                <h2 class="text-lg font-semibold text-gray-800 mb-4">API Endpoint</h2>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                    <div class="flex items-center space-x-2 bg-gray-50 rounded-lg p-3">
+                        <code class="text-sm text-gray-700 flex-1">[[ apiBaseUrl ]]</code>
+                        <button @click="copyApiUrl" class="p-2 hover:bg-gray-200 rounded-lg transition-colors">
+                            <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </main>
 
-                this.app_ws.onerror = (error) => {
-                     console.error('WebSocket error:', error);
-                     showErrorInfo('Connection error occurred. Please refresh the page.');
-                     // Hide splash screen and show error state
-                     setTimeout(() => {
-                         document.getElementById('app').style.display = 'block';
-                         document.getElementById('splash-screen').classList.add('fade-out');
-                     }, 1000);
-                };
+        <!-- QR Code Modal -->
+        <div v-if="qrModal.show" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800">Scan QR Code</h3>
+                    <button @click="closeQR" class="p-1 hover:bg-gray-100 rounded-lg">
+                        <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <p class="text-sm text-gray-600 mb-4">Scan this QR code with WhatsApp on your phone to login <strong>[[ qrModal.phone ]]</strong></p>
+                <div class="bg-gray-50 rounded-xl p-4 flex items-center justify-center min-h-[250px]">
+                    <img v-if="qrModal.image" :src="qrModal.image" alt="QR Code" class="max-w-full">
+                    <div v-else class="text-center">
+                        <svg class="animate-spin w-8 h-8 text-whatsapp-dark mx-auto mb-2" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                        </svg>
+                        <p class="text-sm text-gray-500">Loading QR code...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-                this.app_ws.onmessage = (evt) => {
-                    const message = JSON.parse(evt.data)
-                    switch (message.code) {
-                        case 'LOGIN_SUCCESS':
-                            showSuccessInfo(message.message)
-                            $('#modalLogin').modal('hide');
-                            this.fetchClientStatus();
-                            break;
-                        case 'LIST_DEVICES':
-                            // In multi-client mode, we use REST API for per-client status
-                            // This WebSocket event is ignored; status is fetched via fetchClientStatus()
-                            console.log('[LIST_DEVICES] Received, using REST API for status');
-                            break;
-                        case 'LOGOUT_COMPLETE':
-                            // Handle successful cleanup after remote logout
-                            showSuccessInfo('✅ ' + message.message)
-                            console.log('[LOGOUT_COMPLETE] Remote logout cleanup completed:', message)
-                            this.fetchClientStatus();
-                            break;
-                        default:
-                            console.log(message)
+    <script>
+        const { createApp } = Vue;
+        const basePath = '{{ .AppBasePath }}';
+        const appHost = '{{ .AppHost }}';
+        const configuredClients = [{{ range $i, $c := .Clients }}{{ if $i }},{{ end }}"{{ $c }}"{{ end }}];
+
+        // Create axios instance with auth
+        const http = axios.create({
+            baseURL: basePath,
+            withCredentials: true
+        });
+
+        // Add token refresh interceptor
+        http.interceptors.response.use(
+            response => response,
+            async error => {
+                if (error.response?.status === 401 && error.response?.data?.error === 'token_expired') {
+                    try {
+                        await axios.post(basePath + '/auth/refresh', {}, { withCredentials: true });
+                        return http.request(error.config);
+                    } catch (refreshError) {
+                        window.location.href = basePath + '/login';
                     }
-                };
-            } else {
-                console.error('Your browser does not support WebSockets');
-                // Hide splash screen if WebSocket is not supported
-                document.getElementById('splash-screen').classList.add('fade-out');
+                }
+                return Promise.reject(error);
             }
-        },
-    }).mount('#app')
-</script>
+        );
+
+        createApp({
+            delimiters: ['[[', ']]'],
+            data() {
+                return {
+                    clients: configuredClients,
+                    selectedClient: configuredClients[0] || '',
+                    clientStatuses: {},
+                    qrModal: { show: false, phone: '', image: '' },
+                    sendForm: { phone: '', message: '' },
+                    sending: false,
+                    notification: { show: false, type: 'success', message: '' },
+                    ws: null
+                };
+            },
+            computed: {
+                apiBaseUrl() {
+                    if (!this.selectedClient) return '';
+                    return `${appHost}${basePath}/api/${this.selectedClient}`;
+                }
+            },
+            methods: {
+                getClientStatus(phone) {
+                    return this.clientStatuses[phone] || { connected: false, loggedIn: false };
+                },
+                async fetchClientStatuses() {
+                    try {
+                        const response = await http.get('/admin/clients');
+                        if (response.data?.data?.clients) {
+                            const statuses = {};
+                            for (const [phone, status] of Object.entries(response.data.data.clients)) {
+                                statuses[phone] = {
+                                    connected: status.is_connected,
+                                    loggedIn: status.is_logged_in,
+                                    deviceId: status.device_id
+                                };
+                            }
+                            this.clientStatuses = statuses;
+                        }
+                    } catch (error) {
+                        console.error('Failed to fetch client statuses:', error);
+                    }
+                },
+                selectClient(phone) {
+                    this.selectedClient = phone;
+                },
+                async showQR(phone) {
+                    this.qrModal = { show: true, phone, image: '' };
+                    try {
+                        const response = await http.get(`/api/${phone}/app/login`);
+                        if (response.data?.data?.image_path) {
+                            this.qrModal.image = basePath + response.data.data.image_path;
+                        }
+                    } catch (error) {
+                        this.showNotification('error', 'Failed to generate QR code');
+                        this.closeQR();
+                    }
+                },
+                closeQR() {
+                    this.qrModal = { show: false, phone: '', image: '' };
+                },
+                async logoutClient(phone) {
+                    try {
+                        await http.post(`/api/${phone}/app/logout`);
+                        this.showNotification('success', `Logged out ${phone}`);
+                        this.fetchClientStatuses();
+                    } catch (error) {
+                        this.showNotification('error', 'Failed to logout');
+                    }
+                },
+                async sendMessage() {
+                    if (!this.selectedClient) return;
+                    this.sending = true;
+                    try {
+                        await http.post(`/api/${this.selectedClient}/send/message`, {
+                            phone: this.sendForm.phone,
+                            message: this.sendForm.message
+                        });
+                        this.showNotification('success', 'Message sent successfully');
+                        this.sendForm = { phone: '', message: '' };
+                    } catch (error) {
+                        this.showNotification('error', error.response?.data?.message || 'Failed to send message');
+                    } finally {
+                        this.sending = false;
+                    }
+                },
+                async logout() {
+                    try {
+                        await http.post('/auth/logout');
+                    } catch (error) {
+                        console.error('Logout error:', error);
+                    }
+                    window.location.href = basePath + '/login';
+                },
+                copyApiUrl() {
+                    navigator.clipboard.writeText(this.apiBaseUrl);
+                    this.showNotification('success', 'API URL copied to clipboard');
+                },
+                showNotification(type, message) {
+                    this.notification = { show: true, type, message };
+                    setTimeout(() => { this.notification.show = false; }, 3000);
+                },
+                connectWebSocket() {
+                    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    const wsUrl = `${wsProtocol}//${window.location.host}${basePath}/ws`;
+
+                    this.ws = new WebSocket(wsUrl);
+                    this.ws.onmessage = (event) => {
+                        const data = JSON.parse(event.data);
+                        if (data.code === 'LOGIN_SUCCESS' || data.code === 'LOGOUT_COMPLETE') {
+                            this.fetchClientStatuses();
+                            this.closeQR();
+                        }
+                    };
+                    this.ws.onclose = () => {
+                        setTimeout(() => this.connectWebSocket(), 3000);
+                    };
+                }
+            },
+            mounted() {
+                this.fetchClientStatuses();
+                this.connectWebSocket();
+                // Refresh statuses periodically
+                setInterval(() => this.fetchClientStatuses(), 30000);
+            }
+        }).mount('#app');
+    </script>
 </body>
 </html>
