@@ -159,6 +159,26 @@ func (s *serviceAdmin) VacuumDatabase(ctx context.Context) (response domainAdmin
 	return response, nil
 }
 
+// formatFileSize converts bytes to a human-readable format
+func formatFileSize(bytes int64) string {
+	const (
+		KB = 1024
+		MB = KB * 1024
+		GB = MB * 1024
+	)
+
+	switch {
+	case bytes >= GB:
+		return fmt.Sprintf("%.2f GiB", float64(bytes)/float64(GB))
+	case bytes >= MB:
+		return fmt.Sprintf("%.2f MiB", float64(bytes)/float64(MB))
+	case bytes >= KB:
+		return fmt.Sprintf("%.2f KiB", float64(bytes)/float64(KB))
+	default:
+		return fmt.Sprintf("%d B", bytes)
+	}
+}
+
 // DeleteChats deletes chats by pattern or specific JIDs
 func (s *serviceAdmin) DeleteChats(ctx context.Context, request domainAdmin.DeleteChatsRequest) (response domainAdmin.DeleteChatsResponse, err error) {
 	response.DryRun = request.DryRun
