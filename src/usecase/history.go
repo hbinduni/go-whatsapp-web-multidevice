@@ -20,7 +20,7 @@ func NewHistoryService() domainHistory.IHistoryUsecase {
 
 // RequestHistorySync implements history.IHistoryUsecase.
 func (service serviceHistory) RequestHistorySync(ctx context.Context, request domainHistory.HistorySyncRequest) (response domainHistory.HistorySyncResponse, err error) {
-	client := whatsapp.GetClient()
+	client := whatsapp.GetClientFromContext(ctx)
 	if client == nil {
 		return response, fmt.Errorf("WhatsApp client not initialized")
 	}

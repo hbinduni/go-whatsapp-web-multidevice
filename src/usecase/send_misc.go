@@ -20,7 +20,7 @@ func (service serviceSend) SendContact(ctx context.Context, request domainSend.C
 	if err != nil {
 		return response, err
 	}
-	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.BaseRequest.Phone)
+	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClientFromContext(ctx), request.BaseRequest.Phone)
 	if err != nil {
 		return response, err
 	}
@@ -63,7 +63,7 @@ func (service serviceSend) SendLink(ctx context.Context, request domainSend.Link
 	if err != nil {
 		return response, err
 	}
-	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.BaseRequest.Phone)
+	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClientFromContext(ctx), request.BaseRequest.Phone)
 	if err != nil {
 		return response, err
 	}
@@ -134,7 +134,7 @@ func (service serviceSend) SendLocation(ctx context.Context, request domainSend.
 	if err != nil {
 		return response, err
 	}
-	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.BaseRequest.Phone)
+	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClientFromContext(ctx), request.BaseRequest.Phone)
 	if err != nil {
 		return response, err
 	}
@@ -177,14 +177,14 @@ func (service serviceSend) SendPoll(ctx context.Context, request domainSend.Poll
 	if err != nil {
 		return response, err
 	}
-	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.BaseRequest.Phone)
+	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClientFromContext(ctx), request.BaseRequest.Phone)
 	if err != nil {
 		return response, err
 	}
 
 	content := "📊 " + request.Question
 
-	msg := whatsapp.GetClient().BuildPollCreation(request.Question, request.Options, request.MaxAnswer)
+	msg := whatsapp.GetClientFromContext(ctx).BuildPollCreation(request.Question, request.Options, request.MaxAnswer)
 
 	if request.BaseRequest.Duration != nil && *request.BaseRequest.Duration > 0 {
 		if msg.PollCreationMessage.ContextInfo == nil {
@@ -209,7 +209,7 @@ func (service serviceSend) SendPresence(ctx context.Context, request domainSend.
 		return response, err
 	}
 
-	err = whatsapp.GetClient().SendPresence(ctx, types.Presence(request.Type))
+	err = whatsapp.GetClientFromContext(ctx).SendPresence(ctx, types.Presence(request.Type))
 	if err != nil {
 		return response, err
 	}
@@ -225,7 +225,7 @@ func (service serviceSend) SendChatPresence(ctx context.Context, request domainS
 		return response, err
 	}
 
-	userJid, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.Phone)
+	userJid, err := utils.ValidateJidWithLogin(whatsapp.GetClientFromContext(ctx), request.Phone)
 	if err != nil {
 		return response, err
 	}
@@ -247,7 +247,7 @@ func (service serviceSend) SendChatPresence(ctx context.Context, request domainS
 		return response, fmt.Errorf("invalid action: %s. Must be 'start' or 'stop'", request.Action)
 	}
 
-	err = whatsapp.GetClient().SendChatPresence(ctx, userJid, presenceType, types.ChatPresenceMedia(""))
+	err = whatsapp.GetClientFromContext(ctx).SendChatPresence(ctx, userJid, presenceType, types.ChatPresenceMedia(""))
 	if err != nil {
 		return response, err
 	}

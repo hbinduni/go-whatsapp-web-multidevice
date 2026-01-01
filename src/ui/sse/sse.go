@@ -265,3 +265,80 @@ func BroadcastReactionReceived(messageID, chatJID, sender, reactionEmoji, target
 		"is_from_me":        isFromMe,
 	})
 }
+
+// ============================================================================
+// Multi-Client Broadcast Functions (with device_id)
+// ============================================================================
+
+// BroadcastMessageReceivedWithDevice broadcasts a new incoming message event with device info
+func BroadcastMessageReceivedWithDevice(deviceID, messageID, chatJID, sender, content string, timestamp time.Time, isFromMe bool, mediaType, mediaPath, mimeType, filename string, fileSize int64) {
+	BroadcastMessage(EventMessageReceived, "MESSAGE_RECEIVED", "New message received", map[string]any{
+		"device_id":  deviceID,
+		"message_id": messageID,
+		"chat_jid":   chatJID,
+		"sender":     sender,
+		"content":    content,
+		"timestamp":  timestamp,
+		"is_from_me": isFromMe,
+		"media_type": mediaType,
+		"media_path": mediaPath,
+		"mimetype":   mimeType,
+		"filename":   filename,
+		"file_size":  fileSize,
+	})
+}
+
+// BroadcastMessageSentWithDevice broadcasts a sent message confirmation event with device info
+func BroadcastMessageSentWithDevice(deviceID, messageID, chatJID, content string, timestamp time.Time) {
+	BroadcastMessage(EventMessageSent, "MESSAGE_SENT", "Message sent successfully", map[string]any{
+		"device_id":  deviceID,
+		"message_id": messageID,
+		"chat_jid":   chatJID,
+		"content":    content,
+		"timestamp":  timestamp,
+	})
+}
+
+// BroadcastReceiptWithDevice broadcasts a receipt event with device info
+func BroadcastReceiptWithDevice(deviceID string, messageIDs []string, chatJID, receiptType string, timestamp time.Time) {
+	BroadcastMessage(EventReceipt, "RECEIPT", "Receipt received", map[string]any{
+		"device_id":    deviceID,
+		"message_ids":  messageIDs,
+		"chat_jid":     chatJID,
+		"receipt_type": receiptType,
+		"timestamp":    timestamp,
+	})
+}
+
+// BroadcastPresenceUpdateWithDevice broadcasts a presence update event with device info
+func BroadcastPresenceUpdateWithDevice(deviceID, jid string, isOnline bool, lastSeen time.Time) {
+	BroadcastMessage(EventPresenceUpdate, "PRESENCE_UPDATE", "Presence updated", map[string]any{
+		"device_id": deviceID,
+		"jid":       jid,
+		"is_online": isOnline,
+		"last_seen": lastSeen,
+	})
+}
+
+// BroadcastReactionReceivedWithDevice broadcasts a reaction event with device info
+func BroadcastReactionReceivedWithDevice(deviceID, messageID, chatJID, sender, reactionEmoji, targetMessageID string, timestamp time.Time, isFromMe bool) {
+	BroadcastMessage(EventReactionReceived, "REACTION_RECEIVED", "Reaction received", map[string]any{
+		"device_id":         deviceID,
+		"message_id":        messageID,
+		"chat_jid":          chatJID,
+		"sender":            sender,
+		"reaction_emoji":    reactionEmoji,
+		"target_message_id": targetMessageID,
+		"timestamp":         timestamp,
+		"is_from_me":        isFromMe,
+	})
+}
+
+// BroadcastConnectionStatusWithDevice broadcasts connection status changes with device info
+func BroadcastConnectionStatusWithDevice(deviceID string, isConnected, isLoggedIn bool) {
+	BroadcastMessage(EventConnectionStatus, "CONNECTION_STATUS", "Connection status changed", map[string]any{
+		"device_id":    deviceID,
+		"is_connected": isConnected,
+		"is_logged_in": isLoggedIn,
+	})
+}

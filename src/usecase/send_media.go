@@ -33,7 +33,7 @@ func (service serviceSend) SendImage(ctx context.Context, request domainSend.Ima
 	if err != nil {
 		return response, err
 	}
-	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.Phone)
+	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClientFromContext(ctx), request.Phone)
 	if err != nil {
 		return response, err
 	}
@@ -182,7 +182,7 @@ func (service serviceSend) SendFile(ctx context.Context, request domainSend.File
 	if err != nil {
 		return response, err
 	}
-	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.BaseRequest.Phone)
+	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClientFromContext(ctx), request.BaseRequest.Phone)
 	if err != nil {
 		return response, err
 	}
@@ -257,7 +257,7 @@ func (service serviceSend) SendVideo(ctx context.Context, request domainSend.Vid
 	if err != nil {
 		return response, err
 	}
-	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.BaseRequest.Phone)
+	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClientFromContext(ctx), request.BaseRequest.Phone)
 	if err != nil {
 		return response, err
 	}
@@ -413,7 +413,7 @@ func (service serviceSend) SendAudio(ctx context.Context, request domainSend.Aud
 		return response, err
 	}
 
-	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.BaseRequest.Phone)
+	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClientFromContext(ctx), request.BaseRequest.Phone)
 	if err != nil {
 		return response, err
 	}
@@ -484,7 +484,7 @@ func (service serviceSend) SendSticker(ctx context.Context, request domainSend.S
 		return response, err
 	}
 
-	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.Phone)
+	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClientFromContext(ctx), request.Phone)
 	if err != nil {
 		return response, err
 	}

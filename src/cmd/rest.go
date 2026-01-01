@@ -98,17 +98,42 @@ func restServer(_ *cobra.Command, _ []string) {
 		apiGroup = app.Group(config.AppBasePath)
 	}
 
-	// Rest
-	rest.InitRestApp(apiGroup, appUsecase)
-	rest.InitRestAdmin(apiGroup, adminUsecase)
-	rest.InitRestChat(apiGroup, chatUsecase)
-	rest.InitRestSend(apiGroup, sendUsecase)
-	rest.InitRestUser(apiGroup, userUsecase)
-	rest.InitRestMessage(apiGroup, messageUsecase)
-	rest.InitRestGroup(apiGroup, groupUsecase)
-	rest.InitRestNewsletter(apiGroup, newsletterUsecase)
-	rest.InitRestHistory(apiGroup, historyUsecase)
-	rest.InitRestMedia(apiGroup) // Media download endpoint for private S3 buckets
+	// Register routes based on mode
+	if isMultiClientMode() {
+		// Multi-client mode: routes are prefixed with /api/:phone/
+		// All routes go through MultiClientMiddleware which injects client into context
+		logrus.Info("Registering multi-client routes with /api/:phone/ prefix")
+
+		// Admin routes (not per-phone, manage all clients)
+		rest.InitRestAdmin(apiGroup, adminUsecase)
+
+		// Create per-phone route group with middleware
+		phoneGroup := apiGroup.Group("/api/:phone", middleware.MultiClientMiddleware())
+
+		// Register all per-phone routes
+		rest.InitRestApp(phoneGroup, appUsecase)
+		rest.InitRestChat(phoneGroup, chatUsecase)
+		rest.InitRestSend(phoneGroup, sendUsecase)
+		rest.InitRestUser(phoneGroup, userUsecase)
+		rest.InitRestMessage(phoneGroup, messageUsecase)
+		rest.InitRestGroup(phoneGroup, groupUsecase)
+		rest.InitRestNewsletter(phoneGroup, newsletterUsecase)
+		rest.InitRestHistory(phoneGroup, historyUsecase)
+		rest.InitRestMedia(phoneGroup) // Media download endpoint for private S3 buckets
+	} else {
+		// Single-client mode (legacy): routes without phone prefix
+		logrus.Info("Registering single-client routes (legacy mode)")
+		rest.InitRestApp(apiGroup, appUsecase)
+		rest.InitRestAdmin(apiGroup, adminUsecase)
+		rest.InitRestChat(apiGroup, chatUsecase)
+		rest.InitRestSend(apiGroup, sendUsecase)
+		rest.InitRestUser(apiGroup, userUsecase)
+		rest.InitRestMessage(apiGroup, messageUsecase)
+		rest.InitRestGroup(apiGroup, groupUsecase)
+		rest.InitRestNewsletter(apiGroup, newsletterUsecase)
+		rest.InitRestHistory(apiGroup, historyUsecase)
+		rest.InitRestMedia(apiGroup) // Media download endpoint for private S3 buckets
+	}
 
 	apiGroup.Get("/", func(c *fiber.Ctx) error {
 		return c.Render("views/index", fiber.Map{

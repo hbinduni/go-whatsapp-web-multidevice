@@ -35,13 +35,13 @@ func (service serviceMessage) MarkAsRead(ctx context.Context, request domainMess
 	if err = validations.ValidateMarkAsRead(ctx, request); err != nil {
 		return response, err
 	}
-	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.Phone)
+	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClientFromContext(ctx), request.Phone)
 	if err != nil {
 		return response, err
 	}
 
 	ids := []types.MessageID{request.MessageID}
-	if err = whatsapp.GetClient().MarkRead(ctx, ids, time.Now(), dataWaRecipient, *whatsapp.GetClient().Store.ID); err != nil {
+	if err = whatsapp.GetClientFromContext(ctx).MarkRead(ctx, ids, time.Now(), dataWaRecipient, *whatsapp.GetClientFromContext(ctx).Store.ID); err != nil {
 		return response, err
 	}
 
@@ -49,7 +49,7 @@ func (service serviceMessage) MarkAsRead(ctx context.Context, request domainMess
 		"phone":      request.Phone,
 		"message_id": request.MessageID,
 		"chat":       dataWaRecipient.String(),
-		"sender":     whatsapp.GetClient().Store.ID.String(),
+		"sender":     whatsapp.GetClientFromContext(ctx).Store.ID.String(),
 	})
 
 	response.MessageID = request.MessageID
@@ -61,7 +61,7 @@ func (service serviceMessage) ReactMessage(ctx context.Context, request domainMe
 	if err = validations.ValidateReactMessage(ctx, request); err != nil {
 		return response, err
 	}
-	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.Phone)
+	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClientFromContext(ctx), request.Phone)
 	if err != nil {
 		return response, err
 	}
@@ -77,7 +77,7 @@ func (service serviceMessage) ReactMessage(ctx context.Context, request domainMe
 			SenderTimestampMS: proto.Int64(time.Now().UnixMilli()),
 		},
 	}
-	ts, err := whatsapp.GetClient().SendMessage(ctx, dataWaRecipient, msg)
+	ts, err := whatsapp.GetClientFromContext(ctx).SendMessage(ctx, dataWaRecipient, msg)
 	if err != nil {
 		return response, err
 	}
@@ -91,12 +91,12 @@ func (service serviceMessage) RevokeMessage(ctx context.Context, request domainM
 	if err = validations.ValidateRevokeMessage(ctx, request); err != nil {
 		return response, err
 	}
-	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.Phone)
+	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClientFromContext(ctx), request.Phone)
 	if err != nil {
 		return response, err
 	}
 
-	ts, err := whatsapp.GetClient().SendMessage(ctx, dataWaRecipient, whatsapp.GetClient().BuildRevoke(dataWaRecipient, types.EmptyJID, request.MessageID))
+	ts, err := whatsapp.GetClientFromContext(ctx).SendMessage(ctx, dataWaRecipient, whatsapp.GetClientFromContext(ctx).BuildRevoke(dataWaRecipient, types.EmptyJID, request.MessageID))
 	if err != nil {
 		return response, err
 	}
@@ -110,7 +110,7 @@ func (service serviceMessage) DeleteMessage(ctx context.Context, request domainM
 	if err = validations.ValidateDeleteMessage(ctx, request); err != nil {
 		return err
 	}
-	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.Phone)
+	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClientFromContext(ctx), request.Phone)
 	if err != nil {
 		return err
 	}
@@ -124,7 +124,7 @@ func (service serviceMessage) DeleteMessage(ctx context.Context, request domainM
 		Timestamp: time.Now(),
 		Type:      appstate.WAPatchRegularHigh,
 		Mutations: []appstate.MutationInfo{{
-			Index: []string{appstate.IndexDeleteMessageForMe, dataWaRecipient.String(), request.MessageID, isFromMe, whatsapp.GetClient().Store.ID.String()},
+			Index: []string{appstate.IndexDeleteMessageForMe, dataWaRecipient.String(), request.MessageID, isFromMe, whatsapp.GetClientFromContext(ctx).Store.ID.String()},
 			Value: &waSyncAction.SyncActionValue{
 				DeleteMessageForMeAction: &waSyncAction.DeleteMessageForMeAction{
 					DeleteMedia:      proto.Bool(true),
@@ -134,7 +134,7 @@ func (service serviceMessage) DeleteMessage(ctx context.Context, request domainM
 		}},
 	}
 
-	if err = whatsapp.GetClient().SendAppState(ctx, patchInfo); err != nil {
+	if err = whatsapp.GetClientFromContext(ctx).SendAppState(ctx, patchInfo); err != nil {
 		return err
 	}
 	return nil
@@ -145,13 +145,13 @@ func (service serviceMessage) UpdateMessage(ctx context.Context, request domainM
 		return response, err
 	}
 
-	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.Phone)
+	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClientFromContext(ctx), request.Phone)
 	if err != nil {
 		return response, err
 	}
 
 	msg := &waE2E.Message{Conversation: proto.String(request.Message)}
-	ts, err := whatsapp.GetClient().SendMessage(ctx, dataWaRecipient, whatsapp.GetClient().BuildEdit(dataWaRecipient, request.MessageID, msg))
+	ts, err := whatsapp.GetClientFromContext(ctx).SendMessage(ctx, dataWaRecipient, whatsapp.GetClientFromContext(ctx).BuildEdit(dataWaRecipient, request.MessageID, msg))
 	if err != nil {
 		return response, err
 	}
@@ -167,7 +167,7 @@ func (service serviceMessage) StarMessage(ctx context.Context, request domainMes
 		return err
 	}
 
-	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.Phone)
+	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClientFromContext(ctx), request.Phone)
 	if err != nil {
 		return err
 	}
@@ -177,9 +177,9 @@ func (service serviceMessage) StarMessage(ctx context.Context, request domainMes
 		isFromMe = false
 	}
 
-	patchInfo := appstate.BuildStar(dataWaRecipient.ToNonAD(), *whatsapp.GetClient().Store.ID, request.MessageID, isFromMe, request.IsStarred)
+	patchInfo := appstate.BuildStar(dataWaRecipient.ToNonAD(), *whatsapp.GetClientFromContext(ctx).Store.ID, request.MessageID, isFromMe, request.IsStarred)
 
-	if err = whatsapp.GetClient().SendAppState(ctx, patchInfo); err != nil {
+	if err = whatsapp.GetClientFromContext(ctx).SendAppState(ctx, patchInfo); err != nil {
 		return err
 	}
 	return nil
@@ -191,7 +191,7 @@ func (service serviceMessage) DownloadMedia(ctx context.Context, request domainM
 		return response, err
 	}
 
-	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.Phone)
+	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClientFromContext(ctx), request.Phone)
 	if err != nil {
 		return response, err
 	}
@@ -266,7 +266,7 @@ func (service serviceMessage) DownloadMedia(ctx context.Context, request domainM
 	}
 
 	// Download the media with organized path structure
-	client := whatsapp.GetClient()
+	client := whatsapp.GetClientFromContext(ctx)
 	deviceID := client.Store.ID.User
 	extractedMedia, err := utils.ExtractMediaWithInfo(ctx, client, downloadableMsg.(whatsmeow.DownloadableMessage), message.ChatJID, request.MessageID, deviceID)
 	if err != nil {

@@ -38,15 +38,15 @@ func NewSendService(appService app.IAppUsecase, chatStorageRepo domainChatStorag
 
 // wrapSendMessage wraps the message sending process with message ID saving
 func (service serviceSend) wrapSendMessage(ctx context.Context, recipient types.JID, msg *waE2E.Message, content string) (whatsmeow.SendResponse, error) {
-	ts, err := whatsapp.GetClient().SendMessage(ctx, recipient, msg)
+	ts, err := whatsapp.GetClientFromContext(ctx).SendMessage(ctx, recipient, msg)
 	if err != nil {
 		return whatsmeow.SendResponse{}, err
 	}
 
 	// Store the sent message using chatstorage
 	senderJID := ""
-	if whatsapp.GetClient().Store.ID != nil {
-		senderJID = whatsapp.GetClient().Store.ID.String()
+	if whatsapp.GetClientFromContext(ctx).Store.ID != nil {
+		senderJID = whatsapp.GetClientFromContext(ctx).Store.ID.String()
 	}
 
 	// Store message asynchronously with timeout
@@ -71,7 +71,7 @@ func (service serviceSend) SendText(ctx context.Context, request domainSend.Mess
 	if err != nil {
 		return response, err
 	}
-	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.BaseRequest.Phone)
+	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClientFromContext(ctx), request.BaseRequest.Phone)
 	if err != nil {
 		return response, err
 	}
@@ -152,10 +152,10 @@ func (service serviceSend) SendText(ctx context.Context, request domainSend.Mess
 	return response, nil
 }
 
-func (service serviceSend) getMentionFromText(_ context.Context, messages string) (result []string) {
+func (service serviceSend) getMentionFromText(ctx context.Context, messages string) (result []string) {
 	mentions := utils.ContainsMention(messages)
 	for _, mention := range mentions {
-		if dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), mention); err == nil {
+		if dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClientFromContext(ctx), mention); err == nil {
 			result = append(result, dataWaRecipient.String())
 		}
 	}
@@ -164,9 +164,9 @@ func (service serviceSend) getMentionFromText(_ context.Context, messages string
 
 func (service serviceSend) uploadMedia(ctx context.Context, mediaType whatsmeow.MediaType, media []byte, recipient types.JID) (uploaded whatsmeow.UploadResponse, err error) {
 	if recipient.Server == types.NewsletterServer {
-		uploaded, err = whatsapp.GetClient().UploadNewsletter(ctx, media, mediaType)
+		uploaded, err = whatsapp.GetClientFromContext(ctx).UploadNewsletter(ctx, media, mediaType)
 	} else {
-		uploaded, err = whatsapp.GetClient().Upload(ctx, media, mediaType)
+		uploaded, err = whatsapp.GetClientFromContext(ctx).Upload(ctx, media, mediaType)
 	}
 	return uploaded, err
 }

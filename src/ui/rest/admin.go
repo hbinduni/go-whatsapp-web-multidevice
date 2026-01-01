@@ -2,6 +2,7 @@ package rest
 
 import (
 	domainAdmin "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/admin"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/whatsapp"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/ui/rest/helpers"
 	"github.com/gofiber/fiber/v2"
 )
@@ -16,10 +17,18 @@ func InitRestAdmin(app fiber.Router, service domainAdmin.IAdminUsecase) Admin {
 	rest := Admin{Service: service}
 
 	admin := app.Group("/admin")
+
+	// Storage management endpoints
 	admin.Get("/storage/stats", rest.GetStorageStats)
 	admin.Post("/storage/cleanup", rest.CleanupStorage)
 	admin.Post("/storage/vacuum", rest.VacuumDatabase)
 	admin.Delete("/storage/chats", rest.DeleteChats)
+
+	// Multi-client management endpoints
+	admin.Get("/clients", rest.ListClients)
+	admin.Get("/clients/:phone/status", rest.GetClientStatus)
+	admin.Post("/clients/:phone/connect", rest.ConnectClient)
+	admin.Post("/clients/:phone/disconnect", rest.DisconnectClient)
 
 	return rest
 }
@@ -114,4 +123,151 @@ func (controller *Admin) DeleteChats(c *fiber.Ctx) error {
 	}
 
 	return helpers.HandleSuccess(c, message, response)
+}
+
+// ============================================================================
+// Multi-Client Management Endpoints
+// ============================================================================
+
+// ListClients returns all registered clients and their status
+// @Summary List all clients
+// @Description Returns a list of all registered WhatsApp clients with their connection status
+// @Tags Admin
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Router /admin/clients [get]
+func (controller *Admin) ListClients(c *fiber.Ctx) error {
+	if !whatsapp.IsMultiClientMode() {
+		// Single client mode - return status of the single client
+		isConnected, isLoggedIn, deviceID := whatsapp.GetConnectionStatus()
+		return helpers.HandleSuccess(c, "Single-client mode", map[string]interface{}{
+			"mode": "single",
+			"client": map[string]interface{}{
+				"is_connected": isConnected,
+				"is_logged_in": isLoggedIn,
+				"device_id":    deviceID,
+			},
+		})
+	}
+
+	// Multi-client mode
+	statuses := whatsapp.GetAllClientStatuses()
+	if statuses == nil {
+		return helpers.HandleError(c, fiber.NewError(fiber.StatusInternalServerError, "Client registry not initialized"))
+	}
+
+	return helpers.HandleSuccess(c, "Client list retrieved", map[string]interface{}{
+		"mode":         "multi",
+		"client_count": len(statuses),
+		"clients":      statuses,
+	})
+}
+
+// GetClientStatus returns the status of a specific client
+// @Summary Get client status
+// @Description Returns the connection status of a specific WhatsApp client
+// @Tags Admin
+// @Produce json
+// @Param phone path string true "Phone number"
+// @Success 200 {object} map[string]interface{}
+// @Router /admin/clients/{phone}/status [get]
+func (controller *Admin) GetClientStatus(c *fiber.Ctx) error {
+	phone := c.Params("phone")
+	if phone == "" {
+		return helpers.HandleBadRequest(c, "Phone number is required")
+	}
+
+	if !whatsapp.IsMultiClientMode() {
+		// Single client mode - return status of the single client
+		isConnected, isLoggedIn, deviceID := whatsapp.GetConnectionStatus()
+		return helpers.HandleSuccess(c, "Single-client mode", map[string]interface{}{
+			"mode":         "single",
+			"is_connected": isConnected,
+			"is_logged_in": isLoggedIn,
+			"device_id":    deviceID,
+		})
+	}
+
+	registry := whatsapp.GetRegistry()
+	if registry == nil {
+		return helpers.HandleError(c, fiber.NewError(fiber.StatusInternalServerError, "Client registry not initialized"))
+	}
+
+	isConnected, isLoggedIn, deviceID, err := registry.GetClientStatus(phone)
+	if err != nil {
+		return helpers.HandleError(c, fiber.NewError(fiber.StatusNotFound, "Client not found: "+phone))
+	}
+
+	return helpers.HandleSuccess(c, "Client status retrieved", map[string]interface{}{
+		"phone":        phone,
+		"is_connected": isConnected,
+		"is_logged_in": isLoggedIn,
+		"device_id":    deviceID,
+	})
+}
+
+// ConnectClient connects a specific client
+// @Summary Connect client
+// @Description Connects a specific WhatsApp client
+// @Tags Admin
+// @Produce json
+// @Param phone path string true "Phone number"
+// @Success 200 {object} map[string]interface{}
+// @Router /admin/clients/{phone}/connect [post]
+func (controller *Admin) ConnectClient(c *fiber.Ctx) error {
+	phone := c.Params("phone")
+	if phone == "" {
+		return helpers.HandleBadRequest(c, "Phone number is required")
+	}
+
+	if !whatsapp.IsMultiClientMode() {
+		return helpers.HandleError(c, fiber.NewError(fiber.StatusBadRequest, "Connect endpoint is only available in multi-client mode"))
+	}
+
+	registry := whatsapp.GetRegistry()
+	if registry == nil {
+		return helpers.HandleError(c, fiber.NewError(fiber.StatusInternalServerError, "Client registry not initialized"))
+	}
+
+	if err := registry.ConnectClient(phone); err != nil {
+		return helpers.HandleError(c, fiber.NewError(fiber.StatusInternalServerError, "Failed to connect client: "+err.Error()))
+	}
+
+	return helpers.HandleSuccess(c, "Client connected successfully", map[string]interface{}{
+		"phone":     phone,
+		"connected": true,
+	})
+}
+
+// DisconnectClient disconnects a specific client
+// @Summary Disconnect client
+// @Description Disconnects a specific WhatsApp client
+// @Tags Admin
+// @Produce json
+// @Param phone path string true "Phone number"
+// @Success 200 {object} map[string]interface{}
+// @Router /admin/clients/{phone}/disconnect [post]
+func (controller *Admin) DisconnectClient(c *fiber.Ctx) error {
+	phone := c.Params("phone")
+	if phone == "" {
+		return helpers.HandleBadRequest(c, "Phone number is required")
+	}
+
+	if !whatsapp.IsMultiClientMode() {
+		return helpers.HandleError(c, fiber.NewError(fiber.StatusBadRequest, "Disconnect endpoint is only available in multi-client mode"))
+	}
+
+	registry := whatsapp.GetRegistry()
+	if registry == nil {
+		return helpers.HandleError(c, fiber.NewError(fiber.StatusInternalServerError, "Client registry not initialized"))
+	}
+
+	if err := registry.DisconnectClient(phone); err != nil {
+		return helpers.HandleError(c, fiber.NewError(fiber.StatusInternalServerError, "Failed to disconnect client: "+err.Error()))
+	}
+
+	return helpers.HandleSuccess(c, "Client disconnected successfully", map[string]interface{}{
+		"phone":        phone,
+		"disconnected": true,
+	})
 }

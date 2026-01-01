@@ -33,13 +33,13 @@ func (service serviceUser) Info(ctx context.Context, request domainUser.InfoRequ
 		return response, err
 	}
 	var jids []types.JID
-	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.Phone)
+	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClientFromContext(ctx), request.Phone)
 	if err != nil {
 		return response, err
 	}
 
 	jids = append(jids, dataWaRecipient)
-	resp, err := whatsapp.GetClient().GetUserInfo(ctx, jids)
+	resp, err := whatsapp.GetClientFromContext(ctx).GetUserInfo(ctx, jids)
 	if err != nil {
 		return response, err
 	}
@@ -79,12 +79,12 @@ func (service serviceUser) Avatar(ctx context.Context, request domainUser.Avatar
 		return response, err
 	}
 
-	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.Phone)
+	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClientFromContext(ctx), request.Phone)
 	if err != nil {
 		return response, err
 	}
 
-	pic, err := whatsapp.GetClient().GetProfilePictureInfo(ctx, dataWaRecipient, &whatsmeow.GetProfilePictureParams{
+	pic, err := whatsapp.GetClientFromContext(ctx).GetProfilePictureInfo(ctx, dataWaRecipient, &whatsmeow.GetProfilePictureParams{
 		Preview:     request.IsPreview,
 		IsCommunity: request.IsCommunity,
 	})
@@ -105,9 +105,9 @@ func (service serviceUser) Avatar(ctx context.Context, request domainUser.Avatar
 }
 
 func (service serviceUser) MyListGroups(ctx context.Context) (response domainUser.MyListGroupsResponse, err error) {
-	utils.MustLogin(whatsapp.GetClient())
+	utils.MustLogin(whatsapp.GetClientFromContext(ctx))
 
-	groups, err := whatsapp.GetClient().GetJoinedGroups(ctx)
+	groups, err := whatsapp.GetClientFromContext(ctx).GetJoinedGroups(ctx)
 	if err != nil {
 		return
 	}
@@ -119,9 +119,9 @@ func (service serviceUser) MyListGroups(ctx context.Context) (response domainUse
 }
 
 func (service serviceUser) MyListNewsletter(ctx context.Context) (response domainUser.MyListNewsletterResponse, err error) {
-	utils.MustLogin(whatsapp.GetClient())
+	utils.MustLogin(whatsapp.GetClientFromContext(ctx))
 
-	datas, err := whatsapp.GetClient().GetSubscribedNewsletters(ctx)
+	datas, err := whatsapp.GetClientFromContext(ctx).GetSubscribedNewsletters(ctx)
 	if err != nil {
 		return
 	}
@@ -133,9 +133,9 @@ func (service serviceUser) MyListNewsletter(ctx context.Context) (response domai
 }
 
 func (service serviceUser) MyPrivacySetting(ctx context.Context) (response domainUser.MyPrivacySettingResponse, err error) {
-	utils.MustLogin(whatsapp.GetClient())
+	utils.MustLogin(whatsapp.GetClientFromContext(ctx))
 
-	resp, err := whatsapp.GetClient().TryFetchPrivacySettings(ctx, true)
+	resp, err := whatsapp.GetClientFromContext(ctx).TryFetchPrivacySettings(ctx, true)
 	if err != nil {
 		return
 	}
@@ -148,9 +148,9 @@ func (service serviceUser) MyPrivacySetting(ctx context.Context) (response domai
 }
 
 func (service serviceUser) MyListContacts(ctx context.Context) (response domainUser.MyListContactsResponse, err error) {
-	utils.MustLogin(whatsapp.GetClient())
+	utils.MustLogin(whatsapp.GetClientFromContext(ctx))
 
-	contacts, err := whatsapp.GetClient().Store.Contacts.GetAllContacts(ctx)
+	contacts, err := whatsapp.GetClientFromContext(ctx).Store.Contacts.GetAllContacts(ctx)
 	if err != nil {
 		return
 	}
@@ -166,7 +166,7 @@ func (service serviceUser) MyListContacts(ctx context.Context) (response domainU
 }
 
 func (service serviceUser) ChangeAvatar(ctx context.Context, request domainUser.ChangeAvatarRequest) (err error) {
-	utils.MustLogin(whatsapp.GetClient())
+	utils.MustLogin(whatsapp.GetClientFromContext(ctx))
 
 	file, err := request.Avatar.Open()
 	if err != nil {
@@ -211,7 +211,7 @@ func (service serviceUser) ChangeAvatar(ctx context.Context, request domainUser.
 		return fmt.Errorf("failed to encode image: %v", err)
 	}
 
-	_, err = whatsapp.GetClient().SetGroupPhoto(ctx, types.JID{}, buf.Bytes())
+	_, err = whatsapp.GetClientFromContext(ctx).SetGroupPhoto(ctx, types.JID{}, buf.Bytes())
 	if err != nil {
 		return err
 	}
@@ -220,9 +220,9 @@ func (service serviceUser) ChangeAvatar(ctx context.Context, request domainUser.
 }
 
 func (service serviceUser) ChangePushName(ctx context.Context, request domainUser.ChangePushNameRequest) (err error) {
-	utils.MustLogin(whatsapp.GetClient())
+	utils.MustLogin(whatsapp.GetClientFromContext(ctx))
 
-	err = whatsapp.GetClient().SendAppState(ctx, appstate.BuildSettingPushName(request.PushName))
+	err = whatsapp.GetClientFromContext(ctx).SendAppState(ctx, appstate.BuildSettingPushName(request.PushName))
 	if err != nil {
 		return err
 	}
@@ -230,11 +230,11 @@ func (service serviceUser) ChangePushName(ctx context.Context, request domainUse
 }
 
 func (service serviceUser) IsOnWhatsApp(ctx context.Context, request domainUser.CheckRequest) (response domainUser.CheckResponse, err error) {
-	utils.MustLogin(whatsapp.GetClient())
+	utils.MustLogin(whatsapp.GetClientFromContext(ctx))
 
 	utils.SanitizePhone(&request.Phone)
 
-	response.IsOnWhatsApp = utils.IsOnWhatsapp(whatsapp.GetClient(), request.Phone)
+	response.IsOnWhatsApp = utils.IsOnWhatsapp(whatsapp.GetClientFromContext(ctx), request.Phone)
 
 	return response, nil
 }
@@ -245,12 +245,12 @@ func (service serviceUser) BusinessProfile(ctx context.Context, request domainUs
 		return response, err
 	}
 
-	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.Phone)
+	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClientFromContext(ctx), request.Phone)
 	if err != nil {
 		return response, err
 	}
 
-	profile, err := whatsapp.GetClient().GetBusinessProfile(ctx, dataWaRecipient)
+	profile, err := whatsapp.GetClientFromContext(ctx).GetBusinessProfile(ctx, dataWaRecipient)
 	if err != nil {
 		return response, err
 	}

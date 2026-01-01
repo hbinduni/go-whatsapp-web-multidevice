@@ -7,7 +7,7 @@ import (
 var (
 	// Project version - independent fork of aldinokemal/go-whatsapp-web-multidevice
 	// Diverged at upstream v7.11.0, now maintained independently with different architecture
-	AppVersion             = "v2.0.6"
+	AppVersion             = "v3.0.0" // Major version bump for multi-client architecture
 	AppPort                = "3000"
 	AppHost                = "0.0.0.0"
 	AppDebug               = false
@@ -21,8 +21,16 @@ var (
 	PathSendItems = "statics/senditems"
 	PathStorages  = "storages"
 
+	// Database configuration
+	// For PostgreSQL: "postgresql://user:password@localhost:5432/dbname"
+	// For SQLite: "file:storages/whatsapp.db?_foreign_keys=on"
 	DBURI     = "file:storages/whatsapp.db?_foreign_keys=on"
 	DBKeysURI = ""
+
+	// Multi-client configuration
+	// Comma-separated list of phone numbers to register as clients
+	// Example: "+6281234567890,+6289876543210"
+	WhatsAppClients = []string{}
 
 	WhatsappAutoReplyMessage          string
 	WhatsappAutoMarkRead              = false // Auto-mark incoming messages as read
@@ -39,9 +47,16 @@ var (
 	WhatsappTypeGroup                       = "@g.us"
 	WhatsappAccountValidation               = true
 
+	// Chat storage database configuration
+	// For PostgreSQL: "postgresql://user:password@localhost:5432/dbname"
+	// For SQLite: "file:storages/chatstorage.db"
 	ChatStorageURI               = "file:storages/chatstorage.db"
 	ChatStorageEnableForeignKeys = true
 	ChatStorageEnableWAL         = true
+
+	// DatabaseURL is the primary database URL for PostgreSQL in multi-client mode
+	// This replaces both DBURI and ChatStorageURI when using PostgreSQL
+	DatabaseURL = ""
 
 	// History Sync Configuration
 	HistorySyncEnabled       = true // Enable or disable history sync processing

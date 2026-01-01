@@ -177,7 +177,7 @@ func (service serviceChat) GetChatMessages(ctx context.Context, request domainCh
 
 	// Get device ID for constructing S3 media URLs
 	var deviceID string
-	if client := whatsapp.GetClient(); client != nil && client.Store != nil && client.Store.ID != nil {
+	if client := whatsapp.GetClientFromContext(ctx); client != nil && client.Store != nil && client.Store.ID != nil {
 		deviceID = client.Store.ID.User
 	}
 
@@ -276,7 +276,7 @@ func (service serviceChat) PinChat(ctx context.Context, request domainChat.PinCh
 	}
 
 	// Validate JID and ensure connection
-	targetJID, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.ChatJID)
+	targetJID, err := utils.ValidateJidWithLogin(whatsapp.GetClientFromContext(ctx), request.ChatJID)
 	if err != nil {
 		return response, err
 	}
@@ -285,7 +285,7 @@ func (service serviceChat) PinChat(ctx context.Context, request domainChat.PinCh
 	patchInfo := appstate.BuildPin(targetJID, request.Pinned)
 
 	// Send app state update
-	if err = whatsapp.GetClient().SendAppState(ctx, patchInfo); err != nil {
+	if err = whatsapp.GetClientFromContext(ctx).SendAppState(ctx, patchInfo); err != nil {
 		logrus.WithError(err).WithFields(logrus.Fields{
 			"chat_jid": request.ChatJID,
 			"pinned":   request.Pinned,
@@ -318,13 +318,13 @@ func (service serviceChat) SetDisappearingTimer(ctx context.Context, request dom
 	}
 
 	// Validate JID and ensure connection
-	targetJID, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.ChatJID)
+	targetJID, err := utils.ValidateJidWithLogin(whatsapp.GetClientFromContext(ctx), request.ChatJID)
 	if err != nil {
 		return response, err
 	}
 
 	// Set disappearing timer using whatsmeow
-	if err = whatsapp.GetClient().SetDisappearingTimer(ctx, targetJID, time.Duration(request.TimerSeconds)*time.Second, time.Now()); err != nil {
+	if err = whatsapp.GetClientFromContext(ctx).SetDisappearingTimer(ctx, targetJID, time.Duration(request.TimerSeconds)*time.Second, time.Now()); err != nil {
 		logrus.WithError(err).WithFields(logrus.Fields{
 			"chat_jid":      request.ChatJID,
 			"timer_seconds": request.TimerSeconds,

@@ -31,7 +31,7 @@ func NewAppService(chatStorageRepo domainChatStorage.IChatStorageRepository) dom
 }
 
 func (service *serviceApp) Login(ctx context.Context) (response domainApp.LoginResponse, err error) {
-	client := whatsapp.GetClient()
+	client := whatsapp.GetClientFromContext(ctx)
 	if client == nil {
 		return response, pkgError.ErrWaCLI
 	}
@@ -108,7 +108,7 @@ func (service *serviceApp) LoginWithCode(ctx context.Context, phoneNumber string
 		return loginCode, err
 	}
 
-	client := whatsapp.GetClient()
+	client := whatsapp.GetClientFromContext(ctx)
 	// detect is already logged in
 	if client.Store.ID != nil || client.IsLoggedIn() {
 		return loginCode, pkgError.ErrAlreadyLoggedIn
@@ -120,7 +120,7 @@ func (service *serviceApp) LoginWithCode(ctx context.Context, phoneNumber string
 	}
 
 	// refresh client reference after reconnect
-	client = whatsapp.GetClient()
+	client = whatsapp.GetClientFromContext(ctx)
 	if client.IsLoggedIn() || client.Store.ID != nil {
 		return loginCode, pkgError.ErrAlreadyLoggedIn
 	}
@@ -144,7 +144,7 @@ func (service *serviceApp) LoginWithCode(ctx context.Context, phoneNumber string
 func (service *serviceApp) Logout(ctx context.Context) (err error) {
 	logrus.Debug("Starting logout process...")
 
-	client := whatsapp.GetClient()
+	client := whatsapp.GetClientFromContext(ctx)
 	if client == nil {
 		return pkgError.ErrWaCLI
 	}
@@ -183,10 +183,10 @@ func (service *serviceApp) Logout(ctx context.Context) (err error) {
 	return nil
 }
 
-func (service *serviceApp) Reconnect(_ context.Context) (err error) {
+func (service *serviceApp) Reconnect(ctx context.Context) (err error) {
 	logrus.Debug("Starting reconnect process...")
 
-	client := whatsapp.GetClient()
+	client := whatsapp.GetClientFromContext(ctx)
 	client.Disconnect()
 	err = client.Connect()
 
@@ -205,7 +205,7 @@ func (service *serviceApp) Reconnect(_ context.Context) (err error) {
 }
 
 func (service *serviceApp) FirstDevice(ctx context.Context) (response domainApp.DevicesResponse, err error) {
-	if whatsapp.GetClient() == nil {
+	if whatsapp.GetClientFromContext(ctx) == nil {
 		return response, pkgError.ErrWaCLI
 	}
 
@@ -225,7 +225,7 @@ func (service *serviceApp) FirstDevice(ctx context.Context) (response domainApp.
 }
 
 func (service *serviceApp) FetchDevices(ctx context.Context) (response []domainApp.DevicesResponse, err error) {
-	if whatsapp.GetClient() == nil {
+	if whatsapp.GetClientFromContext(ctx) == nil {
 		return response, pkgError.ErrWaCLI
 	}
 
