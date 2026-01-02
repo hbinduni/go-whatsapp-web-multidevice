@@ -8,8 +8,9 @@ import (
 	"time"
 
 	domainApp "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/app"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/whatsapp"
 	"github.com/sirupsen/logrus"
-	"go.mau.fi/whatsmeow"
+	waLib "go.mau.fi/whatsmeow"
 )
 
 var (
@@ -27,17 +28,18 @@ func SetAutoConnectAfterBooting(service domainApp.IAppUsecase) {
 // SetAutoReconnectChecking starts a background goroutine that periodically checks
 // if the WhatsApp client is connected, and reconnects if not.
 // Call StopAutoReconnectChecking() to gracefully stop the loop.
-func SetAutoReconnectChecking(cli *whatsmeow.Client) {
+// This is for single-client mode only.
+func SetAutoReconnectChecking(cli *waLib.Client) {
 	if cli == nil {
 		logrus.Warn("[AutoReconnect] Called with nil WhatsApp client; skipping")
 		return
 	}
 
 	reconnectOnce.Do(func() {
-		logrus.Info("[AutoReconnect] Starting reconnect checker (every 5 minutes)")
+		logrus.Info("[AutoReconnect] Starting single-client reconnect checker (every 1 minute)")
 		go func() {
 			defer close(reconnectStopped)
-			ticker := time.NewTicker(5 * time.Minute)
+			ticker := time.NewTicker(1 * time.Minute)
 			defer ticker.Stop()
 
 			for {
@@ -58,6 +60,62 @@ func SetAutoReconnectChecking(cli *whatsmeow.Client) {
 			}
 		}()
 	})
+}
+
+// SetAutoReconnectCheckingMultiClient starts a background goroutine that periodically checks
+// ALL registered WhatsApp clients and reconnects any that are disconnected.
+// This is for multi-client mode - it monitors every client in the registry.
+func SetAutoReconnectCheckingMultiClient() {
+	reconnectOnce.Do(func() {
+		logrus.Info("[AutoReconnect] Starting multi-client reconnect checker (every 1 minute)")
+		go func() {
+			defer close(reconnectStopped)
+			ticker := time.NewTicker(1 * time.Minute)
+			defer ticker.Stop()
+
+			for {
+				select {
+				case <-ticker.C:
+					checkAndReconnectAllClients()
+				case <-stopReconnect:
+					logrus.Info("[AutoReconnect] Stopping multi-client reconnect checker")
+					return
+				}
+			}
+		}()
+	})
+}
+
+// checkAndReconnectAllClients checks all registered clients and reconnects any that are disconnected
+func checkAndReconnectAllClients() {
+	registry := whatsapp.GetRegistry()
+	if registry == nil {
+		logrus.Warn("[AutoReconnect] Registry not available")
+		return
+	}
+
+	clients := registry.GetAllClients()
+	if len(clients) == 0 {
+		logrus.Debug("[AutoReconnect] No clients registered")
+		return
+	}
+
+	for _, mc := range clients {
+		if mc == nil || mc.Client == nil {
+			continue
+		}
+
+		// Only attempt reconnect for clients that should be connected (logged in or were connected)
+		if !mc.Client.IsConnected() && mc.Client.IsLoggedIn() {
+			logrus.Infof("[AutoReconnect][%s] Client disconnected, attempting reconnect...", mc.Phone)
+			if err := mc.Client.Connect(); err != nil {
+				logrus.Warnf("[AutoReconnect][%s] Reconnect failed: %v", mc.Phone, err)
+			} else {
+				logrus.Infof("[AutoReconnect][%s] Reconnected successfully", mc.Phone)
+				mc.SetStatus(whatsapp.StatusLoggedIn)
+			}
+		}
+	}
 }
 
 // StopAutoReconnectChecking gracefully stops the auto-reconnect loop

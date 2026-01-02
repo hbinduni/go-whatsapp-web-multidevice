@@ -34,6 +34,8 @@ func handler(ctx context.Context, rawEvt any, chatStorageRepo domainChatStorage.
 		handleLoggedOut(ctx, chatStorageRepo)
 	case *events.Connected, *events.PushNameSetting:
 		handleConnectionEvents(ctx)
+	case *events.Disconnected:
+		handleDisconnected(ctx, evt)
 	case *events.StreamReplaced:
 		handleStreamReplaced(ctx)
 	case *events.Message:
@@ -151,6 +153,14 @@ func handleStreamReplaced(ctx context.Context) {
 		logrus.Warnf("Failed to forward disconnect event to webhook: %v", err)
 	}
 	os.Exit(0)
+}
+
+func handleDisconnected(_ context.Context, _ *events.Disconnected) {
+	log.Warnf("Client disconnected from WhatsApp server")
+
+	// whatsmeow's EnableAutoReconnect should handle reconnection automatically
+	// We just log here for visibility. If auto-reconnect is enabled, it will reconnect.
+	logrus.Info("Waiting for auto-reconnect...")
 }
 
 func handleMessage(ctx context.Context, evt *events.Message, chatStorageRepo domainChatStorage.IChatStorageRepository) {
@@ -527,6 +537,8 @@ func handlerMultiClient(ctx context.Context, rawEvt any, mc *ManagedClient) {
 		handleLoggedOutMultiClient(ctx, mc)
 	case *events.Connected, *events.PushNameSetting:
 		handleConnectionEventsMultiClient(ctx, mc)
+	case *events.Disconnected:
+		handleDisconnectedMultiClient(ctx, evt, mc)
 	case *events.StreamReplaced:
 		handleStreamReplacedMultiClient(ctx, mc)
 	case *events.Message:
@@ -726,6 +738,16 @@ func handleStreamReplacedMultiClient(ctx context.Context, mc *ManagedClient) {
 	// In multi-client mode, we don't exit the whole process
 	// Just mark this client as disconnected and attempt reconnect
 	log.Warnf("[%s] Stream replaced, client disconnected", mc.Phone)
+}
+
+func handleDisconnectedMultiClient(_ context.Context, _ *events.Disconnected, mc *ManagedClient) {
+	log.Warnf("[%s] Client disconnected from WhatsApp server", mc.Phone)
+
+	mc.SetStatus(StatusDisconnected)
+
+	// whatsmeow's EnableAutoReconnect should handle reconnection automatically
+	// We just log here for visibility. If auto-reconnect is enabled, it will reconnect.
+	logrus.Infof("[%s] Waiting for auto-reconnect...", mc.Phone)
 }
 
 func handleMessageMultiClient(ctx context.Context, evt *events.Message, mc *ManagedClient) {
