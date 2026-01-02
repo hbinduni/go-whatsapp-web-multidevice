@@ -149,6 +149,11 @@ func InitWaCLI(ctx context.Context, storeContainer, keysStoreContainer *sqlstore
 	client.EnableAutoReconnect = true
 	client.AutoTrustIdentity = true
 
+	// Configure message retry handler for encryption session establishment.
+	// When sending to a new contact, WhatsApp may request a retry if the initial
+	// message can't be decrypted. This callback provides the original message.
+	client.GetMessageForRetry = GetMessageForRetryHandler()
+
 	client.AddEventHandler(func(rawEvt interface{}) {
 		handler(ctx, rawEvt, chatStorageRepo)
 	})
