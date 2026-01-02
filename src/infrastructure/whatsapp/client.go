@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
@@ -31,9 +30,8 @@ const (
 
 // Global variables for WhatsApp state
 var (
-	globalStateMu sync.RWMutex
-	log           waLog.Logger
-	startupTime   = time.Now().Unix()
+	log         waLog.Logger
+	startupTime = time.Now().Unix()
 )
 
 // InitWaDB initializes the WhatsApp database connection
