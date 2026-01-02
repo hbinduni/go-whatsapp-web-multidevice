@@ -36,23 +36,11 @@ func NewSendService(appService app.IAppUsecase, chatStorageRepo domainChatStorag
 	}
 }
 
-// wrapSendMessage wraps the message sending process with message ID saving.
-// It sends a "composing" presence first to warm up the Signal encryption session,
-// which helps ensure reliable delivery on the first message after idle.
+// wrapSendMessage wraps the message sending process with message ID saving
 func (service serviceSend) wrapSendMessage(ctx context.Context, recipient types.JID, msg *waE2E.Message, content string) (whatsmeow.SendResponse, error) {
 	client := whatsapp.GetClientFromContext(ctx)
 	if client == nil {
 		return whatsmeow.SendResponse{}, errors.New("WhatsApp client not available")
-	}
-
-	// Warm up the encryption session by sending "composing" presence first.
-	// This establishes the Signal session before the actual message, preventing
-	// the first message from getting stuck as "sent but not delivered".
-	if err := client.SendChatPresence(ctx, recipient, types.ChatPresenceComposing, types.ChatPresenceMedia("")); err != nil {
-		logrus.Debugf("Failed to send composing presence (non-fatal): %v", err)
-	} else {
-		// Small delay to let the presence establish the session
-		time.Sleep(100 * time.Millisecond)
 	}
 
 	ts, err := client.SendMessage(ctx, recipient, msg)
