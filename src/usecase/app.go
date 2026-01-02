@@ -197,6 +197,10 @@ func (service *serviceApp) Reconnect(ctx context.Context) (err error) {
 	logrus.Debug("Starting reconnect process...")
 
 	client := whatsapp.GetClientFromContext(ctx)
+	if client == nil {
+		return pkgError.ErrWaCLI
+	}
+
 	client.Disconnect()
 	err = client.Connect()
 

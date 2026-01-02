@@ -1,7 +1,6 @@
 package helpers
 
 import (
-	"context"
 	"io"
 	"mime/multipart"
 	"sync"
@@ -19,9 +18,41 @@ var (
 	reconnectStopOnce sync.Once
 )
 
-func SetAutoConnectAfterBooting(service domainApp.IAppUsecase) {
+// SetAutoConnectAfterBooting connects all registered WhatsApp clients after server startup.
+// Waits 2 seconds to allow the registry to be populated, then connects each client.
+func SetAutoConnectAfterBooting(_ domainApp.IAppUsecase) {
 	time.Sleep(2 * time.Second)
-	_ = service.Reconnect(context.Background())
+
+	registry := whatsapp.GetRegistry()
+	if registry == nil {
+		logrus.Warn("[AutoConnect] Registry not available")
+		return
+	}
+
+	clients := registry.GetAllClients()
+	if len(clients) == 0 {
+		logrus.Info("[AutoConnect] No clients registered yet")
+		return
+	}
+
+	logrus.Infof("[AutoConnect] Connecting %d registered clients...", len(clients))
+	for _, mc := range clients {
+		if mc == nil || mc.Client == nil {
+			continue
+		}
+		if !mc.Client.IsConnected() {
+			if err := mc.Client.Connect(); err != nil {
+				logrus.Warnf("[AutoConnect][%s] Failed to connect: %v", mc.Phone, err)
+			} else {
+				logrus.Infof("[AutoConnect][%s] Connected successfully", mc.Phone)
+				if mc.Client.IsLoggedIn() {
+					mc.SetStatus(whatsapp.StatusLoggedIn)
+				} else {
+					mc.SetStatus(whatsapp.StatusConnected)
+				}
+			}
+		}
+	}
 }
 
 // SetAutoReconnectCheckingMultiClient starts a background goroutine that periodically checks
