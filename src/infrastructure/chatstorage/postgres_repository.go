@@ -327,15 +327,19 @@ func (r *PostgresRepository) GetChats(filter *domainChatStorage.ChatFilter) ([]*
 	args = append(args, r.deviceID)
 	argNum++
 
+	// Use actual message timestamp for last_message_time instead of stored chat value
+	// This ensures correct sorting even if chat.last_message_time is out of sync
 	query := `
 		SELECT
-			c.jid, c.name, c.last_message_time, c.ephemeral_expiration, c.created_at, c.updated_at,
+			c.jid, c.name,
+			COALESCE(lm.max_ts, c.last_message_time) AS last_message_time,
+			c.ephemeral_expiration, c.created_at, c.updated_at,
 			lm.content AS last_message,
 			lm.is_from_me AS last_message_from_me,
 			lm.media_type AS last_message_type
 		FROM chats c
 		LEFT JOIN (
-			SELECT m1.device_id, m1.chat_jid, m1.content, m1.is_from_me, m1.media_type
+			SELECT m1.device_id, m1.chat_jid, m1.content, m1.is_from_me, m1.media_type, m2.max_ts
 			FROM messages m1
 			INNER JOIN (
 				SELECT device_id, chat_jid, MAX(timestamp) as max_ts
@@ -359,7 +363,7 @@ func (r *PostgresRepository) GetChats(filter *domainChatStorage.ChatFilter) ([]*
 		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
 
-	query += " ORDER BY c.last_message_time DESC"
+	query += " ORDER BY COALESCE(lm.max_ts, c.last_message_time) DESC"
 
 	if filter.Limit > 0 {
 		if filter.Limit > 1000 {
