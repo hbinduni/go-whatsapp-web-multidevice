@@ -234,7 +234,7 @@ func (r *ClientRegistry) getOrCreateDevice(ctx context.Context, phone string) (*
 
 // normalizePhone removes common prefixes and formats from phone numbers for comparison
 func normalizePhone(phone string) string {
-	// Remove common prefixes like + or leading zeros
+	// Remove leading + if present
 	result := phone
 	if len(result) > 0 && result[0] == '+' {
 		result = result[1:]
@@ -246,6 +246,14 @@ func normalizePhone(phone string) string {
 			cleaned += string(c)
 		}
 	}
+
+	// Convert Indonesian local format (08xxx) to international format (628xxx)
+	// Indonesian phone numbers are typically 10-13 digits in local format (08xxxxxxxxx)
+	// or 11-14 digits in international format (628xxxxxxxxx)
+	if len(cleaned) >= 10 && len(cleaned) <= 13 && len(cleaned) > 0 && cleaned[0] == '0' {
+		cleaned = "62" + cleaned[1:]
+	}
+
 	return cleaned
 }
 
@@ -342,12 +350,19 @@ func (r *ClientRegistry) UnregisterClient(phone string) error {
 
 // ConnectClient connects a specific client
 func (r *ClientRegistry) ConnectClient(phone string) error {
+	r.log.Infof("[ConnectClient] Attempting to connect client %s", phone)
 	client, err := r.GetClient(phone)
 	if err != nil {
+		r.log.Errorf("[ConnectClient] Failed to get client %s: %v", phone, err)
 		return err
 	}
 
-	if client.Client.IsConnected() {
+	wasConnected := client.Client.IsConnected()
+	wasLoggedIn := client.Client.IsLoggedIn()
+	r.log.Infof("[ConnectClient] Client %s state before: connected=%v, loggedIn=%v", phone, wasConnected, wasLoggedIn)
+
+	if wasConnected {
+		r.log.Infof("[ConnectClient] Client %s already connected, skipping", phone)
 		return nil // Already connected
 	}
 
@@ -355,10 +370,15 @@ func (r *ClientRegistry) ConnectClient(phone string) error {
 	err = client.Client.Connect()
 	if err != nil {
 		client.SetStatus(StatusDisconnected)
+		r.log.Errorf("[ConnectClient] Failed to connect client %s: %v", phone, err)
 		return fmt.Errorf("failed to connect client %s: %w", phone, err)
 	}
 
-	if client.Client.IsLoggedIn() {
+	isConnectedAfter := client.Client.IsConnected()
+	isLoggedInAfter := client.Client.IsLoggedIn()
+	r.log.Infof("[ConnectClient] Client %s state after: connected=%v, loggedIn=%v", phone, isConnectedAfter, isLoggedInAfter)
+
+	if isLoggedInAfter {
 		client.SetStatus(StatusLoggedIn)
 	} else {
 		client.SetStatus(StatusConnected)
@@ -369,15 +389,27 @@ func (r *ClientRegistry) ConnectClient(phone string) error {
 
 // DisconnectClient disconnects a specific client
 func (r *ClientRegistry) DisconnectClient(phone string) error {
+	r.log.Infof("[DisconnectClient] Attempting to disconnect client %s", phone)
 	client, err := r.GetClient(phone)
 	if err != nil {
+		r.log.Errorf("[DisconnectClient] Failed to get client %s: %v", phone, err)
 		return err
 	}
 
-	if client.Client != nil && client.Client.IsConnected() {
+	wasConnected := client.Client != nil && client.Client.IsConnected()
+	wasLoggedIn := client.Client != nil && client.Client.IsLoggedIn()
+	r.log.Infof("[DisconnectClient] Client %s state before: connected=%v, loggedIn=%v", phone, wasConnected, wasLoggedIn)
+
+	if client.Client != nil && wasConnected {
 		client.Client.Disconnect()
+		r.log.Infof("[DisconnectClient] Called Disconnect() on client %s", phone)
+	} else {
+		r.log.Infof("[DisconnectClient] Client %s was not connected, skipping Disconnect()", phone)
 	}
 	client.SetStatus(StatusDisconnected)
+
+	isConnectedAfter := client.Client != nil && client.Client.IsConnected()
+	r.log.Infof("[DisconnectClient] Client %s state after: connected=%v", phone, isConnectedAfter)
 
 	return nil
 }

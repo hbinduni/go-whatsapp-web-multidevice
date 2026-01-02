@@ -39,6 +39,24 @@ func TestValidatePhone(t *testing.T) {
 			wantErr:  false,
 		},
 		{
+			name:     "Indonesian local format (08xxx)",
+			phone:    "08131836981",
+			wantNorm: "628131836981",
+			wantErr:  false,
+		},
+		{
+			name:     "Indonesian local format with spaces",
+			phone:    "0813 1836 981",
+			wantNorm: "628131836981",
+			wantErr:  false,
+		},
+		{
+			name:     "Indonesian local format with dashes",
+			phone:    "0813-1836-981",
+			wantNorm: "628131836981",
+			wantErr:  false,
+		},
+		{
 			name:     "minimum valid length (7 digits)",
 			phone:    "1234567",
 			wantNorm: "1234567",
@@ -122,6 +140,16 @@ func TestNormalizePhone(t *testing.T) {
 		{"(62) 813 1836 981", "628131836981"},
 		{"+1 (555) 123-4567", "15551234567"},
 		{"", ""},
+		// Indonesian local format conversion
+		{"08131836981", "628131836981"},
+		{"0813-1836-981", "628131836981"},
+		{"0813 1836 981", "628131836981"},
+		{"081234567890", "6281234567890"},
+		// Short numbers starting with 0 should NOT be converted (not Indonesian format)
+		{"0123456", "0123456"},     // Too short for Indonesian
+		{"012345678", "012345678"}, // 9 digits - too short
+		// Long numbers starting with 0 should NOT be converted
+		{"01234567890123", "01234567890123"}, // 14 digits - too long for Indonesian local
 	}
 
 	for _, tt := range tests {
