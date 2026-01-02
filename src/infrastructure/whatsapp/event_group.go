@@ -8,17 +8,18 @@ import (
 
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
 	"github.com/sirupsen/logrus"
+	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 )
 
 // createGroupInfoPayload creates a webhook payload for group information events
-func createGroupInfoPayload(evt *events.GroupInfo, actionType string, jids []types.JID) map[string]any {
+func createGroupInfoPayload(evt *events.GroupInfo, actionType string, jids []types.JID, client *whatsmeow.Client) map[string]any {
 	body := make(map[string]any)
 
 	// Add device_jid to identify which WhatsApp account received this event
-	if cli != nil && cli.Store != nil && cli.Store.ID != nil {
-		body["device_jid"] = cli.Store.ID.String()
+	if client != nil && client.Store != nil && client.Store.ID != nil {
+		body["device_jid"] = client.Store.ID.String()
 	}
 
 	// Create payload structure matching the expected format
@@ -55,7 +56,7 @@ func jidsToStrings(jids []types.JID) []string {
 }
 
 // forwardGroupInfoToWebhook forwards group information events to the configured webhook URLs
-func forwardGroupInfoToWebhook(ctx context.Context, evt *events.GroupInfo) error {
+func forwardGroupInfoToWebhook(ctx context.Context, evt *events.GroupInfo, client *whatsmeow.Client) error {
 	logrus.Infof("Forwarding group info event to %d configured webhook(s)", len(config.WhatsappWebhook))
 
 	// Send separate webhook events for each action type
@@ -71,7 +72,7 @@ func forwardGroupInfoToWebhook(ctx context.Context, evt *events.GroupInfo) error
 
 	for _, action := range actions {
 		if len(action.jids) > 0 {
-			payload := createGroupInfoPayload(evt, action.actionType, action.jids)
+			payload := createGroupInfoPayload(evt, action.actionType, action.jids, client)
 
 			// Collect errors from all webhook URLs instead of failing fast
 			var errors []error

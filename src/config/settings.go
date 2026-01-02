@@ -14,7 +14,7 @@ var (
 	AppOs             = "GoWA-SSE" // Identifies this as the SSE-enabled fork
 	AppPlatform       = waCompanionReg.DeviceProps_PlatformType(1)
 	AppBasePath       = ""
-	AppPublicURL      = "" // Public URL for constructing URLs in API responses (e.g., "https://wa.example.com")
+	AppPublicURL      = ""     // Public URL for constructing URLs in API responses (e.g., "https://wa.example.com")
 	AppTrustedProxies []string // Trusted proxy IP ranges (e.g., "0.0.0.0/0" for all, or specific CIDRs)
 
 	// CORS configuration

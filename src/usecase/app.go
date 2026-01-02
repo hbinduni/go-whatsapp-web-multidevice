@@ -96,9 +96,6 @@ func (service *serviceApp) Login(ctx context.Context) (response domainApp.LoginR
 	logrus.Debugf("Login connection established - IsConnected: %v, IsLoggedIn: %v",
 		client.IsConnected(), client.IsLoggedIn())
 
-	// Ensure global client is synchronized with service client
-	whatsapp.UpdateGlobalClient(client, whatsapp.GetDB())
-
 	return response, nil
 }
 
@@ -132,9 +129,6 @@ func (service *serviceApp) LoginWithCode(ctx context.Context, phoneNumber string
 
 	logrus.Debugf("Phone pairing completed - IsConnected: %v, IsLoggedIn: %v",
 		client.IsConnected(), client.IsLoggedIn())
-
-	// Ensure global client is synchronized with service client
-	whatsapp.UpdateGlobalClient(client, whatsapp.GetDB())
 
 	logrus.Infof("Successfully paired phone with code: %s", loginCode)
 	return loginCode, nil
@@ -213,9 +207,6 @@ func (service *serviceApp) Reconnect(ctx context.Context) (err error) {
 
 	logrus.Debugf("Reconnection completed - IsConnected: %v, IsLoggedIn: %v",
 		client.IsConnected(), client.IsLoggedIn())
-
-	// Ensure global client is synchronized with service client
-	whatsapp.UpdateGlobalClient(client, whatsapp.GetDB())
 
 	return err
 }

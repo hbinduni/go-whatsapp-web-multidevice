@@ -11,7 +11,6 @@ import (
 	domainChatStorage "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/chatstorage"
 	pkgError "github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/error"
 	"go.mau.fi/whatsmeow"
-	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	waLog "go.mau.fi/whatsmeow/util/log"
 )
@@ -30,18 +29,11 @@ const (
 	ContextKeyChatStorage contextKey = "wa_chat_storage"
 )
 
-// Global variables for WhatsApp client state
-// NOTE: In multi-client mode, prefer using GetRegistry() instead of these globals
+// Global variables for WhatsApp state
 var (
 	globalStateMu sync.RWMutex
-	cli           *whatsmeow.Client
-	db            *sqlstore.Container
-	keysDB        *sqlstore.Container
 	log           waLog.Logger
 	startupTime   = time.Now().Unix()
-
-	// multiClientMode indicates whether the server is running in multi-client mode
-	multiClientMode bool
 )
 
 // InitWaDB initializes the WhatsApp database connection
@@ -108,96 +100,7 @@ func syncKeysDevice(ctx context.Context, db, keysDB *sqlstore.Container) {
 	}
 }
 
-// InitWaCLI initializes the WhatsApp client
-func InitWaCLI(ctx context.Context, storeContainer, keysStoreContainer *sqlstore.Container, chatStorageRepo domainChatStorage.IChatStorageRepository) *whatsmeow.Client {
-	device, err := storeContainer.GetFirstDevice(ctx)
-	if err != nil {
-		log.Errorf("Failed to get device: %v", err)
-		panic(err)
-	}
-
-	if device == nil {
-		log.Errorf("No device found")
-		panic("No device found")
-	}
-
-	// Configure device properties
-	osName := fmt.Sprintf("%s %s", config.AppOs, config.AppVersion)
-	store.DeviceProps.PlatformType = &config.AppPlatform
-	store.DeviceProps.Os = &osName
-
-	// Keep references for global state update after client creation
-	primaryDB := storeContainer
-	keysContainer := keysStoreContainer
-
-	// Configure a separated database for accelerating encryption caching
-	if keysContainer != nil && device.ID != nil {
-		innerStore := sqlstore.NewSQLStore(keysStoreContainer, *device.ID)
-
-		syncKeysDevice(ctx, primaryDB, keysContainer)
-		device.Identities = innerStore
-		device.Sessions = innerStore
-		device.PreKeys = innerStore
-		device.SenderKeys = innerStore
-		device.MsgSecrets = innerStore
-		device.PrivacyTokens = innerStore
-	}
-
-	// Create and configure the client with filtered logging
-	baseLogger := waLog.Stdout("Client", config.WhatsappLogLevel, true)
-	client := whatsmeow.NewClient(device, newFilteredLogger(baseLogger))
-	client.EnableAutoReconnect = true
-	client.AutoTrustIdentity = true
-
-	// Configure message retry handler for encryption session establishment.
-	// When sending to a new contact, WhatsApp may request a retry if the initial
-	// message can't be decrypted. This callback provides the original message.
-	client.GetMessageForRetry = GetMessageForRetryHandler()
-
-	client.AddEventHandler(func(rawEvt interface{}) {
-		handler(ctx, rawEvt, chatStorageRepo)
-	})
-
-	globalStateMu.Lock()
-	cli = client
-	db = primaryDB
-	keysDB = keysContainer
-	globalStateMu.Unlock()
-
-	return client
-}
-
-// UpdateGlobalClient updates the global cli variable with a new client instance
-func UpdateGlobalClient(newCli *whatsmeow.Client, newDB *sqlstore.Container) {
-	globalStateMu.Lock()
-	cli = newCli
-	db = newDB
-	globalStateMu.Unlock()
-	log.Debugf("Global WhatsApp client updated")
-}
-
-// GetClient returns the current global client instance
-// In multi-client mode, returns the first available client for backward compatibility
-func GetClient() *whatsmeow.Client {
-	// Check if we're in multi-client mode
-	if IsMultiClientMode() {
-		reg := GetRegistry()
-		if reg != nil {
-			clients := reg.GetAllClients()
-			if len(clients) > 0 {
-				return clients[0].Client
-			}
-		}
-		return nil
-	}
-
-	globalStateMu.RLock()
-	defer globalStateMu.RUnlock()
-	return cli
-}
-
 // GetClientByPhone returns a client for a specific phone number
-// This is the preferred method in multi-client mode
 func GetClientByPhone(phone string) (*whatsmeow.Client, error) {
 	reg := GetRegistry()
 	if reg == nil {
@@ -222,76 +125,16 @@ func GetManagedClientByPhone(phone string) (*ManagedClient, error) {
 	return reg.GetClient(phone)
 }
 
-// GetDB returns the current global database instance
-// In multi-client mode, returns the shared database from registry
+// GetDB returns the shared database from registry
 func GetDB() *sqlstore.Container {
-	if IsMultiClientMode() {
-		reg := GetRegistry()
-		if reg != nil {
-			return reg.GetDB()
-		}
-		return nil
+	reg := GetRegistry()
+	if reg != nil {
+		return reg.GetDB()
 	}
-
-	globalStateMu.RLock()
-	defer globalStateMu.RUnlock()
-	return db
-}
-
-func getStoreContainers() (*sqlstore.Container, *sqlstore.Container) {
-	globalStateMu.RLock()
-	defer globalStateMu.RUnlock()
-	return db, keysDB
-}
-
-// GetConnectionStatus returns the current connection status of the global client
-// In multi-client mode, returns status of the first available client
-func GetConnectionStatus() (isConnected bool, isLoggedIn bool, deviceID string) {
-	if IsMultiClientMode() {
-		reg := GetRegistry()
-		if reg != nil {
-			clients := reg.GetAllClients()
-			if len(clients) > 0 {
-				mc := clients[0]
-				return mc.IsConnected(), mc.IsLoggedIn(), mc.GetDeviceID()
-			}
-		}
-		return false, false, ""
-	}
-
-	globalStateMu.RLock()
-	currentClient := cli
-	globalStateMu.RUnlock()
-	if currentClient == nil {
-		return false, false, ""
-	}
-
-	isConnected = currentClient.IsConnected()
-	isLoggedIn = currentClient.IsLoggedIn()
-
-	if currentClient.Store != nil && currentClient.Store.ID != nil {
-		deviceID = currentClient.Store.ID.String()
-	}
-
-	return isConnected, isLoggedIn, deviceID
-}
-
-// SetMultiClientMode enables or disables multi-client mode
-func SetMultiClientMode(enabled bool) {
-	globalStateMu.Lock()
-	defer globalStateMu.Unlock()
-	multiClientMode = enabled
-}
-
-// IsMultiClientMode returns true if the server is running in multi-client mode
-func IsMultiClientMode() bool {
-	globalStateMu.RLock()
-	defer globalStateMu.RUnlock()
-	return multiClientMode
+	return nil
 }
 
 // GetAllClientStatuses returns status for all registered clients
-// Only available in multi-client mode
 func GetAllClientStatuses() map[string]map[string]interface{} {
 	reg := GetRegistry()
 	if reg == nil {
@@ -317,15 +160,12 @@ func ContextWithManagedClient(ctx context.Context, mc *ManagedClient) context.Co
 }
 
 // GetClientFromContext extracts the WhatsApp client from context
-// Falls back to global GetClient() if not found in context (for backward compatibility)
+// Returns nil if not found in context
 func GetClientFromContext(ctx context.Context) *whatsmeow.Client {
-	// Try to get from context first
 	if client, ok := ctx.Value(ContextKeyClient).(*whatsmeow.Client); ok && client != nil {
 		return client
 	}
-
-	// Fallback to global client (backward compatibility)
-	return GetClient()
+	return nil
 }
 
 // GetManagedClientFromContext extracts the ManagedClient from context

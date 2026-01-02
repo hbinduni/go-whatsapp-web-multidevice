@@ -5,12 +5,13 @@ import (
 	"time"
 
 	domainChatStorage "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/chatstorage"
+	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/types/events"
 )
 
 // forwardDeleteToWebhook sends a delete event to webhook
-func forwardDeleteToWebhook(ctx context.Context, evt *events.DeleteForMe, message *domainChatStorage.Message) error {
-	payload, err := createDeletePayload(ctx, evt, message)
+func forwardDeleteToWebhook(ctx context.Context, evt *events.DeleteForMe, message *domainChatStorage.Message, client *whatsmeow.Client) error {
+	payload, err := createDeletePayload(ctx, evt, message, client)
 	if err != nil {
 		return err
 	}
@@ -19,12 +20,12 @@ func forwardDeleteToWebhook(ctx context.Context, evt *events.DeleteForMe, messag
 }
 
 // createDeletePayload creates a webhook payload for delete events
-func createDeletePayload(_ context.Context, evt *events.DeleteForMe, message *domainChatStorage.Message) (map[string]any, error) {
+func createDeletePayload(_ context.Context, evt *events.DeleteForMe, message *domainChatStorage.Message, client *whatsmeow.Client) (map[string]any, error) {
 	body := make(map[string]any)
 
 	// Add device_jid to identify which WhatsApp account received this event
-	if cli != nil && cli.Store != nil && cli.Store.ID != nil {
-		body["device_jid"] = cli.Store.ID.String()
+	if client != nil && client.Store != nil && client.Store.ID != nil {
+		body["device_jid"] = client.Store.ID.String()
 	}
 
 	// Basic delete event information

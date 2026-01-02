@@ -11,7 +11,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type client struct{}
+type client struct {
+	remoteAddr string
+}
 
 type BroadcastMessage struct {
 	Code    string `json:"code"`
@@ -29,19 +31,25 @@ var (
 )
 
 func handleRegister(conn *websocket.Conn) {
+	remoteAddr := conn.RemoteAddr().String()
 	clientsMu.Lock()
-	clients[conn] = client{}
+	clients[conn] = client{remoteAddr: remoteAddr}
 	count := len(clients)
 	clientsMu.Unlock()
-	logrus.Infof("[WebSocket] Client connected from %s (total: %d)", conn.RemoteAddr(), count)
+	logrus.Infof("[WebSocket] Client connected from %s (total: %d)", remoteAddr, count)
 }
 
 func handleUnregister(conn *websocket.Conn) {
 	clientsMu.Lock()
+	c, exists := clients[conn]
+	remoteAddr := "unknown"
+	if exists {
+		remoteAddr = c.remoteAddr
+	}
 	delete(clients, conn)
 	count := len(clients)
 	clientsMu.Unlock()
-	logrus.Infof("[WebSocket] Client disconnected from %s (total: %d)", conn.RemoteAddr(), count)
+	logrus.Infof("[WebSocket] Client disconnected from %s (total: %d)", remoteAddr, count)
 }
 
 func broadcastMessage(message BroadcastMessage) {
@@ -55,9 +63,9 @@ func broadcastMessage(message BroadcastMessage) {
 	var toRemove []*websocket.Conn
 
 	clientsMu.RLock()
-	for conn := range clients {
+	for conn, c := range clients {
 		if err := conn.WriteMessage(websocket.TextMessage, marshalMessage); err != nil {
-			logrus.Warnf("[WebSocket] Write error to %s: %v", conn.RemoteAddr(), err)
+			logrus.Warnf("[WebSocket] Write error to %s: %v", c.remoteAddr, err)
 			toRemove = append(toRemove, conn)
 		}
 	}

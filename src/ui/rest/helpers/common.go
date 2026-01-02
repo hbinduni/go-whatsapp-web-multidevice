@@ -10,7 +10,6 @@ import (
 	domainApp "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/app"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/whatsapp"
 	"github.com/sirupsen/logrus"
-	waLib "go.mau.fi/whatsmeow"
 )
 
 var (
@@ -25,46 +24,8 @@ func SetAutoConnectAfterBooting(service domainApp.IAppUsecase) {
 	_ = service.Reconnect(context.Background())
 }
 
-// SetAutoReconnectChecking starts a background goroutine that periodically checks
-// if the WhatsApp client is connected, and reconnects if not.
-// Call StopAutoReconnectChecking() to gracefully stop the loop.
-// This is for single-client mode only.
-func SetAutoReconnectChecking(cli *waLib.Client) {
-	if cli == nil {
-		logrus.Warn("[AutoReconnect] Called with nil WhatsApp client; skipping")
-		return
-	}
-
-	reconnectOnce.Do(func() {
-		logrus.Info("[AutoReconnect] Starting single-client reconnect checker (every 1 minute)")
-		go func() {
-			defer close(reconnectStopped)
-			ticker := time.NewTicker(1 * time.Minute)
-			defer ticker.Stop()
-
-			for {
-				select {
-				case <-ticker.C:
-					if !cli.IsConnected() {
-						logrus.Info("[AutoReconnect] Client disconnected, attempting reconnect...")
-						if err := cli.Connect(); err != nil {
-							logrus.Warnf("[AutoReconnect] Reconnect failed: %v", err)
-						} else {
-							logrus.Info("[AutoReconnect] Reconnected successfully")
-						}
-					}
-				case <-stopReconnect:
-					logrus.Info("[AutoReconnect] Stopping reconnect checker")
-					return
-				}
-			}
-		}()
-	})
-}
-
 // SetAutoReconnectCheckingMultiClient starts a background goroutine that periodically checks
 // ALL registered WhatsApp clients and reconnects any that are disconnected.
-// This is for multi-client mode - it monitors every client in the registry.
 func SetAutoReconnectCheckingMultiClient() {
 	reconnectOnce.Do(func() {
 		logrus.Info("[AutoReconnect] Starting multi-client reconnect checker (every 1 minute)")

@@ -197,7 +197,7 @@ func (r *ClientRegistry) RegisterClient(ctx context.Context, phone string, chatS
 
 	// Add event handler for this client
 	client.AddEventHandler(func(rawEvt interface{}) {
-		handlerMultiClient(ctx, rawEvt, managedClient)
+		handler(ctx, rawEvt, managedClient)
 	})
 
 	// Store in registry
@@ -446,7 +446,7 @@ func (r *ClientRegistry) ReinitializeClient(ctx context.Context, phone string) e
 
 	// Add event handler for new client
 	newClient.AddEventHandler(func(rawEvt interface{}) {
-		handlerMultiClient(ctx, rawEvt, mc)
+		handler(ctx, rawEvt, mc)
 	})
 
 	r.log.Infof("Reinitialized client for phone: %s", phone)

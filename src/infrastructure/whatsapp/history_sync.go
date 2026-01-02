@@ -8,25 +8,24 @@ import (
 	"sync/atomic"
 	"time"
 
-	"go.mau.fi/whatsmeow/proto/waHistorySync"
-	"go.mau.fi/whatsmeow/types"
-	"go.mau.fi/whatsmeow/types/events"
-
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
 	domainChatStorage "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/chatstorage"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/utils"
+	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/proto/waHistorySync"
+	"go.mau.fi/whatsmeow/types"
+	"go.mau.fi/whatsmeow/types/events"
 )
 
 // historySyncID tracks history sync file numbering
 var historySyncID int32
 
-func handleHistorySync(ctx context.Context, evt *events.HistorySync, chatStorageRepo domainChatStorage.IChatStorageRepository) {
+func handleHistorySync(ctx context.Context, evt *events.HistorySync, chatStorageRepo domainChatStorage.IChatStorageRepository, client *whatsmeow.Client) {
 	if !config.HistorySyncEnabled {
 		log.Debugf("History sync is disabled, skipping sync type: %s", evt.Data.SyncType.String())
 		return
 	}
 
-	client := GetClient()
 	if client == nil || client.Store == nil || client.Store.ID == nil {
 		log.Warnf("Skipping history sync handling: WhatsApp client not initialized")
 		return
@@ -58,14 +57,14 @@ func handleHistorySync(ctx context.Context, evt *events.HistorySync, chatStorage
 
 	// Process history sync data to database
 	if chatStorageRepo != nil {
-		if err := processHistorySync(ctx, evt.Data, chatStorageRepo); err != nil {
+		if err := processHistorySync(ctx, evt.Data, chatStorageRepo, client); err != nil {
 			log.Errorf("Failed to process history sync to database: %v", err)
 		}
 	}
 }
 
 // processHistorySync processes history sync data and stores messages in the database
-func processHistorySync(ctx context.Context, data *waHistorySync.HistorySync, chatStorageRepo domainChatStorage.IChatStorageRepository) error {
+func processHistorySync(ctx context.Context, data *waHistorySync.HistorySync, chatStorageRepo domainChatStorage.IChatStorageRepository, client *whatsmeow.Client) error {
 	if data == nil {
 		return nil
 	}
@@ -75,9 +74,9 @@ func processHistorySync(ctx context.Context, data *waHistorySync.HistorySync, ch
 
 	switch syncType {
 	case waHistorySync.HistorySync_INITIAL_BOOTSTRAP, waHistorySync.HistorySync_RECENT:
-		return processConversationMessages(ctx, data, chatStorageRepo)
+		return processConversationMessages(ctx, data, chatStorageRepo, client)
 	case waHistorySync.HistorySync_PUSH_NAME:
-		return processPushNames(ctx, data, chatStorageRepo)
+		return processPushNames(ctx, data, chatStorageRepo, client)
 	default:
 		log.Debugf("Skipping history sync type: %s", syncType.String())
 		return nil
@@ -85,7 +84,7 @@ func processHistorySync(ctx context.Context, data *waHistorySync.HistorySync, ch
 }
 
 // processConversationMessages processes and stores conversation messages from history sync
-func processConversationMessages(ctx context.Context, data *waHistorySync.HistorySync, chatStorageRepo domainChatStorage.IChatStorageRepository) error {
+func processConversationMessages(ctx context.Context, data *waHistorySync.HistorySync, chatStorageRepo domainChatStorage.IChatStorageRepository, client *whatsmeow.Client) error {
 	conversations := data.GetConversations()
 	log.Infof("Processing %d conversations from history sync", len(conversations))
 
@@ -98,8 +97,6 @@ func processConversationMessages(ctx context.Context, data *waHistorySync.Histor
 	} else if config.HistorySyncMaxDays == -1 {
 		log.Infof("History sync filtering: processing all available messages (no time limit)")
 	}
-
-	client := GetClient()
 
 	for _, conv := range conversations {
 		rawChatJID := conv.GetID()
@@ -235,11 +232,9 @@ func processConversationMessages(ctx context.Context, data *waHistorySync.Histor
 }
 
 // processPushNames processes push names from history sync to update chat names
-func processPushNames(ctx context.Context, data *waHistorySync.HistorySync, chatStorageRepo domainChatStorage.IChatStorageRepository) error {
+func processPushNames(ctx context.Context, data *waHistorySync.HistorySync, chatStorageRepo domainChatStorage.IChatStorageRepository, client *whatsmeow.Client) error {
 	pushnames := data.GetPushnames()
 	log.Debugf("Processing %d push names from history sync", len(pushnames))
-
-	client := GetClient()
 
 	for _, pushname := range pushnames {
 		rawJIDStr := pushname.GetID()

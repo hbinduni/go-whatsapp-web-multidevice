@@ -96,16 +96,12 @@ func (handler *App) Devices(c *fiber.Ctx) error {
 }
 
 func (handler *App) ConnectionStatus(c *fiber.Ctx) error {
-	isConnected, isLoggedIn, deviceID := whatsapp.GetConnectionStatus()
+	statuses := whatsapp.GetAllClientStatuses()
 
 	return c.JSON(utils.ResponseData{
 		Status:  200,
 		Code:    "SUCCESS",
 		Message: "Connection status retrieved",
-		Results: map[string]any{
-			"is_connected": isConnected,
-			"is_logged_in": isLoggedIn,
-			"device_id":    deviceID,
-		},
+		Results: statuses,
 	})
 }

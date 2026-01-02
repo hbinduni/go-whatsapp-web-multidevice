@@ -7,18 +7,18 @@ import (
 	"strings"
 	"time"
 
-	"go.mau.fi/whatsmeow/types"
-
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
 	pkgError "github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/error"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/utils"
 	"github.com/sirupsen/logrus"
+	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 )
 
 // forwardMessageToWebhook is a helper function to forward message event to webhook url
-func forwardMessageToWebhook(ctx context.Context, evt *events.Message) error {
-	payload, err := createMessagePayload(ctx, evt)
+func forwardMessageToWebhook(ctx context.Context, evt *events.Message, client *whatsmeow.Client) error {
+	payload, err := createMessagePayload(ctx, evt, client)
 	if err != nil {
 		return err
 	}
@@ -26,7 +26,7 @@ func forwardMessageToWebhook(ctx context.Context, evt *events.Message) error {
 	return forwardPayloadToConfiguredWebhooks(ctx, payload, "message event")
 }
 
-func createMessagePayload(ctx context.Context, evt *events.Message) (map[string]any, error) {
+func createMessagePayload(ctx context.Context, evt *events.Message, client *whatsmeow.Client) (map[string]any, error) {
 	message := utils.BuildEventMessage(evt)
 	waReaction := utils.BuildEventReaction(evt)
 	forwarded := utils.BuildForwarded(evt)
@@ -34,13 +34,13 @@ func createMessagePayload(ctx context.Context, evt *events.Message) (map[string]
 	body := make(map[string]any)
 
 	// Add device_jid to identify which WhatsApp account received this message
-	if cli != nil && cli.Store != nil && cli.Store.ID != nil {
-		body["device_jid"] = cli.Store.ID.String()
+	if client != nil && client.Store != nil && client.Store.ID != nil {
+		body["device_jid"] = client.Store.ID.String()
 	}
 
 	// Normalize JIDs from @lid to @s.whatsapp.net format for consistent webhook data
-	normalizedSender := NormalizeJIDFromLID(ctx, evt.Info.Sender, cli)
-	normalizedChat := NormalizeJIDFromLID(ctx, evt.Info.Chat, cli)
+	normalizedSender := NormalizeJIDFromLID(ctx, evt.Info.Sender, client)
+	normalizedChat := NormalizeJIDFromLID(ctx, evt.Info.Chat, client)
 	body["sender_id"] = normalizedSender.User
 	body["chat_id"] = normalizedChat.User
 
@@ -59,7 +59,7 @@ func createMessagePayload(ctx context.Context, evt *events.Message) (map[string]
 			if err != nil {
 				logrus.Errorf("Error when parse jid: %v", err)
 			} else {
-				pn, err := cli.Store.LIDs.GetPNForLID(ctx, lid)
+				pn, err := client.Store.LIDs.GetPNForLID(ctx, lid)
 				if err != nil {
 					logrus.Errorf("Error when get pn for lid %s: %v", lid.String(), err)
 				}
@@ -84,7 +84,7 @@ func createMessagePayload(ctx context.Context, evt *events.Message) (map[string]
 			if err != nil {
 				logrus.Errorf("Error when parse jid: %v", err)
 			} else {
-				pn, err := cli.Store.LIDs.GetPNForLID(ctx, lid)
+				pn, err := client.Store.LIDs.GetPNForLID(ctx, lid)
 				if err != nil {
 					logrus.Errorf("Error when get pn for lid %s: %v", lid.String(), err)
 				}
@@ -142,15 +142,18 @@ func createMessagePayload(ctx context.Context, evt *events.Message) (map[string]
 	}
 
 	// Get device ID for path organization
-	deviceID := cli.Store.ID.User
+	deviceID := ""
+	if client != nil && client.Store != nil && client.Store.ID != nil {
+		deviceID = client.Store.ID.User
+	}
 	// Normalize JID to ensure consistent file paths (convert @lid to @s.whatsapp.net)
-	normalizedChatJID := NormalizeJIDFromLID(ctx, evt.Info.Chat, cli)
+	normalizedChatJID := NormalizeJIDFromLID(ctx, evt.Info.Chat, client)
 	chatJID := normalizedChatJID.String()
 	messageID := evt.Info.ID
 
 	if audioMedia := evt.Message.GetAudioMessage(); audioMedia != nil {
 		if config.WhatsappAutoDownloadMedia {
-			path, err := utils.ExtractMediaWithInfo(ctx, cli, audioMedia, chatJID, messageID, deviceID)
+			path, err := utils.ExtractMediaWithInfo(ctx, client, audioMedia, chatJID, messageID, deviceID)
 			if err != nil {
 				logrus.Errorf("Failed to download audio from %s: %v", evt.Info.SourceString(), err)
 				return nil, pkgError.WebhookError(fmt.Sprintf("Failed to download audio: %v", err))
@@ -169,7 +172,7 @@ func createMessagePayload(ctx context.Context, evt *events.Message) (map[string]
 
 	if documentMedia := evt.Message.GetDocumentMessage(); documentMedia != nil {
 		if config.WhatsappAutoDownloadMedia {
-			path, err := utils.ExtractMediaWithInfo(ctx, cli, documentMedia, chatJID, messageID, deviceID)
+			path, err := utils.ExtractMediaWithInfo(ctx, client, documentMedia, chatJID, messageID, deviceID)
 			if err != nil {
 				logrus.Errorf("Failed to download document from %s: %v", evt.Info.SourceString(), err)
 				return nil, pkgError.WebhookError(fmt.Sprintf("Failed to download document: %v", err))
@@ -185,7 +188,7 @@ func createMessagePayload(ctx context.Context, evt *events.Message) (map[string]
 
 	if imageMedia := evt.Message.GetImageMessage(); imageMedia != nil {
 		if config.WhatsappAutoDownloadMedia {
-			path, err := utils.ExtractMediaWithInfo(ctx, cli, imageMedia, chatJID, messageID, deviceID)
+			path, err := utils.ExtractMediaWithInfo(ctx, client, imageMedia, chatJID, messageID, deviceID)
 			if err != nil {
 				logrus.Errorf("Failed to download image from %s: %v", evt.Info.SourceString(), err)
 				return nil, pkgError.WebhookError(fmt.Sprintf("Failed to download image: %v", err))
@@ -217,7 +220,7 @@ func createMessagePayload(ctx context.Context, evt *events.Message) (map[string]
 
 	if stickerMedia := evt.Message.GetStickerMessage(); stickerMedia != nil {
 		if config.WhatsappAutoDownloadMedia {
-			path, err := utils.ExtractMediaWithInfo(ctx, cli, stickerMedia, chatJID, messageID, deviceID)
+			path, err := utils.ExtractMediaWithInfo(ctx, client, stickerMedia, chatJID, messageID, deviceID)
 			if err != nil {
 				logrus.Errorf("Failed to download sticker from %s: %v", evt.Info.SourceString(), err)
 				return nil, pkgError.WebhookError(fmt.Sprintf("Failed to download sticker: %v", err))
@@ -232,7 +235,7 @@ func createMessagePayload(ctx context.Context, evt *events.Message) (map[string]
 
 	if videoMedia := evt.Message.GetVideoMessage(); videoMedia != nil {
 		if config.WhatsappAutoDownloadMedia {
-			path, err := utils.ExtractMediaWithInfo(ctx, cli, videoMedia, chatJID, messageID, deviceID)
+			path, err := utils.ExtractMediaWithInfo(ctx, client, videoMedia, chatJID, messageID, deviceID)
 			if err != nil {
 				logrus.Errorf("Failed to download video from %s: %v", evt.Info.SourceString(), err)
 				return nil, pkgError.WebhookError(fmt.Sprintf("Failed to download video: %v", err))
@@ -249,7 +252,7 @@ func createMessagePayload(ctx context.Context, evt *events.Message) (map[string]
 	// Handle PTV (Push-To-Video) messages - also known as "video notes" (circular video messages)
 	if ptvMedia := evt.Message.GetPtvMessage(); ptvMedia != nil {
 		if config.WhatsappAutoDownloadMedia {
-			path, err := utils.ExtractMediaWithInfo(ctx, cli, ptvMedia, chatJID, messageID, deviceID)
+			path, err := utils.ExtractMediaWithInfo(ctx, client, ptvMedia, chatJID, messageID, deviceID)
 			if err != nil {
 				logrus.Errorf("Failed to download video note from %s: %v", evt.Info.SourceString(), err)
 				return nil, pkgError.WebhookError(fmt.Sprintf("Failed to download video note: %v", err))

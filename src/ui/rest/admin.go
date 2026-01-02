@@ -26,7 +26,7 @@ func InitRestAdmin(app fiber.Router, service domainAdmin.IAdminUsecase) Admin {
 
 	// Client management endpoints
 	admin.Get("/clients", rest.ListClients)
-	admin.Post("/clients", rest.AddClient)           // Add new client dynamically
+	admin.Post("/clients", rest.AddClient)             // Add new client dynamically
 	admin.Delete("/clients/:phone", rest.RemoveClient) // Remove client (keeps chat history)
 	admin.Get("/clients/:phone/status", rest.GetClientStatus)
 	admin.Post("/clients/:phone/connect", rest.ConnectClient)

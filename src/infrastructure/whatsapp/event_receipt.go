@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 )
@@ -33,12 +34,12 @@ func getReceiptTypeDescription(evt types.ReceiptType) string {
 }
 
 // createReceiptPayload creates a webhook payload for message acknowledgement (receipt) events
-func createReceiptPayload(evt *events.Receipt) map[string]any {
+func createReceiptPayload(evt *events.Receipt, client *whatsmeow.Client) map[string]any {
 	body := make(map[string]any)
 
 	// Add device_jid to identify which WhatsApp account received this event
-	if cli != nil && cli.Store != nil && cli.Store.ID != nil {
-		body["device_jid"] = cli.Store.ID.String()
+	if client != nil && client.Store != nil && client.Store.ID != nil {
+		body["device_jid"] = client.Store.ID.String()
 	}
 
 	// Create payload structure matching the expected format
@@ -72,7 +73,7 @@ func createReceiptPayload(evt *events.Receipt) map[string]any {
 }
 
 // forwardReceiptToWebhook forwards message acknowledgement events to the configured webhook URLs
-func forwardReceiptToWebhook(ctx context.Context, evt *events.Receipt) error {
-	payload := createReceiptPayload(evt)
+func forwardReceiptToWebhook(ctx context.Context, evt *events.Receipt, client *whatsmeow.Client) error {
+	payload := createReceiptPayload(evt, client)
 	return forwardPayloadToConfiguredWebhooks(ctx, payload, "message ack event")
 }

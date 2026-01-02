@@ -919,7 +919,7 @@ func (r *PostgresRepository) CreateMessage(ctx context.Context, evt *events.Mess
 		return nil
 	}
 
-	client := whatsapp.GetClient()
+	client := whatsapp.GetClientFromContext(ctx)
 
 	normalizedChatJID := whatsapp.NormalizeJIDFromLID(ctx, evt.Info.Chat, client)
 	normalizedSender := whatsapp.NormalizeJIDFromLID(ctx, evt.Info.Sender, client)
@@ -1009,7 +1009,7 @@ func (r *PostgresRepository) StoreSentMessageWithContext(ctx context.Context, me
 		return fmt.Errorf("invalid JID format: %w", err)
 	}
 
-	client := whatsapp.GetClient()
+	client := whatsapp.GetClientFromContext(ctx)
 	normalizedJID := whatsapp.NormalizeJIDFromLID(ctx, jid, client)
 	chatJID := normalizedJID.String()
 	chatName := r.GetChatNameWithPushName(normalizedJID, chatJID, normalizedJID.User, "")

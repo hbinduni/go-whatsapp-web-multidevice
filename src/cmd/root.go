@@ -614,9 +614,6 @@ func initClients(ctx context.Context) {
 	logrus.Infof("  Env Clients: %v", config.WhatsAppClients)
 	logrus.Info("========================================")
 
-	// Enable multi-client mode in whatsapp package
-	whatsapp.SetMultiClientMode(true)
-
 	var err error
 
 	// Initialize shared database connection
