@@ -92,7 +92,7 @@ add_client() {
 
   echo "$RESPONSE" | jq . 2>/dev/null || echo "$RESPONSE"
 
-  STATUS=$(echo "$RESPONSE" | jq -r '.data.status // "error"' 2>/dev/null)
+  STATUS=$(echo "$RESPONSE" | jq -r '.results.status // .data.status // "error"' 2>/dev/null)
   if [ "$STATUS" = "awaiting_login" ] || [ "$STATUS" = "already_registered" ]; then
     echo -e "${GREEN}  ✓ Add client: $STATUS${NC}"
     return 0
@@ -114,8 +114,8 @@ remove_client() {
 
   echo "$RESPONSE" | jq . 2>/dev/null || echo "$RESPONSE"
 
-  CODE=$(echo "$RESPONSE" | jq -r '.code // 0' 2>/dev/null)
-  if [ "$CODE" = "200" ]; then
+  CODE=$(echo "$RESPONSE" | jq -r '.code // ""' 2>/dev/null)
+  if [ "$CODE" = "200" ] || [ "$CODE" = "SUCCESS" ]; then
     echo -e "${GREEN}  ✓ Remove client successful${NC}"
     return 0
   else
@@ -134,7 +134,7 @@ list_clients() {
 
   echo "$RESPONSE" | jq . 2>/dev/null || echo "$RESPONSE"
 
-  COUNT=$(echo "$RESPONSE" | jq -r '.data.client_count // 0' 2>/dev/null)
+  COUNT=$(echo "$RESPONSE" | jq -r '.results.client_count // .data.client_count // 0' 2>/dev/null)
   echo -e "${GREEN}  ✓ Total clients: $COUNT${NC}"
 }
 

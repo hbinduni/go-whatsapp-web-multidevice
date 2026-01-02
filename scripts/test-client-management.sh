@@ -95,7 +95,7 @@ print_step "2" "Listing current clients..."
 CLIENTS_RESPONSE=$(auth_request GET "/admin/clients")
 echo "$CLIENTS_RESPONSE" | jq . 2>/dev/null || echo "$CLIENTS_RESPONSE"
 
-CLIENT_COUNT=$(echo "$CLIENTS_RESPONSE" | jq -r '.data.client_count // 0' 2>/dev/null || echo "0")
+CLIENT_COUNT=$(echo "$CLIENTS_RESPONSE" | jq -r '.results.client_count // .data.client_count // 0' 2>/dev/null || echo "0")
 print_success "Current client count: $CLIENT_COUNT"
 
 echo ""
@@ -136,8 +136,8 @@ while true; do
       ADD_RESPONSE=$(auth_request POST "/admin/clients" "$ADD_DATA")
       echo "$ADD_RESPONSE" | jq . 2>/dev/null || echo "$ADD_RESPONSE"
 
-      STATUS=$(echo "$ADD_RESPONSE" | jq -r '.data.status // "unknown"' 2>/dev/null)
-      MESSAGE=$(echo "$ADD_RESPONSE" | jq -r '.data.message // ""' 2>/dev/null)
+      STATUS=$(echo "$ADD_RESPONSE" | jq -r '.results.status // .data.status // "unknown"' 2>/dev/null)
+      MESSAGE=$(echo "$ADD_RESPONSE" | jq -r '.results.message // .data.message // ""' 2>/dev/null)
 
       if [ "$STATUS" = "awaiting_login" ]; then
         print_success "Client added successfully"
@@ -159,7 +159,7 @@ while true; do
 
       # First show current clients
       echo "Current clients:"
-      auth_request GET "/admin/clients" | jq -r '.data.clients | to_entries[] | "  - \(.key): \(.value.is_connected) (connected), \(.value.is_logged_in) (logged in)"' 2>/dev/null || echo "  (no clients)"
+      auth_request GET "/admin/clients" | jq -r '(.results.clients // .data.clients) | to_entries[] | "  - \(.key): \(.value.is_connected) (connected), \(.value.is_logged_in) (logged in)"' 2>/dev/null || echo "  (no clients)"
       echo ""
 
       read -p "Enter phone number to remove: " REMOVE_PHONE
@@ -180,8 +180,8 @@ while true; do
       REMOVE_RESPONSE=$(auth_request DELETE "/admin/clients/${REMOVE_PHONE}")
       echo "$REMOVE_RESPONSE" | jq . 2>/dev/null || echo "$REMOVE_RESPONSE"
 
-      CODE=$(echo "$REMOVE_RESPONSE" | jq -r '.code // 0' 2>/dev/null)
-      if [ "$CODE" = "200" ]; then
+      CODE=$(echo "$REMOVE_RESPONSE" | jq -r '.code // ""' 2>/dev/null)
+      if [ "$CODE" = "200" ] || [ "$CODE" = "SUCCESS" ]; then
         print_success "Client removed successfully"
         echo -e "${YELLOW}  Note: Chat history has been preserved${NC}"
       else
