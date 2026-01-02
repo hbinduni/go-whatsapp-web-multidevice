@@ -712,6 +712,7 @@ func initClients(ctx context.Context) {
 }
 
 // loadAndMergeClients loads registered clients from DB and merges with env config
+// Uses PostgreSQL advisory locks to prevent race conditions in K8s multi-pod deployments
 func loadAndMergeClients(ctx context.Context, db *sql.DB) []string {
 	// Create a temporary repository to access registered_clients table
 	tempRepo := chatstorage.NewPostgresRepository(db, "system")
@@ -728,18 +729,76 @@ func loadAndMergeClients(ctx context.Context, db *sql.DB) []string {
 		return config.WhatsAppClients
 	}
 
-	// Load registered clients from database
+	// First check: see if clients already exist (fast path, no lock needed)
 	registeredClients, err := pgRepo.GetRegisteredClients()
 	if err != nil {
 		logrus.Warnf("Failed to load registered clients from DB: %v (using env config only)", err)
 		return config.WhatsAppClients
 	}
 
-	// Build a set of already registered phones
+	// If no clients in DB and we have env clients to seed, use advisory lock
+	if len(registeredClients) == 0 && len(config.WhatsAppClients) > 0 {
+		logrus.Info("No registered clients in DB, attempting to seed from env config...")
+
+		// Try to acquire lock (wait up to 10 seconds for another pod to finish seeding)
+		acquired, err := pgRepo.AcquireClientSeedingLockBlocking(10 * time.Second)
+		if err != nil {
+			logrus.Warnf("Failed to acquire seeding lock: %v", err)
+		}
+
+		if acquired {
+			logrus.Debug("Acquired client seeding lock")
+			defer func() {
+				if err := pgRepo.ReleaseClientSeedingLock(); err != nil {
+					logrus.Warnf("Failed to release seeding lock: %v", err)
+				}
+			}()
+
+			// Double-check: re-query after acquiring lock (another pod may have seeded)
+			registeredClients, err = pgRepo.GetRegisteredClients()
+			if err != nil {
+				logrus.Warnf("Failed to re-check registered clients: %v", err)
+			}
+
+			// Still empty? We're the first pod - seed from env
+			if len(registeredClients) == 0 {
+				logrus.Info("First-time setup: seeding clients from WHATSAPP_CLIENTS env")
+				for _, phone := range config.WhatsAppClients {
+					phone = strings.TrimSpace(phone)
+					if phone == "" {
+						continue
+					}
+
+					normalized, err := whatsapp.ValidatePhone(phone)
+					if err != nil {
+						logrus.Errorf("Invalid phone in WHATSAPP_CLIENTS: %v", err)
+						continue
+					}
+
+					if err := pgRepo.AddRegisteredClient(normalized, ""); err != nil {
+						logrus.Warnf("Failed to persist env client to DB: %v", err)
+					} else {
+						logrus.Infof("Seeded client from env: %s", normalized)
+					}
+				}
+
+				// Reload after seeding
+				registeredClients, _ = pgRepo.GetRegisteredClients()
+			} else {
+				logrus.Info("Another pod already seeded the clients")
+			}
+		} else {
+			logrus.Info("Could not acquire seeding lock (another pod is seeding), waiting for clients...")
+			// Wait a moment for the other pod to finish, then reload
+			time.Sleep(2 * time.Second)
+			registeredClients, _ = pgRepo.GetRegisteredClients()
+		}
+	}
+
+	// Build the final client list from DB
 	registeredPhones := make(map[string]bool)
 	var clientList []string
 
-	// Add DB clients first (they have priority - they survived a restart)
 	for _, client := range registeredClients {
 		normalized, err := whatsapp.ValidatePhone(client.Phone)
 		if err != nil {
@@ -751,7 +810,7 @@ func loadAndMergeClients(ctx context.Context, db *sql.DB) []string {
 		logrus.Debugf("Loaded registered client from DB: %s", normalized)
 	}
 
-	// Merge with WHATSAPP_CLIENTS env (add new ones that aren't in DB)
+	// Also add any NEW env clients that aren't in DB yet (for adding new clients via env without API)
 	for _, phone := range config.WhatsAppClients {
 		phone = strings.TrimSpace(phone)
 		if phone == "" {
@@ -760,16 +819,12 @@ func loadAndMergeClients(ctx context.Context, db *sql.DB) []string {
 
 		normalized, err := whatsapp.ValidatePhone(phone)
 		if err != nil {
-			logrus.Errorf("Invalid phone in WHATSAPP_CLIENTS: %v", err)
-			continue
+			continue // Already logged above
 		}
 
-		// Only add if not already in DB
 		if !registeredPhones[normalized] {
 			clientList = append(clientList, normalized)
 			logrus.Infof("Adding new client from env config: %s", normalized)
-
-			// Persist to DB for future restarts
 			if err := pgRepo.AddRegisteredClient(normalized, ""); err != nil {
 				logrus.Warnf("Failed to persist env client to DB: %v", err)
 			}

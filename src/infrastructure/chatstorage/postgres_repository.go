@@ -1516,3 +1516,46 @@ func (r *PostgresRepository) GetRegisteredClientCount() (int, error) {
 	err := r.db.QueryRow(`SELECT COUNT(*) FROM registered_clients WHERE is_active = true`).Scan(&count)
 	return count, err
 }
+
+// Advisory lock key for client seeding (arbitrary unique number)
+const clientSeedingLockKey = 89012345
+
+// AcquireClientSeedingLock acquires a PostgreSQL advisory lock for client seeding
+// This prevents race conditions when multiple pods start simultaneously
+// Returns true if lock was acquired, false if another process holds it
+func (r *PostgresRepository) AcquireClientSeedingLock() (bool, error) {
+	var acquired bool
+	// pg_try_advisory_lock returns true if lock acquired, false if already held by another session
+	err := r.db.QueryRow(`SELECT pg_try_advisory_lock($1)`, clientSeedingLockKey).Scan(&acquired)
+	if err != nil {
+		return false, fmt.Errorf("failed to acquire advisory lock: %w", err)
+	}
+	return acquired, nil
+}
+
+// ReleaseClientSeedingLock releases the PostgreSQL advisory lock for client seeding
+func (r *PostgresRepository) ReleaseClientSeedingLock() error {
+	_, err := r.db.Exec(`SELECT pg_advisory_unlock($1)`, clientSeedingLockKey)
+	if err != nil {
+		return fmt.Errorf("failed to release advisory lock: %w", err)
+	}
+	return nil
+}
+
+// AcquireClientSeedingLockBlocking acquires the lock, waiting up to the specified duration
+// This is useful when you want to wait for another pod to finish seeding
+func (r *PostgresRepository) AcquireClientSeedingLockBlocking(timeout time.Duration) (bool, error) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		acquired, err := r.AcquireClientSeedingLock()
+		if err != nil {
+			return false, err
+		}
+		if acquired {
+			return true, nil
+		}
+		// Wait a bit before retrying
+		time.Sleep(100 * time.Millisecond)
+	}
+	return false, nil
+}
