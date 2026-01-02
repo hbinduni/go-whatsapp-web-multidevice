@@ -458,8 +458,27 @@ func (r *PostgresRepository) TruncateAllChats() error {
 
 // GetChatNameWithPushName determines the appropriate name for a chat
 func (r *PostgresRepository) GetChatNameWithPushName(jid types.JID, chatJID string, senderUser string, pushName string) string {
+	// Detect self-chat: when the chat JID matches the device phone number
+	// This handles "Messages to Self" / "Notes to Self" feature in WhatsApp
+	if jid.Server == "s.whatsapp.net" && jid.User == r.deviceID {
+		return "You"
+	}
+
 	existingChat, err := r.GetChat(chatJID)
 	if err == nil && existingChat != nil && existingChat.Name != "" {
+		// Don't return "You" from existing chat if it was previously set incorrectly
+		// (e.g., masked phone number from WhatsApp's push name)
+		if existingChat.Name == "You" {
+			return existingChat.Name
+		}
+		// Check if existing name looks like a masked phone (contains ∙ or similar)
+		// If so, prefer pushName or the actual phone
+		if strings.Contains(existingChat.Name, "∙") {
+			if pushName != "" && !strings.Contains(pushName, "∙") {
+				return pushName
+			}
+			return jid.User
+		}
 		if pushName != "" && (existingChat.Name == jid.User || existingChat.Name == senderUser) {
 			return pushName
 		}
@@ -473,7 +492,8 @@ func (r *PostgresRepository) GetChatNameWithPushName(jid types.JID, chatJID stri
 	case "newsletter":
 		name = fmt.Sprintf("Newsletter %s", jid.User)
 	default:
-		if pushName != "" && pushName != senderUser && pushName != jid.User {
+		// Skip masked phone numbers from WhatsApp (contain ∙ character)
+		if pushName != "" && pushName != senderUser && pushName != jid.User && !strings.Contains(pushName, "∙") {
 			name = pushName
 		} else if senderUser != "" {
 			name = senderUser
