@@ -51,7 +51,12 @@ func (service serviceSend) wrapSendMessage(ctx context.Context, recipient types.
 	// Store message in retry cache for encryption session establishment.
 	// When sending to a new contact, WhatsApp may request a retry if the initial
 	// message can't be decrypted. This ensures the message can be resent.
-	whatsapp.StoreMessageForRetry(ts.ID, recipient, msg)
+	// Use device phone for per-client cache isolation.
+	devicePhone := whatsapp.GetDeviceIDFromContext(ctx)
+	if devicePhone == "" && client.Store != nil && client.Store.ID != nil {
+		devicePhone = client.Store.ID.User
+	}
+	whatsapp.StoreMessageForRetry(devicePhone, ts.ID, msg)
 
 	// Store the sent message using chatstorage
 	senderJID := ""

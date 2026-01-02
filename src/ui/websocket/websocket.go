@@ -25,7 +25,7 @@ var (
 	clients    = make(map[*websocket.Conn]client)
 	clientsMu  sync.RWMutex
 	Register   = make(chan *websocket.Conn)
-	Broadcast  = make(chan BroadcastMessage)
+	Broadcast  = make(chan BroadcastMessage, 100) // Buffered to prevent blocking event handlers
 	Unregister = make(chan *websocket.Conn)
 	stopHub    = make(chan struct{})
 )

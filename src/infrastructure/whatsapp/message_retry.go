@@ -1,6 +1,7 @@
 package whatsapp
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 // MessageRetryCache stores sent messages for retry handling.
 // When WhatsApp can't decrypt a message (e.g., first message to a new contact),
 // it requests a retry. whatsmeow needs the original message to resend it.
+// Keys are formatted as "devicePhone:messageID" for multi-client isolation.
 type MessageRetryCache struct {
 	mu       sync.RWMutex
 	messages map[string]*cachedMessage
@@ -19,11 +21,10 @@ type MessageRetryCache struct {
 
 type cachedMessage struct {
 	message   *waE2E.Message
-	recipient types.JID
 	timestamp time.Time
 }
 
-// Global message retry cache (shared across all clients)
+// Global message retry cache (shared across all clients but keyed by device)
 var globalRetryCache = NewMessageRetryCache(5 * time.Minute)
 
 // NewMessageRetryCache creates a new cache with the specified TTL
@@ -37,32 +38,39 @@ func NewMessageRetryCache(ttl time.Duration) *MessageRetryCache {
 	return cache
 }
 
-// Store saves a message for potential retry
-func (c *MessageRetryCache) Store(messageID string, recipient types.JID, msg *waE2E.Message) {
+// makeCacheKey creates a unique cache key combining device phone and message ID
+func makeCacheKey(devicePhone, messageID string) string {
+	return fmt.Sprintf("%s:%s", devicePhone, messageID)
+}
+
+// Store saves a message for potential retry with device isolation
+func (c *MessageRetryCache) Store(devicePhone, messageID string, msg *waE2E.Message) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.messages[messageID] = &cachedMessage{
+	key := makeCacheKey(devicePhone, messageID)
+	c.messages[key] = &cachedMessage{
 		message:   msg,
-		recipient: recipient,
 		timestamp: time.Now(),
 	}
 }
 
-// Get retrieves a message by ID for retry
-func (c *MessageRetryCache) Get(messageID string) *waE2E.Message {
+// Get retrieves a message by device phone and message ID for retry
+func (c *MessageRetryCache) Get(devicePhone, messageID string) *waE2E.Message {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	if cached, ok := c.messages[messageID]; ok {
+	key := makeCacheKey(devicePhone, messageID)
+	if cached, ok := c.messages[key]; ok {
 		return cached.message
 	}
 	return nil
 }
 
 // Delete removes a message from cache (after successful delivery)
-func (c *MessageRetryCache) Delete(messageID string) {
+func (c *MessageRetryCache) Delete(devicePhone, messageID string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	delete(c.messages, messageID)
+	key := makeCacheKey(devicePhone, messageID)
+	delete(c.messages, key)
 }
 
 // cleanupLoop periodically removes expired messages
@@ -92,20 +100,21 @@ func GetGlobalRetryCache() *MessageRetryCache {
 	return globalRetryCache
 }
 
-// StoreMessageForRetry stores a message in the global retry cache
-func StoreMessageForRetry(messageID string, recipient types.JID, msg *waE2E.Message) {
-	globalRetryCache.Store(messageID, recipient, msg)
+// StoreMessageForRetry stores a message in the global retry cache with device isolation
+func StoreMessageForRetry(devicePhone, messageID string, msg *waE2E.Message) {
+	globalRetryCache.Store(devicePhone, messageID, msg)
 }
 
 // GetMessageForRetryHandler returns a callback function for whatsmeow's GetMessageForRetry
 // This is used when WhatsApp requests a message retry (e.g., for new encryption sessions)
-func GetMessageForRetryHandler() func(requester types.JID, to types.JID, messageID types.MessageID) *waE2E.Message {
+// The devicePhone is captured in the closure for multi-client isolation
+func GetMessageForRetryHandler(devicePhone string) func(requester types.JID, to types.JID, messageID types.MessageID) *waE2E.Message {
 	return func(requester types.JID, to types.JID, messageID types.MessageID) *waE2E.Message {
-		msg := globalRetryCache.Get(messageID)
+		msg := globalRetryCache.Get(devicePhone, messageID)
 		if msg != nil {
-			log.Debugf("Found message %s in retry cache for %s -> %s", messageID, requester.String(), to.String())
+			log.Debugf("[%s] Found message %s in retry cache for %s -> %s", devicePhone, messageID, requester.String(), to.String())
 		} else {
-			log.Warnf("Message %s not found in retry cache for %s -> %s", messageID, requester.String(), to.String())
+			log.Warnf("[%s] Message %s not found in retry cache for %s -> %s", devicePhone, messageID, requester.String(), to.String())
 		}
 		return msg
 	}

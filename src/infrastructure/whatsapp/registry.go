@@ -176,8 +176,8 @@ func (r *ClientRegistry) RegisterClient(ctx context.Context, phone string, chatS
 	client.EnableAutoReconnect = true
 	client.AutoTrustIdentity = true
 
-	// Configure message retry handler for encryption session establishment
-	client.GetMessageForRetry = GetMessageForRetryHandler()
+	// Configure message retry handler for encryption session establishment (per-client isolation)
+	client.GetMessageForRetry = GetMessageForRetryHandler(phone)
 
 	// Create managed client
 	managedClient := &ManagedClient{
@@ -429,8 +429,8 @@ func (r *ClientRegistry) ReinitializeClient(ctx context.Context, phone string) e
 	newClient.EnableAutoReconnect = true
 	newClient.AutoTrustIdentity = true
 
-	// Configure message retry handler for encryption session establishment
-	newClient.GetMessageForRetry = GetMessageForRetryHandler()
+	// Configure message retry handler for encryption session establishment (per-client isolation)
+	newClient.GetMessageForRetry = GetMessageForRetryHandler(phone)
 
 	// Update managed client with new whatsmeow client
 	mc.mu.Lock()

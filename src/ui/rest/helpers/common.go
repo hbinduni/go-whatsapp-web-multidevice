@@ -31,13 +31,19 @@ func SetAutoReconnectCheckingMultiClient() {
 		logrus.Info("[AutoReconnect] Starting multi-client reconnect checker (every 1 minute)")
 		go func() {
 			defer close(reconnectStopped)
+			defer func() {
+				if r := recover(); r != nil {
+					logrus.Errorf("[AutoReconnect] Panic recovered in reconnect checker: %v", r)
+				}
+			}()
+
 			ticker := time.NewTicker(1 * time.Minute)
 			defer ticker.Stop()
 
 			for {
 				select {
 				case <-ticker.C:
-					checkAndReconnectAllClients()
+					safeCheckAndReconnect()
 				case <-stopReconnect:
 					logrus.Info("[AutoReconnect] Stopping multi-client reconnect checker")
 					return
@@ -45,6 +51,16 @@ func SetAutoReconnectCheckingMultiClient() {
 			}
 		}()
 	})
+}
+
+// safeCheckAndReconnect wraps checkAndReconnectAllClients with panic recovery
+func safeCheckAndReconnect() {
+	defer func() {
+		if r := recover(); r != nil {
+			logrus.Errorf("[AutoReconnect] Panic during reconnect check: %v", r)
+		}
+	}()
+	checkAndReconnectAllClients()
 }
 
 // checkAndReconnectAllClients checks all registered clients and reconnects any that are disconnected
