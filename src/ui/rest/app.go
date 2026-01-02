@@ -33,12 +33,20 @@ func (handler *App) Login(c *fiber.Ctx) error {
 		return helpers.HandleError(c, err)
 	}
 
+	// Build QR link URL - use AppPublicURL if configured, otherwise derive from request
+	var qrLink string
+	if config.AppPublicURL != "" {
+		qrLink = fmt.Sprintf("%s%s/%s", config.AppPublicURL, config.AppBasePath, response.ImagePath)
+	} else {
+		qrLink = fmt.Sprintf("%s://%s%s/%s", c.Protocol(), c.Hostname(), config.AppBasePath, response.ImagePath)
+	}
+
 	return c.JSON(utils.ResponseData{
 		Status:  200,
 		Code:    "SUCCESS",
 		Message: "Login success",
 		Results: map[string]any{
-			"qr_link":     fmt.Sprintf("%s://%s%s/%s", c.Protocol(), c.Hostname(), config.AppBasePath, response.ImagePath),
+			"qr_link":     qrLink,
 			"qr_duration": response.Duration,
 		},
 	})

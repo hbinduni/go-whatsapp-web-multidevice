@@ -260,6 +260,9 @@ func initEnvConfig() {
 	if envBasePath := viper.GetString("app_base_path"); envBasePath != "" {
 		config.AppBasePath = envBasePath
 	}
+	if envPublicURL := viper.GetString("app_public_url"); envPublicURL != "" {
+		config.AppPublicURL = envPublicURL
+	}
 	if envTrustedProxies := viper.GetString("app_trusted_proxies"); envTrustedProxies != "" {
 		proxies := strings.Split(envTrustedProxies, ",")
 		config.AppTrustedProxies = proxies
