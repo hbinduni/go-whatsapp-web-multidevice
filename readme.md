@@ -137,7 +137,8 @@ To use environment variables:
 | `AUTH_SECRET`                 | JWT secret for authentication               | -         | `AUTH_SECRET=your-secret-key`               |
 | `AUTH_USERNAME`               | Admin username                              | `admin`   | `AUTH_USERNAME=admin`                       |
 | `AUTH_PASSWORD_HASH`          | Bcrypt hash of admin password               | -         | (use hash-password script)                  |
-| `WHATSAPP_CLIENTS`            | Comma-separated phone numbers (see [Phone Requirements](#phone-number-requirements)) | - | `WHATSAPP_CLIENTS=6281234567890` |
+| `WHATSAPP_CLIENTS`            | Initial seed phone numbers (see [Phone Requirements](#phone-number-requirements)) | - | `WHATSAPP_CLIENTS=6281234567890` |
+| `MAX_CLIENTS`                 | Maximum clients per instance (for K8s scaling) | `10`    | `MAX_CLIENTS=10`                            |
 | `WHATSAPP_AUTO_REPLY`         | Auto-reply message                          | -         | `WHATSAPP_AUTO_REPLY="Auto reply message"`  |
 | `WHATSAPP_AUTO_MARK_READ`     | Auto-mark incoming messages as read         | `false`   | `WHATSAPP_AUTO_MARK_READ=true`              |
 | `WHATSAPP_AUTO_DOWNLOAD_MEDIA`| Auto-download media from incoming messages  | `true`    | `WHATSAPP_AUTO_DOWNLOAD_MEDIA=false`        |
@@ -433,6 +434,49 @@ Message: "Phone mismatch: configured client 6281234567890 but scanned with 62899
 
 This prevents session loss from misconfigured client IDs. If you need to use a different phone number, update `WHATSAPP_CLIENTS` first.
 
+### Dynamic Client Management
+
+Clients can be added and removed dynamically via the Admin API without restarting the server:
+
+```bash
+# Add a new client
+curl -X POST http://localhost:3000/admin/clients \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"phone": "628123456789", "display_name": "Client 3"}'
+
+# Response
+{
+  "code": 200,
+  "message": "Client added successfully",
+  "data": {
+    "phone": "628123456789",
+    "status": "awaiting_login",
+    "message": "Client registered. Use /api/628123456789/app/login to get QR code"
+  }
+}
+
+# Remove a client (chat history preserved)
+curl -X DELETE http://localhost:3000/admin/clients/628123456789 \
+  -H "Authorization: Bearer $TOKEN"
+
+# Response
+{
+  "code": 200,
+  "message": "Client removed successfully",
+  "data": {
+    "phone": "628123456789",
+    "message": "Client disconnected. Chat history preserved."
+  }
+}
+```
+
+**Key Features:**
+- **Persistence**: Dynamically added clients are stored in the database and survive restarts
+- **MAX_CLIENTS**: Limit clients per instance (default: 10) for horizontal scaling with K8s
+- **Chat History**: Removing a client only disconnects it; all chat history is preserved
+- **Env as Seed**: `WHATSAPP_CLIENTS` serves as initial seed for first-time setup only
+
 ### Authentication Routes
 
 | Method | URL              | Description                    |
@@ -450,6 +494,8 @@ This prevents session loss from misconfigured client IDs. If you need to use a d
 | POST   | /admin/storage/vacuum           | Optimize database              |
 | DELETE | /admin/storage/chats            | Delete chats by pattern/JID    |
 | GET    | /admin/clients                  | List all WhatsApp clients      |
+| POST   | /admin/clients                  | Add new client dynamically     |
+| DELETE | /admin/clients/:phone           | Remove client (keeps history)  |
 | GET    | /admin/clients/:phone/status    | Get client connection status   |
 | POST   | /admin/clients/:phone/connect   | Connect a client               |
 | POST   | /admin/clients/:phone/disconnect| Disconnect a client            |

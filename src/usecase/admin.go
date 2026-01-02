@@ -2,22 +2,27 @@ package usecase
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
 	domainAdmin "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/admin"
 	domainChatStorage "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/chatstorage"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/chatstorage"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/whatsapp"
 	"github.com/sirupsen/logrus"
 )
 
 type serviceAdmin struct {
 	chatStorageRepo domainChatStorage.IChatStorageRepository
+	db              *sql.DB // Shared database for creating per-client repositories
 }
 
 // NewAdminService creates a new admin service
-func NewAdminService(chatStorageRepo domainChatStorage.IChatStorageRepository) domainAdmin.IAdminUsecase {
+func NewAdminService(chatStorageRepo domainChatStorage.IChatStorageRepository, db *sql.DB) domainAdmin.IAdminUsecase {
 	return &serviceAdmin{
 		chatStorageRepo: chatStorageRepo,
+		db:              db,
 	}
 }
 
@@ -219,6 +224,166 @@ func (s *serviceAdmin) DeleteChats(ctx context.Context, request domainAdmin.Dele
 			response.DeletedJIDs = append(response.DeletedJIDs, deletedJIDs...)
 		}
 	}
+
+	return response, nil
+}
+
+// AddClient dynamically adds a new WhatsApp client
+func (s *serviceAdmin) AddClient(ctx context.Context, request domainAdmin.AddClientRequest) (response domainAdmin.AddClientResponse, err error) {
+	response.Phone = request.Phone
+	response.DisplayName = request.DisplayName
+
+	// Validate phone number format
+	normalizedPhone, err := whatsapp.ValidatePhone(request.Phone)
+	if err != nil {
+		return response, fmt.Errorf("invalid phone number: %w", err)
+	}
+	response.Phone = normalizedPhone
+
+	// Get the registry
+	registry := whatsapp.GetRegistry()
+	if registry == nil {
+		return response, fmt.Errorf("client registry not initialized")
+	}
+
+	// Check MAX_CLIENTS limit
+	if !registry.CanAddClient() {
+		currentCount := registry.GetClientCount()
+		maxClients := registry.GetMaxClients()
+		return response, fmt.Errorf("maximum client limit reached (%d/%d). Remove a client before adding new ones", currentCount, maxClients)
+	}
+
+	// Check if client already exists in registry
+	if _, err := registry.GetClient(normalizedPhone); err == nil {
+		response.Status = "already_registered"
+		response.Message = "Client is already registered"
+		return response, nil
+	}
+
+	// Check if client is already registered in database (might be inactive)
+	isRegistered, err := s.chatStorageRepo.IsClientRegistered(normalizedPhone)
+	if err != nil {
+		logrus.Warnf("[Admin] Failed to check client registration: %v", err)
+	}
+	if isRegistered {
+		// Client exists in DB but not in registry - might be from a previous session
+		logrus.Infof("[Admin] Reactivating previously registered client: %s", normalizedPhone)
+	}
+
+	// Add to registered_clients table
+	if err := s.chatStorageRepo.AddRegisteredClient(normalizedPhone, request.DisplayName); err != nil {
+		return response, fmt.Errorf("failed to persist client registration: %w", err)
+	}
+
+	// Create chat storage repository for new client
+	clientChatStorageRepo := chatstorage.NewPostgresRepository(s.db, normalizedPhone)
+
+	// Initialize schema for this client
+	if err := clientChatStorageRepo.InitializeSchema(); err != nil {
+		// Rollback: remove from registered_clients
+		_ = s.chatStorageRepo.RemoveRegisteredClient(normalizedPhone)
+		return response, fmt.Errorf("failed to initialize chat storage schema: %w", err)
+	}
+
+	// Register client in registry
+	_, err = registry.RegisterClient(ctx, normalizedPhone, clientChatStorageRepo)
+	if err != nil {
+		// Rollback: remove from registered_clients
+		_ = s.chatStorageRepo.RemoveRegisteredClient(normalizedPhone)
+		return response, fmt.Errorf("failed to register client: %w", err)
+	}
+
+	// Connect the client (it will be in disconnected state, awaiting QR login)
+	if err := registry.ConnectClient(normalizedPhone); err != nil {
+		logrus.Warnf("[Admin] Client registered but failed to connect: %v", err)
+		response.Status = "registered_not_connected"
+		response.Message = fmt.Sprintf("Client registered but connection failed: %v. Use /api/%s/app/login to retry", err, normalizedPhone)
+		return response, nil
+	}
+
+	response.Status = "awaiting_login"
+	response.Message = fmt.Sprintf("Client registered successfully. Use /api/%s/app/login to get QR code", normalizedPhone)
+
+	logrus.WithFields(logrus.Fields{
+		"phone":        normalizedPhone,
+		"display_name": request.DisplayName,
+	}).Info("[Admin] Added new client")
+
+	return response, nil
+}
+
+// RemoveClient removes a WhatsApp client (keeps chat history)
+func (s *serviceAdmin) RemoveClient(ctx context.Context, phone string) (response domainAdmin.RemoveClientResponse, err error) {
+	response.Phone = phone
+
+	// Validate phone number format
+	normalizedPhone, err := whatsapp.ValidatePhone(phone)
+	if err != nil {
+		return response, fmt.Errorf("invalid phone number: %w", err)
+	}
+	response.Phone = normalizedPhone
+
+	// Get the registry
+	registry := whatsapp.GetRegistry()
+	if registry == nil {
+		return response, fmt.Errorf("client registry not initialized")
+	}
+
+	// Get the client from registry
+	managedClient, err := registry.GetClient(normalizedPhone)
+	if err != nil {
+		// Client not in registry - check if it's in database
+		isRegistered, dbErr := s.chatStorageRepo.IsClientRegistered(normalizedPhone)
+		if dbErr != nil || !isRegistered {
+			return response, fmt.Errorf("client not found: %s", normalizedPhone)
+		}
+		// Client is in DB but not in registry - just mark as inactive
+		if err := s.chatStorageRepo.RemoveRegisteredClient(normalizedPhone); err != nil {
+			return response, fmt.Errorf("failed to remove client registration: %w", err)
+		}
+		response.Message = "Client registration removed (was not active)"
+		return response, nil
+	}
+
+	// Logout from WhatsApp (this will invalidate the session)
+	if managedClient.Client != nil && managedClient.Client.IsLoggedIn() {
+		if err := managedClient.Client.Logout(ctx); err != nil {
+			logrus.Warnf("[Admin] Failed to logout client %s: %v", normalizedPhone, err)
+			// Continue with removal even if logout fails
+		}
+	}
+
+	// Disconnect client
+	if err := registry.DisconnectClient(normalizedPhone); err != nil {
+		logrus.Warnf("[Admin] Failed to disconnect client %s: %v", normalizedPhone, err)
+	}
+
+	// Delete device from whatsmeow store (removes session/keys)
+	if managedClient.Client != nil && managedClient.Client.Store != nil && managedClient.Client.Store.ID != nil {
+		db := registry.GetDB()
+		if db != nil {
+			if err := db.DeleteDevice(ctx, managedClient.Client.Store); err != nil {
+				logrus.Warnf("[Admin] Failed to delete device for %s: %v", normalizedPhone, err)
+			}
+		}
+	}
+
+	// Unregister from registry
+	if err := registry.UnregisterClient(normalizedPhone); err != nil {
+		logrus.Warnf("[Admin] Failed to unregister client %s: %v", normalizedPhone, err)
+	}
+
+	// Mark as inactive in registered_clients (soft delete - preserves audit trail)
+	if err := s.chatStorageRepo.RemoveRegisteredClient(normalizedPhone); err != nil {
+		logrus.Warnf("[Admin] Failed to remove client registration: %v", err)
+	}
+
+	// NOTE: Chat history is intentionally NOT deleted per user requirement
+	response.Message = "Client disconnected and removed. Chat history preserved."
+
+	logrus.WithFields(logrus.Fields{
+		"phone": normalizedPhone,
+	}).Info("[Admin] Removed client (chat history preserved)")
 
 	return response, nil
 }

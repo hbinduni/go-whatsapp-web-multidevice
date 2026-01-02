@@ -47,6 +47,8 @@ var (
 	// Comma-separated list of phone numbers to register as clients
 	// Example: "+6281234567890,+6289876543210"
 	WhatsAppClients = []string{}
+	// Maximum number of WhatsApp clients per instance (for k8s scaling)
+	MaxClients = 10
 
 	WhatsappAutoReplyMessage          string
 	WhatsappAutoMarkRead              = false // Auto-mark incoming messages as read

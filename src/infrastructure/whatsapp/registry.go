@@ -505,3 +505,15 @@ func (r *ClientRegistry) GetAllClientStatuses() map[string]map[string]interface{
 func (r *ClientRegistry) GetDB() *sqlstore.Container {
 	return r.db
 }
+
+// CanAddClient checks if we can add more clients (below MAX_CLIENTS limit)
+func (r *ClientRegistry) CanAddClient() bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return len(r.clients) < config.MaxClients
+}
+
+// GetMaxClients returns the configured maximum clients limit
+func (r *ClientRegistry) GetMaxClients() int {
+	return config.MaxClients
+}

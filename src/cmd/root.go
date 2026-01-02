@@ -307,6 +307,9 @@ func initEnvConfig() {
 		}
 		config.WhatsAppClients = clients
 	}
+	if viper.IsSet("max_clients") {
+		config.MaxClients = viper.GetInt("max_clients")
+	}
 
 	// CORS settings
 	if envCorsOrigins := viper.GetString("cors_allowed_origins"); envCorsOrigins != "" {
@@ -506,6 +509,14 @@ func initFlags() {
 		config.WhatsappAccountValidation,
 		`enable or disable account validation --account-validation <true/false> | example: --account-validation=true`,
 	)
+
+	// Multi-client flags
+	rootCmd.PersistentFlags().IntVarP(
+		&config.MaxClients,
+		"max-clients", "",
+		config.MaxClients,
+		`maximum number of WhatsApp clients per instance --max-clients <number> | example: --max-clients=10`,
+	)
 }
 
 func initChatStorage() (*sql.DB, error) {
@@ -585,7 +596,7 @@ func initApp() {
 
 	// Initialize usecases
 	appUsecase = usecase.NewAppService(chatStorageRepo)
-	adminUsecase = usecase.NewAdminService(chatStorageRepo)
+	adminUsecase = usecase.NewAdminService(chatStorageRepo, chatStorageDB)
 	chatUsecase = usecase.NewChatService(chatStorageRepo)
 	sendUsecase = usecase.NewSendService(appUsecase, chatStorageRepo)
 	userUsecase = usecase.NewUserService()
@@ -599,7 +610,8 @@ func initApp() {
 func initClients(ctx context.Context) {
 	logrus.Info("========================================")
 	logrus.Info("  Multi-Client WhatsApp API")
-	logrus.Infof("  Clients: %v", config.WhatsAppClients)
+	logrus.Infof("  Max Clients: %d", config.MaxClients)
+	logrus.Infof("  Env Clients: %v", config.WhatsAppClients)
 	logrus.Info("========================================")
 
 	// Enable multi-client mode in whatsapp package
@@ -620,8 +632,12 @@ func initClients(ctx context.Context) {
 	whatsapp.InitRegistry(whatsappDB, nil)
 	registry := whatsapp.GetRegistry()
 
+	// Load registered clients from database first
+	clientsToRegister := loadAndMergeClients(ctx, chatStorageDB)
+	logrus.Infof("Total clients to register: %d", len(clientsToRegister))
+
 	// Register each client
-	for _, phone := range config.WhatsAppClients {
+	for _, phone := range clientsToRegister {
 		phone = strings.TrimSpace(phone)
 		if phone == "" {
 			continue
@@ -630,11 +646,18 @@ func initClients(ctx context.Context) {
 		// Validate phone number format early
 		normalizedPhone, err := whatsapp.ValidatePhone(phone)
 		if err != nil {
-			logrus.Fatalf("Invalid phone number in WHATSAPP_CLIENTS: %v", err)
+			logrus.Errorf("Invalid phone number '%s': %v", phone, err)
+			continue
 		}
 
 		// Use normalized phone for consistency
 		phone = normalizedPhone
+
+		// Check MAX_CLIENTS limit
+		if registry.GetClientCount() >= config.MaxClients {
+			logrus.Warnf("Max clients limit reached (%d), skipping remaining clients", config.MaxClients)
+			break
+		}
 
 		// Create a device-specific chat storage repository
 		clientChatStorageRepo := chatstorage.NewPostgresRepository(chatStorageDB, phone)
@@ -685,7 +708,79 @@ func initClients(ctx context.Context) {
 		}
 	}
 
-	logrus.Infof("Initialization complete. Registered %d clients", registry.GetClientCount())
+	logrus.Infof("Initialization complete. Registered %d clients (max: %d)", registry.GetClientCount(), config.MaxClients)
+}
+
+// loadAndMergeClients loads registered clients from DB and merges with env config
+func loadAndMergeClients(ctx context.Context, db *sql.DB) []string {
+	// Create a temporary repository to access registered_clients table
+	tempRepo := chatstorage.NewPostgresRepository(db, "system")
+
+	// Ensure the registered_clients table exists (run migrations)
+	if err := tempRepo.InitializeSchema(); err != nil {
+		logrus.Warnf("Failed to initialize system schema: %v", err)
+	}
+
+	// Type assertion to access PostgresRepository-specific methods
+	pgRepo, ok := tempRepo.(*chatstorage.PostgresRepository)
+	if !ok {
+		logrus.Warn("Could not access registered clients from DB, using env config only")
+		return config.WhatsAppClients
+	}
+
+	// Load registered clients from database
+	registeredClients, err := pgRepo.GetRegisteredClients()
+	if err != nil {
+		logrus.Warnf("Failed to load registered clients from DB: %v (using env config only)", err)
+		return config.WhatsAppClients
+	}
+
+	// Build a set of already registered phones
+	registeredPhones := make(map[string]bool)
+	var clientList []string
+
+	// Add DB clients first (they have priority - they survived a restart)
+	for _, client := range registeredClients {
+		normalized, err := whatsapp.ValidatePhone(client.Phone)
+		if err != nil {
+			logrus.Warnf("Invalid registered client phone '%s': %v", client.Phone, err)
+			continue
+		}
+		registeredPhones[normalized] = true
+		clientList = append(clientList, normalized)
+		logrus.Debugf("Loaded registered client from DB: %s", normalized)
+	}
+
+	// Merge with WHATSAPP_CLIENTS env (add new ones that aren't in DB)
+	for _, phone := range config.WhatsAppClients {
+		phone = strings.TrimSpace(phone)
+		if phone == "" {
+			continue
+		}
+
+		normalized, err := whatsapp.ValidatePhone(phone)
+		if err != nil {
+			logrus.Errorf("Invalid phone in WHATSAPP_CLIENTS: %v", err)
+			continue
+		}
+
+		// Only add if not already in DB
+		if !registeredPhones[normalized] {
+			clientList = append(clientList, normalized)
+			logrus.Infof("Adding new client from env config: %s", normalized)
+
+			// Persist to DB for future restarts
+			if err := pgRepo.AddRegisteredClient(normalized, ""); err != nil {
+				logrus.Warnf("Failed to persist env client to DB: %v", err)
+			}
+		}
+	}
+
+	if len(registeredClients) > 0 {
+		logrus.Infof("Loaded %d clients from database", len(registeredClients))
+	}
+
+	return clientList
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

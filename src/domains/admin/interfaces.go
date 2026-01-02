@@ -15,4 +15,10 @@ type IAdminUsecase interface {
 
 	// DeleteChats deletes chats by pattern or specific JIDs
 	DeleteChats(ctx context.Context, request DeleteChatsRequest) (DeleteChatsResponse, error)
+
+	// AddClient dynamically adds a new WhatsApp client
+	AddClient(ctx context.Context, request AddClientRequest) (AddClientResponse, error)
+
+	// RemoveClient removes a WhatsApp client (keeps chat history)
+	RemoveClient(ctx context.Context, phone string) (RemoveClientResponse, error)
 }

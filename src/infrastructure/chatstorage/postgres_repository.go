@@ -195,6 +195,21 @@ func (r *PostgresRepository) getMigrations() []string {
 		CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(device_id, status);
 		CREATE INDEX IF NOT EXISTS idx_reactions_message ON message_reactions(device_id, message_id, chat_jid);
 		`,
+
+		// Migration 2: Add registered_clients table for dynamic client management
+		`
+		-- Create registered_clients table for persisting dynamically added clients
+		CREATE TABLE IF NOT EXISTS registered_clients (
+			phone TEXT PRIMARY KEY,
+			display_name TEXT,
+			is_active BOOLEAN DEFAULT true,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		);
+
+		-- Create index for faster active client queries
+		CREATE INDEX IF NOT EXISTS idx_registered_clients_active ON registered_clients(is_active);
+		`,
 	}
 }
 
@@ -1377,4 +1392,127 @@ func (r *PostgresRepository) DeleteMessagesOlderThan(before time.Time) (deleted 
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+// ============================================================================
+// Registered Client Operations (for dynamic client management)
+// ============================================================================
+
+// RegisteredClient represents a dynamically registered WhatsApp client
+type RegisteredClient struct {
+	Phone       string
+	DisplayName string
+	IsActive    bool
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+// GetRegisteredClients returns all active registered clients
+func (r *PostgresRepository) GetRegisteredClients() ([]RegisteredClient, error) {
+	query := `
+		SELECT phone, COALESCE(display_name, ''), is_active, created_at, updated_at
+		FROM registered_clients
+		WHERE is_active = true
+		ORDER BY created_at ASC
+	`
+
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query registered clients: %w", err)
+	}
+	defer rows.Close()
+
+	var clients []RegisteredClient
+	for rows.Next() {
+		var client RegisteredClient
+		if err := rows.Scan(&client.Phone, &client.DisplayName, &client.IsActive, &client.CreatedAt, &client.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan registered client: %w", err)
+		}
+		clients = append(clients, client)
+	}
+
+	return clients, rows.Err()
+}
+
+// GetAllRegisteredClients returns all registered clients (including inactive)
+func (r *PostgresRepository) GetAllRegisteredClients() ([]RegisteredClient, error) {
+	query := `
+		SELECT phone, COALESCE(display_name, ''), is_active, created_at, updated_at
+		FROM registered_clients
+		ORDER BY created_at ASC
+	`
+
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query all registered clients: %w", err)
+	}
+	defer rows.Close()
+
+	var clients []RegisteredClient
+	for rows.Next() {
+		var client RegisteredClient
+		if err := rows.Scan(&client.Phone, &client.DisplayName, &client.IsActive, &client.CreatedAt, &client.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan registered client: %w", err)
+		}
+		clients = append(clients, client)
+	}
+
+	return clients, rows.Err()
+}
+
+// AddRegisteredClient adds or reactivates a client registration
+func (r *PostgresRepository) AddRegisteredClient(phone, displayName string) error {
+	query := `
+		INSERT INTO registered_clients (phone, display_name, is_active, created_at, updated_at)
+		VALUES ($1, $2, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		ON CONFLICT (phone) DO UPDATE SET
+			display_name = COALESCE(EXCLUDED.display_name, registered_clients.display_name),
+			is_active = true,
+			updated_at = CURRENT_TIMESTAMP
+	`
+
+	_, err := r.db.Exec(query, phone, displayName)
+	if err != nil {
+		return fmt.Errorf("failed to add registered client: %w", err)
+	}
+
+	return nil
+}
+
+// RemoveRegisteredClient marks a client as inactive (soft delete)
+func (r *PostgresRepository) RemoveRegisteredClient(phone string) error {
+	query := `
+		UPDATE registered_clients
+		SET is_active = false, updated_at = CURRENT_TIMESTAMP
+		WHERE phone = $1
+	`
+
+	result, err := r.db.Exec(query, phone)
+	if err != nil {
+		return fmt.Errorf("failed to remove registered client: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("client not found: %s", phone)
+	}
+
+	return nil
+}
+
+// IsClientRegistered checks if a phone number is registered and active
+func (r *PostgresRepository) IsClientRegistered(phone string) (bool, error) {
+	var exists bool
+	err := r.db.QueryRow(`
+		SELECT EXISTS(SELECT 1 FROM registered_clients WHERE phone = $1 AND is_active = true)
+	`, phone).Scan(&exists)
+
+	return exists, err
+}
+
+// GetRegisteredClientCount returns the count of active registered clients
+func (r *PostgresRepository) GetRegisteredClientCount() (int, error) {
+	var count int
+	err := r.db.QueryRow(`SELECT COUNT(*) FROM registered_clients WHERE is_active = true`).Scan(&count)
+	return count, err
 }

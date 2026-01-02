@@ -57,4 +57,10 @@ type IChatStorageRepository interface {
 
 	// Schema operations
 	InitializeSchema() error
+
+	// Registered client operations (for dynamic client management)
+	AddRegisteredClient(phone, displayName string) error
+	RemoveRegisteredClient(phone string) error
+	IsClientRegistered(phone string) (bool, error)
+	GetRegisteredClientCount() (int, error)
 }

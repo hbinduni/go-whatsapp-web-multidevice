@@ -52,3 +52,23 @@ type VacuumResponse struct {
 	Reclaimed       string `json:"reclaimed"`
 	ReclaimedBytes  int64  `json:"reclaimed_bytes"`
 }
+
+// AddClientRequest contains the data for adding a new WhatsApp client
+type AddClientRequest struct {
+	Phone       string `json:"phone" validate:"required"`
+	DisplayName string `json:"display_name,omitempty"`
+}
+
+// AddClientResponse contains the result of adding a new client
+type AddClientResponse struct {
+	Phone       string `json:"phone"`
+	DisplayName string `json:"display_name,omitempty"`
+	Status      string `json:"status"`
+	Message     string `json:"message"`
+}
+
+// RemoveClientResponse contains the result of removing a client
+type RemoveClientResponse struct {
+	Phone   string `json:"phone"`
+	Message string `json:"message"`
+}

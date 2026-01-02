@@ -26,6 +26,8 @@ func InitRestAdmin(app fiber.Router, service domainAdmin.IAdminUsecase) Admin {
 
 	// Client management endpoints
 	admin.Get("/clients", rest.ListClients)
+	admin.Post("/clients", rest.AddClient)           // Add new client dynamically
+	admin.Delete("/clients/:phone", rest.RemoveClient) // Remove client (keeps chat history)
 	admin.Get("/clients/:phone/status", rest.GetClientStatus)
 	admin.Post("/clients/:phone/connect", rest.ConnectClient)
 	admin.Post("/clients/:phone/disconnect", rest.DisconnectClient)
@@ -236,4 +238,57 @@ func (controller *Admin) DisconnectClient(c *fiber.Ctx) error {
 		"phone":        phone,
 		"disconnected": true,
 	})
+}
+
+// AddClient dynamically adds a new WhatsApp client
+// @Summary Add a new WhatsApp client
+// @Description Dynamically adds a new WhatsApp client to the system. The client will need to be logged in via QR code.
+// @Tags Admin
+// @Accept json
+// @Produce json
+// @Param request body domainAdmin.AddClientRequest true "Add client request"
+// @Success 200 {object} domainAdmin.AddClientResponse
+// @Failure 400 {object} map[string]interface{} "Invalid request or max clients reached"
+// @Router /admin/clients [post]
+func (controller *Admin) AddClient(c *fiber.Ctx) error {
+	var request domainAdmin.AddClientRequest
+
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
+
+	if request.Phone == "" {
+		return helpers.HandleBadRequest(c, "Phone number is required")
+	}
+
+	response, err := controller.Service.AddClient(c.UserContext(), request)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
+
+	return helpers.HandleSuccess(c, "Client added successfully", response)
+}
+
+// RemoveClient removes a WhatsApp client (keeps chat history)
+// @Summary Remove a WhatsApp client
+// @Description Removes a WhatsApp client from the system. The client will be disconnected and logged out. Chat history is preserved.
+// @Tags Admin
+// @Produce json
+// @Param phone path string true "Phone number of the client to remove"
+// @Success 200 {object} domainAdmin.RemoveClientResponse
+// @Failure 400 {object} map[string]interface{} "Invalid phone number"
+// @Failure 404 {object} map[string]interface{} "Client not found"
+// @Router /admin/clients/{phone} [delete]
+func (controller *Admin) RemoveClient(c *fiber.Ctx) error {
+	phone := c.Params("phone")
+	if phone == "" {
+		return helpers.HandleBadRequest(c, "Phone number is required")
+	}
+
+	response, err := controller.Service.RemoveClient(c.UserContext(), phone)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
+
+	return helpers.HandleSuccess(c, "Client removed successfully", response)
 }
