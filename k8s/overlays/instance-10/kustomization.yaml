@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: whatsapp-10
+
+namePrefix: instance-10-
+
+resources:
+  - ../../base
+  - postgres.yaml
+
+patches:
+  - path: namespace-patch.yaml
+  - path: secret-patch.yaml
+  - path: ingress-patch.yaml
+
+commonLabels:
+  app.kubernetes.io/instance: instance-10
+
+commonAnnotations:
+  whatsapp.io/instance-id: "10"

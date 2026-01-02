@@ -1,0 +1,16 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: whatsapp-api
+spec:
+  rules:
+    - host: whatsapp-03.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: instance-03-whatsapp-api
+                port:
+                  name: http
