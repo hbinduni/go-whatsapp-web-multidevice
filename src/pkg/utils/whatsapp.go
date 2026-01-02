@@ -633,7 +633,9 @@ func IsOnWhatsapp(client *whatsmeow.Client, jid string) bool {
 
 // ValidateJidWithLogin validates JID with login check
 func ValidateJidWithLogin(client *whatsmeow.Client, jid string) (types.JID, error) {
-	MustLogin(client)
+	if err := MustLogin(client); err != nil {
+		return types.JID{}, err
+	}
 
 	if config.WhatsappAccountValidation && !IsOnWhatsapp(client, jid) {
 		return types.JID{}, pkgError.InvalidJID(fmt.Sprintf("Phone %s is not on whatsapp", jid))
@@ -642,16 +644,19 @@ func ValidateJidWithLogin(client *whatsmeow.Client, jid string) (types.JID, erro
 	return ParseJID(jid)
 }
 
-// MustLogin ensures the WhatsApp client is logged in
-func MustLogin(client *whatsmeow.Client) {
+// MustLogin ensures the WhatsApp client is connected and logged in
+// Returns an error if client is nil, not connected, or not logged in
+func MustLogin(client *whatsmeow.Client) error {
 	if client == nil {
-		panic(pkgError.InternalServerError("Whatsapp client is not initialized"))
+		return pkgError.InternalServerError("Whatsapp client is not initialized")
 	}
 	if !client.IsConnected() {
-		panic(pkgError.ErrNotConnected)
-	} else if !client.IsLoggedIn() {
-		panic(pkgError.ErrNotLoggedIn)
+		return pkgError.ErrNotConnected
 	}
+	if !client.IsLoggedIn() {
+		return pkgError.ErrNotLoggedIn
+	}
+	return nil
 }
 
 // Internal message types for event handling

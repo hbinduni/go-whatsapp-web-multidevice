@@ -26,7 +26,9 @@ func (service serviceGroup) JoinGroupWithLink(ctx context.Context, request domai
 	if err = validations.ValidateJoinGroupWithLink(ctx, request); err != nil {
 		return groupID, err
 	}
-	utils.MustLogin(whatsapp.GetClientFromContext(ctx))
+	if err = utils.MustLogin(whatsapp.GetClientFromContext(ctx)); err != nil {
+		return groupID, err
+	}
 
 	jid, err := whatsapp.GetClientFromContext(ctx).JoinGroupWithLink(ctx, request.Link)
 	if err != nil {
@@ -52,7 +54,9 @@ func (service serviceGroup) CreateGroup(ctx context.Context, request domainGroup
 	if err = validations.ValidateCreateGroup(ctx, request); err != nil {
 		return groupID, err
 	}
-	utils.MustLogin(whatsapp.GetClientFromContext(ctx))
+	if err = utils.MustLogin(whatsapp.GetClientFromContext(ctx)); err != nil {
+		return groupID, err
+	}
 
 	participantsJID, err := service.participantToJID(ctx, request.Participants)
 	if err != nil {
@@ -78,7 +82,9 @@ func (service serviceGroup) GetGroupInfoFromLink(ctx context.Context, request do
 	if err = validations.ValidateGetGroupInfoFromLink(ctx, request); err != nil {
 		return response, err
 	}
-	utils.MustLogin(whatsapp.GetClientFromContext(ctx))
+	if err = utils.MustLogin(whatsapp.GetClientFromContext(ctx)); err != nil {
+		return response, err
+	}
 
 	groupInfo, err := whatsapp.GetClientFromContext(ctx).GetGroupInfoFromLink(ctx, request.Link)
 	if err != nil {
@@ -104,7 +110,9 @@ func (service serviceGroup) ManageParticipant(ctx context.Context, request domai
 	if err = validations.ValidateParticipant(ctx, request); err != nil {
 		return result, err
 	}
-	utils.MustLogin(whatsapp.GetClientFromContext(ctx))
+	if err = utils.MustLogin(whatsapp.GetClientFromContext(ctx)); err != nil {
+		return result, err
+	}
 
 	groupJID, err := utils.ValidateJidWithLogin(whatsapp.GetClientFromContext(ctx), request.GroupID)
 	if err != nil {
@@ -378,7 +386,9 @@ func (service serviceGroup) GroupInfo(ctx context.Context, request domainGroup.G
 	}
 
 	// Ensure we are logged in
-	utils.MustLogin(whatsapp.GetClientFromContext(ctx))
+	if err = utils.MustLogin(whatsapp.GetClientFromContext(ctx)); err != nil {
+		return response, err
+	}
 
 	// Validate and parse the provided group JID / ID
 	groupJID, err := utils.ValidateJidWithLogin(whatsapp.GetClientFromContext(ctx), request.GroupID)
@@ -404,7 +414,9 @@ func (service serviceGroup) GetGroupInviteLink(ctx context.Context, request doma
 	if err = validations.ValidateGetGroupInviteLink(ctx, request); err != nil {
 		return response, err
 	}
-	utils.MustLogin(whatsapp.GetClientFromContext(ctx))
+	if err = utils.MustLogin(whatsapp.GetClientFromContext(ctx)); err != nil {
+		return response, err
+	}
 
 	groupJID, err := utils.ValidateJidWithLogin(whatsapp.GetClientFromContext(ctx), request.GroupID)
 	if err != nil {
