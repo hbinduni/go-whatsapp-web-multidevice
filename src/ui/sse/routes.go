@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
 	"github.com/gofiber/fiber/v2"
 	"github.com/sirupsen/logrus"
 )
@@ -22,9 +23,15 @@ func handleSSE(c *fiber.Ctx) error {
 	c.Set("Cache-Control", "no-cache")
 	c.Set("Connection", "keep-alive")
 	c.Set("Transfer-Encoding", "chunked")
-	c.Set("Access-Control-Allow-Origin", "*")
-	c.Set("Access-Control-Allow-Headers", "Cache-Control")
-	c.Set("Access-Control-Allow-Credentials", "true")
+
+	// Apply CORS headers only if CORS is enabled
+	if config.CORSAllowOrigins != "" {
+		c.Set("Access-Control-Allow-Origin", config.CORSAllowOrigins)
+		c.Set("Access-Control-Allow-Headers", config.CORSAllowHeaders)
+		if config.CORSAllowCredentials {
+			c.Set("Access-Control-Allow-Credentials", "true")
+		}
+	}
 
 	// Create a new client
 	client := NewClient()

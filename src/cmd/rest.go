@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/ui/rest"
@@ -16,6 +17,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/basicauth"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/filesystem"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/template/html/v2"
 	"github.com/sirupsen/logrus"
@@ -72,10 +74,46 @@ func restServer(_ *cobra.Command, _ []string) {
 	if config.AppDebug {
 		app.Use(logger.New())
 	}
-	app.Use(cors.New(cors.Config{
-		AllowOrigins: "*",
-		AllowHeaders: "Origin, Content-Type, Accept",
-	}))
+
+	// CORS Configuration
+	// If CORSAllowOrigins is empty, CORS middleware is not applied (same-origin only)
+	// If CORSAllowOrigins is "*", all origins are allowed (development/testing)
+	// Otherwise, only specified origins are allowed (production)
+	if config.CORSAllowOrigins != "" {
+		logrus.Infof("CORS enabled for origins: %s", config.CORSAllowOrigins)
+		app.Use(cors.New(cors.Config{
+			AllowOrigins:     config.CORSAllowOrigins,
+			AllowHeaders:     config.CORSAllowHeaders,
+			AllowMethods:     config.CORSAllowMethods,
+			AllowCredentials: config.CORSAllowCredentials,
+		}))
+	} else {
+		logrus.Info("CORS disabled (same-origin only) - set CORS_ALLOW_ORIGINS to enable cross-origin requests")
+	}
+
+	// Rate Limiting Configuration
+	if config.RateLimitEnabled {
+		logrus.Infof("Rate limiting enabled: %d requests per %d seconds", config.RateLimitMax, config.RateLimitWindowSecs)
+		app.Use(limiter.New(limiter.Config{
+			Max:        config.RateLimitMax,
+			Expiration: time.Duration(config.RateLimitWindowSecs) * time.Second,
+			KeyGenerator: func(c *fiber.Ctx) string {
+				// Use X-Forwarded-For if behind a proxy, otherwise use remote IP
+				return c.IP()
+			},
+			LimitReached: func(c *fiber.Ctx) error {
+				return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+					"status":  429,
+					"code":    "RATE_LIMIT_EXCEEDED",
+					"message": fmt.Sprintf("Rate limit exceeded. Maximum %d requests per %d seconds.", config.RateLimitMax, config.RateLimitWindowSecs),
+				})
+			},
+			// Skip rate limiting for SSE endpoints (they are long-lived connections)
+			Next: func(c *fiber.Ctx) bool {
+				return strings.HasPrefix(c.Path(), config.AppBasePath+"/events")
+			},
+		}))
+	}
 
 	if len(config.AppBasicAuthCredential) > 0 {
 		account := make(map[string]string)

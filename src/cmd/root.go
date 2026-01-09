@@ -117,6 +117,31 @@ func initEnvConfig() {
 		config.AppTrustedProxies = proxies
 	}
 
+	// CORS settings
+	if envCORSOrigins := viper.GetString("cors_allow_origins"); envCORSOrigins != "" {
+		config.CORSAllowOrigins = envCORSOrigins
+	}
+	if envCORSHeaders := viper.GetString("cors_allow_headers"); envCORSHeaders != "" {
+		config.CORSAllowHeaders = envCORSHeaders
+	}
+	if envCORSMethods := viper.GetString("cors_allow_methods"); envCORSMethods != "" {
+		config.CORSAllowMethods = envCORSMethods
+	}
+	if viper.IsSet("cors_allow_credentials") {
+		config.CORSAllowCredentials = viper.GetBool("cors_allow_credentials")
+	}
+
+	// Rate limiting settings
+	if viper.IsSet("rate_limit_enabled") {
+		config.RateLimitEnabled = viper.GetBool("rate_limit_enabled")
+	}
+	if viper.IsSet("rate_limit_max") {
+		config.RateLimitMax = viper.GetInt("rate_limit_max")
+	}
+	if viper.IsSet("rate_limit_window_secs") {
+		config.RateLimitWindowSecs = viper.GetInt("rate_limit_window_secs")
+	}
+
 	// Database settings
 	if envDBURI := viper.GetString("db_uri"); envDBURI != "" {
 		config.DBURI = envDBURI
@@ -225,6 +250,52 @@ func initFlags() {
 		"trusted-proxies", "",
 		config.AppTrustedProxies,
 		`trusted proxy IP ranges for reverse proxy deployments --trusted-proxies <string> | example: --trusted-proxies="0.0.0.0/0" or --trusted-proxies="10.0.0.0/8,172.16.0.0/12"`,
+	)
+
+	// CORS flags
+	rootCmd.PersistentFlags().StringVarP(
+		&config.CORSAllowOrigins,
+		"cors-origins", "",
+		config.CORSAllowOrigins,
+		`allowed CORS origins (comma-separated). Empty = same-origin only, "*" = all origins --cors-origins <string> | example: --cors-origins="https://example.com,https://app.example.com"`,
+	)
+	rootCmd.PersistentFlags().StringVarP(
+		&config.CORSAllowHeaders,
+		"cors-headers", "",
+		config.CORSAllowHeaders,
+		`allowed CORS headers --cors-headers <string> | example: --cors-headers="Origin, Content-Type, Accept, Authorization"`,
+	)
+	rootCmd.PersistentFlags().StringVarP(
+		&config.CORSAllowMethods,
+		"cors-methods", "",
+		config.CORSAllowMethods,
+		`allowed CORS methods --cors-methods <string> | example: --cors-methods="GET, POST, PUT, DELETE, OPTIONS"`,
+	)
+	rootCmd.PersistentFlags().BoolVarP(
+		&config.CORSAllowCredentials,
+		"cors-credentials", "",
+		config.CORSAllowCredentials,
+		`allow credentials in CORS requests --cors-credentials <true/false> | example: --cors-credentials=true`,
+	)
+
+	// Rate limiting flags
+	rootCmd.PersistentFlags().BoolVarP(
+		&config.RateLimitEnabled,
+		"rate-limit", "",
+		config.RateLimitEnabled,
+		`enable rate limiting --rate-limit <true/false> | example: --rate-limit=true`,
+	)
+	rootCmd.PersistentFlags().IntVarP(
+		&config.RateLimitMax,
+		"rate-limit-max", "",
+		config.RateLimitMax,
+		`maximum requests per time window --rate-limit-max <number> | example: --rate-limit-max=100`,
+	)
+	rootCmd.PersistentFlags().IntVarP(
+		&config.RateLimitWindowSecs,
+		"rate-limit-window", "",
+		config.RateLimitWindowSecs,
+		`rate limit time window in seconds --rate-limit-window <number> | example: --rate-limit-window=60`,
 	)
 
 	// Database flags
