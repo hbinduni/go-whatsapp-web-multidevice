@@ -18,13 +18,13 @@ import (
 
 // Global variables for WhatsApp client state
 var (
-	globalStateMu    sync.RWMutex
-	cli              *whatsmeow.Client
-	db               *sqlstore.Container
-	keysDB           *sqlstore.Container
-	log              waLog.Logger
-	startupTime      = time.Now().Unix()
-	clientStopped    bool // True when client is intentionally stopped (not auto-reconnect)
+	globalStateMu         sync.RWMutex
+	cli                   *whatsmeow.Client
+	db                    *sqlstore.Container
+	keysDB                *sqlstore.Container
+	log                   waLog.Logger
+	startupTime           = time.Now().Unix()
+	clientStopped         bool // True when client is intentionally stopped (not auto-reconnect)
 	originalAutoReconnect bool // Stores original auto-reconnect setting
 )
 

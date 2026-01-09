@@ -39,7 +39,7 @@ type LoginResponse struct {
 type ClientStatusResponse struct {
 	IsConnected   bool   `json:"is_connected"`
 	IsLoggedIn    bool   `json:"is_logged_in"`
-	IsStopped     bool   `json:"is_stopped"`      // True if client was intentionally stopped
+	IsStopped     bool   `json:"is_stopped"` // True if client was intentionally stopped
 	DeviceJID     string `json:"device_jid,omitempty"`
 	StatusMessage string `json:"status_message"`
 }
