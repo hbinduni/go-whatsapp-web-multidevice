@@ -52,3 +52,45 @@ type VacuumResponse struct {
 	Reclaimed       string `json:"reclaimed"`
 	ReclaimedBytes  int64  `json:"reclaimed_bytes"`
 }
+
+// =============================================================================
+// WhatsApp Store Management (Device/Keys Database)
+// =============================================================================
+
+// WhatsAppStoreStatsResponse contains statistics for WhatsApp store databases
+type WhatsAppStoreStatsResponse struct {
+	DatabaseSize      string `json:"database_size"`
+	DatabaseSizeBytes int64  `json:"database_size_bytes"`
+	DeviceCount       int64  `json:"device_count"`
+	HasKeysDB         bool   `json:"has_keys_db"`
+	KeysDBSize        string `json:"keys_db_size,omitempty"`
+	KeysDBSizeBytes   int64  `json:"keys_db_size_bytes,omitempty"`
+	IsConnected       bool   `json:"is_connected"`
+	IsLoggedIn        bool   `json:"is_logged_in"`
+	DeviceJID         string `json:"device_jid,omitempty"`
+}
+
+// WhatsAppStoreExportResponse contains export result paths
+type WhatsAppStoreExportResponse struct {
+	MainDBPath  string `json:"main_db_path"`
+	KeysDBPath  string `json:"keys_db_path,omitempty"`
+	HasKeysDB   bool   `json:"has_keys_db"`
+	IsConnected bool   `json:"is_connected"`
+	Warning     string `json:"warning,omitempty"`
+}
+
+// WhatsAppStoreImportResponse contains import result
+type WhatsAppStoreImportResponse struct {
+	Status          string `json:"status"`
+	Message         string `json:"message"`
+	MainDBImported  bool   `json:"main_db_imported"`
+	KeysDBImported  bool   `json:"keys_db_imported"`
+	RequiresRestart bool   `json:"requires_restart"`
+}
+
+// WhatsAppStoreVacuumResponse contains vacuum results for both databases
+type WhatsAppStoreVacuumResponse struct {
+	MainDB  VacuumResponse  `json:"main_db"`
+	KeysDB  *VacuumResponse `json:"keys_db,omitempty"`
+	Warning string          `json:"warning,omitempty"`
+}
