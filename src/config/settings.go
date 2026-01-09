@@ -18,7 +18,7 @@ var (
 	AppTrustedProxies      []string // Trusted proxy IP ranges (e.g., "0.0.0.0/0" for all, or specific CIDRs)
 
 	// CORS Configuration
-	CORSAllowOrigins     = ""    // Comma-separated list of allowed origins (empty = same-origin only, "*" = all origins)
+	CORSAllowOrigins     = "" // Comma-separated list of allowed origins (empty = same-origin only, "*" = all origins)
 	CORSAllowHeaders     = "Origin, Content-Type, Accept, Authorization"
 	CORSAllowMethods     = "GET, POST, PUT, DELETE, OPTIONS"
 	CORSAllowCredentials = false // Allow credentials (cookies, authorization headers)
