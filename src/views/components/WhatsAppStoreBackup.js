@@ -3,10 +3,21 @@ export default {
     data() {
         return {
             loading: false,
+            stopping: false,
+            starting: false,
             stats: null,
+            clientStatus: null,
             importFile: null,
             importResult: null,
             vacuumResult: null
+        }
+    },
+    computed: {
+        canImport() {
+            return this.importFile && this.clientStatus && this.clientStatus.is_stopped;
+        },
+        isClientRunning() {
+            return this.clientStatus && !this.clientStatus.is_stopped && this.clientStatus.is_connected;
         }
     },
     methods: {
@@ -16,6 +27,7 @@ export default {
             this.importFile = null;
             this.vacuumResult = null;
             this.loadStats();
+            this.loadClientStatus();
         },
         closeModal() {
             $('#modalWhatsAppStoreBackup').modal('hide');
@@ -29,6 +41,44 @@ export default {
                 showErrorInfo(error.response?.data?.message || 'Failed to load WhatsApp store stats');
             } finally {
                 this.loading = false;
+            }
+        },
+        async loadClientStatus() {
+            try {
+                const response = await window.http.get('/app/status');
+                this.clientStatus = response.data.results;
+            } catch (error) {
+                console.error('Failed to load client status:', error);
+            }
+        },
+        async stopClient() {
+            if (!confirm('This will disconnect WhatsApp client (session remains valid). Continue?')) {
+                return;
+            }
+
+            this.stopping = true;
+            try {
+                const response = await window.http.post('/app/stop');
+                this.clientStatus = response.data.results;
+                showSuccessInfo('WhatsApp client stopped successfully');
+                await this.loadStats();
+            } catch (error) {
+                showErrorInfo(error.response?.data?.message || 'Failed to stop client');
+            } finally {
+                this.stopping = false;
+            }
+        },
+        async startClient() {
+            this.starting = true;
+            try {
+                const response = await window.http.post('/app/start');
+                this.clientStatus = response.data.results;
+                showSuccessInfo('WhatsApp client started successfully');
+                await this.loadStats();
+            } catch (error) {
+                showErrorInfo(error.response?.data?.message || 'Failed to start client');
+            } finally {
+                this.starting = false;
             }
         },
         async exportStore() {
@@ -83,8 +133,13 @@ export default {
                 return;
             }
 
+            if (!this.clientStatus?.is_stopped) {
+                showErrorInfo('Please stop the client first before importing');
+                return;
+            }
+
             // Confirm import - this is a critical operation
-            if (!confirm('WARNING: Importing will replace your current WhatsApp credentials and keys. You will need to restart the application after import. Are you sure you want to continue?')) {
+            if (!confirm('WARNING: Importing will replace your current WhatsApp credentials and keys. Are you sure you want to continue?')) {
                 return;
             }
 
@@ -102,11 +157,7 @@ export default {
                 });
 
                 this.importResult = response.data.results;
-                if (this.importResult.requires_restart) {
-                    showSuccessInfo('Import successful! Please restart the application to apply changes.');
-                } else {
-                    showSuccessInfo('WhatsApp store imported successfully');
-                }
+                showSuccessInfo('Import successful! You can now start the client.');
             } catch (error) {
                 showErrorInfo(error.response?.data?.message || 'Failed to import WhatsApp store');
             } finally {
@@ -161,6 +212,54 @@ export default {
             WhatsApp Store Backup
         </div>
         <div class="content">
+            <!-- Client Control Section -->
+            <div class="ui segment">
+                <h3 class="ui header">
+                    <i class="power icon"></i>
+                    Client Control
+                    <div class="ui right floated buttons">
+                        <button class="ui mini button" @click="loadClientStatus" :class="{ loading: loading }">
+                            <i class="sync icon"></i>
+                        </button>
+                    </div>
+                </h3>
+
+                <div v-if="clientStatus" class="ui equal width grid">
+                    <div class="column">
+                        <div class="ui small statistic">
+                            <div class="value">
+                                <i :class="[clientStatus.is_stopped ? 'red' : (clientStatus.is_connected ? 'green' : 'yellow'), 'circle icon']"></i>
+                            </div>
+                            <div class="label">
+                                {{ clientStatus.is_stopped ? 'Stopped' : (clientStatus.is_connected ? 'Connected' : 'Disconnected') }}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column" style="display: flex; align-items: center; justify-content: center;">
+                        <div class="ui buttons">
+                            <button class="ui red button"
+                                    @click="stopClient"
+                                    :class="{ loading: stopping, disabled: clientStatus.is_stopped }">
+                                <i class="stop icon"></i>
+                                Stop Client
+                            </button>
+                            <div class="or"></div>
+                            <button class="ui green button"
+                                    @click="startClient"
+                                    :class="{ loading: starting, disabled: !clientStatus.is_stopped }">
+                                <i class="play icon"></i>
+                                Start Client
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="clientStatus" class="ui small message" style="margin-top: 1em;">
+                    <i class="info circle icon"></i>
+                    {{ clientStatus.status_message }}
+                </div>
+            </div>
+
             <!-- Stats Section -->
             <div class="ui segment">
                 <h3 class="ui header">
@@ -187,17 +286,15 @@ export default {
                     <div class="column">
                         <div class="ui small statistic">
                             <div class="value">
-                                <i :class="[stats.is_connected ? 'green' : 'red', 'circle icon']"></i>
-                            </div>
-                            <div class="label">{{ stats.is_connected ? 'Connected' : 'Disconnected' }}</div>
-                        </div>
-                    </div>
-                    <div class="column">
-                        <div class="ui small statistic">
-                            <div class="value">
                                 <i :class="[stats.is_logged_in ? 'green' : 'grey', 'user icon']"></i>
                             </div>
                             <div class="label">{{ stats.is_logged_in ? 'Logged In' : 'Not Logged In' }}</div>
+                        </div>
+                    </div>
+                    <div class="column" v-if="stats.has_keys_db">
+                        <div class="ui small statistic">
+                            <div class="value">{{ stats.keys_db_size }}</div>
+                            <div class="label">Keys DB Size</div>
                         </div>
                     </div>
                 </div>
@@ -205,11 +302,6 @@ export default {
                 <div v-if="stats && stats.device_jid" class="ui small message" style="margin-top: 1em;">
                     <i class="mobile icon"></i>
                     Device JID: <strong>{{ stats.device_jid }}</strong>
-                </div>
-
-                <div v-if="stats && stats.has_keys_db" class="ui small info message" style="margin-top: 0.5em;">
-                    <i class="key icon"></i>
-                    Keys DB Size: <strong>{{ stats.keys_db_size }}</strong>
                 </div>
             </div>
 
@@ -260,7 +352,7 @@ export default {
                             <div class="ui buttons">
                                 <button class="ui orange button"
                                         @click="importStore"
-                                        :class="{ loading: loading, disabled: !importFile || (stats && stats.is_connected) }">
+                                        :class="{ loading: loading, disabled: !canImport }">
                                     <i class="upload icon"></i>
                                     Import
                                 </button>
@@ -270,9 +362,13 @@ export default {
                                     <i class="redo icon"></i>
                                 </button>
                             </div>
-                            <div v-if="stats && stats.is_connected" class="ui tiny warning message" style="margin-top: 0.5em;">
+                            <div v-if="!clientStatus?.is_stopped" class="ui tiny warning message" style="margin-top: 0.5em;">
                                 <i class="warning icon"></i>
-                                Disconnect first to import
+                                Stop client first to enable import
+                            </div>
+                            <div v-else class="ui tiny positive message" style="margin-top: 0.5em;">
+                                <i class="check icon"></i>
+                                Client stopped - ready to import
                             </div>
                         </div>
 
@@ -289,11 +385,11 @@ export default {
                                     <i class="green check icon"></i>
                                     Keys database imported
                                 </div>
-                                <div class="item" v-if="importResult.requires_restart">
-                                    <i class="orange warning icon"></i>
-                                    Restart required
-                                </div>
                             </div>
+                            <button class="ui small green button" style="margin-top: 0.5em;" @click="startClient" :class="{ loading: starting }">
+                                <i class="play icon"></i>
+                                Start Client Now
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -333,16 +429,28 @@ export default {
                 </div>
             </div>
 
+            <div class="ui info message">
+                <div class="header">
+                    <i class="info circle icon"></i>
+                    How to Import a Backup
+                </div>
+                <ol class="list">
+                    <li><strong>Stop the client</strong> using the "Stop Client" button above</li>
+                    <li><strong>Select your backup file</strong> (.db file)</li>
+                    <li><strong>Click Import</strong> to restore the backup</li>
+                    <li><strong>Start the client</strong> using the "Start Client" button</li>
+                </ol>
+            </div>
+
             <div class="ui red message">
                 <div class="header">
                     <i class="exclamation triangle icon"></i>
-                    Critical Information
+                    Important Notes
                 </div>
                 <ul class="list">
                     <li><strong>This database contains your WhatsApp encryption keys and device credentials.</strong></li>
                     <li>Export creates a backup of your login session - store it securely!</li>
-                    <li>Import replaces your current credentials - <strong>you must disconnect first</strong>.</li>
-                    <li>After import, <strong>restart the application</strong> to apply changes.</li>
+                    <li>Import replaces your current credentials.</li>
                     <li>If you import an old backup, you may need to re-link your device.</li>
                 </ul>
             </div>

@@ -248,3 +248,67 @@ func (service *serviceApp) FetchDevices(ctx context.Context) (response []domainA
 
 	return response, nil
 }
+
+// StopClient disconnects from WhatsApp without logging out
+func (service *serviceApp) StopClient(_ context.Context) (response domainApp.ClientStatusResponse, err error) {
+	logrus.Debug("Stopping WhatsApp client...")
+
+	err = whatsapp.StopClient()
+	if err != nil {
+		return response, err
+	}
+
+	// Get updated status
+	isConnected, isLoggedIn, isStopped, deviceID := whatsapp.GetFullClientStatus()
+	response.IsConnected = isConnected
+	response.IsLoggedIn = isLoggedIn
+	response.IsStopped = isStopped
+	response.DeviceJID = deviceID
+	response.StatusMessage = "Client stopped successfully. Session remains valid."
+
+	logrus.Info("WhatsApp client stopped successfully")
+	return response, nil
+}
+
+// StartClient reconnects to WhatsApp after being stopped
+func (service *serviceApp) StartClient(_ context.Context) (response domainApp.ClientStatusResponse, err error) {
+	logrus.Debug("Starting WhatsApp client...")
+
+	err = whatsapp.StartClient()
+	if err != nil {
+		return response, err
+	}
+
+	// Get updated status
+	isConnected, isLoggedIn, isStopped, deviceID := whatsapp.GetFullClientStatus()
+	response.IsConnected = isConnected
+	response.IsLoggedIn = isLoggedIn
+	response.IsStopped = isStopped
+	response.DeviceJID = deviceID
+	response.StatusMessage = "Client started successfully."
+
+	logrus.Info("WhatsApp client started successfully")
+	return response, nil
+}
+
+// GetClientStatus returns the current client connection status
+func (service *serviceApp) GetClientStatus(_ context.Context) (response domainApp.ClientStatusResponse, err error) {
+	isConnected, isLoggedIn, isStopped, deviceID := whatsapp.GetFullClientStatus()
+
+	response.IsConnected = isConnected
+	response.IsLoggedIn = isLoggedIn
+	response.IsStopped = isStopped
+	response.DeviceJID = deviceID
+
+	if isStopped {
+		response.StatusMessage = "Client is stopped (disconnected but session valid)"
+	} else if isConnected && isLoggedIn {
+		response.StatusMessage = "Client is connected and logged in"
+	} else if isConnected {
+		response.StatusMessage = "Client is connected but not logged in"
+	} else {
+		response.StatusMessage = "Client is disconnected"
+	}
+
+	return response, nil
+}

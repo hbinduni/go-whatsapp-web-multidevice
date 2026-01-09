@@ -5,7 +5,6 @@ import (
 
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
 	domainApp "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/app"
-	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/whatsapp"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/utils"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/ui/rest/helpers"
 	"github.com/gofiber/fiber/v2"
@@ -23,6 +22,10 @@ func InitRestApp(app fiber.Router, service domainApp.IAppUsecase) App {
 	app.Get("/app/reconnect", rest.Reconnect)
 	app.Get("/app/devices", rest.Devices)
 	app.Get("/app/status", rest.ConnectionStatus)
+
+	// Client start/stop endpoints (disconnect without logout)
+	app.Post("/app/stop", rest.StopClient)
+	app.Post("/app/start", rest.StartClient)
 
 	return App{Service: service}
 }
@@ -88,16 +91,42 @@ func (handler *App) Devices(c *fiber.Ctx) error {
 }
 
 func (handler *App) ConnectionStatus(c *fiber.Ctx) error {
-	isConnected, isLoggedIn, deviceID := whatsapp.GetConnectionStatus()
+	response, err := handler.Service.GetClientStatus(c.UserContext())
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
 
-	return c.JSON(utils.ResponseData{
-		Status:  200,
-		Code:    "SUCCESS",
-		Message: "Connection status retrieved",
-		Results: map[string]any{
-			"is_connected": isConnected,
-			"is_logged_in": isLoggedIn,
-			"device_id":    deviceID,
-		},
-	})
+	return helpers.HandleSuccess(c, response.StatusMessage, response)
+}
+
+// StopClient stops the WhatsApp client without logging out
+// @Summary Stop WhatsApp client
+// @Description Disconnects from WhatsApp without invalidating the session. Useful for maintenance operations.
+// @Tags App
+// @Produce json
+// @Success 200 {object} domainApp.ClientStatusResponse
+// @Router /app/stop [post]
+func (handler *App) StopClient(c *fiber.Ctx) error {
+	response, err := handler.Service.StopClient(c.UserContext())
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
+
+	return helpers.HandleSuccess(c, response.StatusMessage, response)
+}
+
+// StartClient starts the WhatsApp client after being stopped
+// @Summary Start WhatsApp client
+// @Description Reconnects to WhatsApp after being stopped. Session remains valid.
+// @Tags App
+// @Produce json
+// @Success 200 {object} domainApp.ClientStatusResponse
+// @Router /app/start [post]
+func (handler *App) StartClient(c *fiber.Ctx) error {
+	response, err := handler.Service.StartClient(c.UserContext())
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
+
+	return helpers.HandleSuccess(c, response.StatusMessage, response)
 }

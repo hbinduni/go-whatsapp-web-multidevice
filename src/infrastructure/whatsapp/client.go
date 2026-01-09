@@ -18,12 +18,14 @@ import (
 
 // Global variables for WhatsApp client state
 var (
-	globalStateMu sync.RWMutex
-	cli           *whatsmeow.Client
-	db            *sqlstore.Container
-	keysDB        *sqlstore.Container
-	log           waLog.Logger
-	startupTime   = time.Now().Unix()
+	globalStateMu    sync.RWMutex
+	cli              *whatsmeow.Client
+	db               *sqlstore.Container
+	keysDB           *sqlstore.Container
+	log              waLog.Logger
+	startupTime      = time.Now().Unix()
+	clientStopped    bool // True when client is intentionally stopped (not auto-reconnect)
+	originalAutoReconnect bool // Stores original auto-reconnect setting
 )
 
 // InitWaDB initializes the WhatsApp database connection
@@ -192,4 +194,90 @@ func GetConnectionStatus() (isConnected bool, isLoggedIn bool, deviceID string) 
 	}
 
 	return isConnected, isLoggedIn, deviceID
+}
+
+// IsClientStopped returns true if the client was intentionally stopped
+func IsClientStopped() bool {
+	globalStateMu.RLock()
+	defer globalStateMu.RUnlock()
+	return clientStopped
+}
+
+// StopClient disconnects the WhatsApp client without logging out
+// The session remains valid and can be reconnected with StartClient
+func StopClient() error {
+	globalStateMu.Lock()
+	defer globalStateMu.Unlock()
+
+	if cli == nil {
+		return fmt.Errorf("client not initialized")
+	}
+
+	if clientStopped {
+		return fmt.Errorf("client is already stopped")
+	}
+
+	// Save original auto-reconnect setting and disable it
+	originalAutoReconnect = cli.EnableAutoReconnect
+	cli.EnableAutoReconnect = false
+
+	// Disconnect from WhatsApp (session remains valid)
+	cli.Disconnect()
+
+	clientStopped = true
+	log.Infof("WhatsApp client stopped (disconnected without logout)")
+
+	return nil
+}
+
+// StartClient reconnects the WhatsApp client after being stopped
+func StartClient() error {
+	globalStateMu.Lock()
+	defer globalStateMu.Unlock()
+
+	if cli == nil {
+		return fmt.Errorf("client not initialized")
+	}
+
+	if !clientStopped {
+		// If not stopped, just ensure we're connected
+		if cli.IsConnected() {
+			return nil // Already connected
+		}
+	}
+
+	// Restore auto-reconnect setting
+	cli.EnableAutoReconnect = originalAutoReconnect
+
+	// Reconnect to WhatsApp
+	err := cli.Connect()
+	if err != nil {
+		return fmt.Errorf("failed to connect: %w", err)
+	}
+
+	clientStopped = false
+	log.Infof("WhatsApp client started (reconnected)")
+
+	return nil
+}
+
+// GetFullClientStatus returns comprehensive client status including stopped state
+func GetFullClientStatus() (isConnected bool, isLoggedIn bool, isStopped bool, deviceID string) {
+	globalStateMu.RLock()
+	defer globalStateMu.RUnlock()
+
+	isStopped = clientStopped
+
+	if cli == nil {
+		return false, false, isStopped, ""
+	}
+
+	isConnected = cli.IsConnected()
+	isLoggedIn = cli.IsLoggedIn()
+
+	if cli.Store != nil && cli.Store.ID != nil {
+		deviceID = cli.Store.ID.String()
+	}
+
+	return isConnected, isLoggedIn, isStopped, deviceID
 }
