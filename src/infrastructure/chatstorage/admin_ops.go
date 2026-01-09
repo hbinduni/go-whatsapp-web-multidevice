@@ -1,6 +1,7 @@
 package chatstorage
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 	"strings"
@@ -200,16 +201,23 @@ func (r *SQLiteRepository) GetDatabaseSize() (int64, error) {
 
 // GetMessageDateRange returns the oldest and newest message timestamps
 func (r *SQLiteRepository) GetMessageDateRange() (oldest, newest *time.Time, err error) {
-	var oldestTime, newestTime time.Time
+	var oldestTime, newestTime sql.NullTime
 
+	// Use sql.NullTime to properly handle NULL when table is empty
 	err = r.db.QueryRow("SELECT MIN(timestamp) FROM messages").Scan(&oldestTime)
-	if err == nil && !oldestTime.IsZero() {
-		oldest = &oldestTime
+	if err != nil && err != sql.ErrNoRows {
+		logrus.Warnf("Failed to get oldest message time: %v", err)
+	}
+	if oldestTime.Valid {
+		oldest = &oldestTime.Time
 	}
 
 	err = r.db.QueryRow("SELECT MAX(timestamp) FROM messages").Scan(&newestTime)
-	if err == nil && !newestTime.IsZero() {
-		newest = &newestTime
+	if err != nil && err != sql.ErrNoRows {
+		logrus.Warnf("Failed to get newest message time: %v", err)
+	}
+	if newestTime.Valid {
+		newest = &newestTime.Time
 	}
 
 	return oldest, newest, nil

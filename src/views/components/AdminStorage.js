@@ -132,6 +132,38 @@ export default {
                     </div>
                 </div>
 
+                <!-- Message Date Range -->
+                <div v-if="stats && (stats.oldest_message || stats.newest_message)" class="ui segment" style="margin-top: 1em; background: #f8f9fa;">
+                    <div class="ui two column stackable grid">
+                        <div class="column">
+                            <div class="ui small statistic" v-if="stats.oldest_message">
+                                <div class="value" style="font-size: 1.2em !important;">
+                                    <i class="calendar alternate outline icon"></i>
+                                    {{ formatDate(stats.oldest_message) }}
+                                </div>
+                                <div class="label">Earliest Message</div>
+                            </div>
+                            <div v-else class="ui small statistic">
+                                <div class="value" style="font-size: 1.2em !important; color: #999;">N/A</div>
+                                <div class="label">Earliest Message</div>
+                            </div>
+                        </div>
+                        <div class="column">
+                            <div class="ui small statistic" v-if="stats.newest_message">
+                                <div class="value" style="font-size: 1.2em !important;">
+                                    <i class="calendar check icon"></i>
+                                    {{ formatDate(stats.newest_message) }}
+                                </div>
+                                <div class="label">Latest Message</div>
+                            </div>
+                            <div v-else class="ui small statistic">
+                                <div class="value" style="font-size: 1.2em !important; color: #999;">N/A</div>
+                                <div class="label">Latest Message</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div v-if="stats" class="ui divider"></div>
 
                 <div v-if="stats" class="ui small list">
@@ -142,14 +174,6 @@ export default {
                     <div class="item">
                         <i class="comment icon"></i>
                         Text Messages: {{ stats.text_messages }}
-                    </div>
-                    <div class="item" v-if="stats.oldest_message">
-                        <i class="calendar minus icon"></i>
-                        Oldest: {{ formatDate(stats.oldest_message) }}
-                    </div>
-                    <div class="item" v-if="stats.newest_message">
-                        <i class="calendar plus icon"></i>
-                        Newest: {{ formatDate(stats.newest_message) }}
                     </div>
                 </div>
 
