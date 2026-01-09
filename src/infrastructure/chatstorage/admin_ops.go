@@ -201,26 +201,53 @@ func (r *SQLiteRepository) GetDatabaseSize() (int64, error) {
 
 // GetMessageDateRange returns the oldest and newest message timestamps
 func (r *SQLiteRepository) GetMessageDateRange() (oldest, newest *time.Time, err error) {
-	var oldestTime, newestTime sql.NullTime
+	// SQLite stores timestamps as strings, so we scan to NullString first then parse
+	var oldestStr, newestStr sql.NullString
 
-	// Use sql.NullTime to properly handle NULL when table is empty
-	err = r.db.QueryRow("SELECT MIN(timestamp) FROM messages").Scan(&oldestTime)
+	err = r.db.QueryRow("SELECT MIN(timestamp) FROM messages").Scan(&oldestStr)
 	if err != nil && err != sql.ErrNoRows {
 		logrus.Warnf("Failed to get oldest message time: %v", err)
 	}
-	if oldestTime.Valid {
-		oldest = &oldestTime.Time
+	if oldestStr.Valid && oldestStr.String != "" {
+		if parsed, parseErr := parseTimestamp(oldestStr.String); parseErr == nil {
+			oldest = &parsed
+		}
 	}
 
-	err = r.db.QueryRow("SELECT MAX(timestamp) FROM messages").Scan(&newestTime)
+	err = r.db.QueryRow("SELECT MAX(timestamp) FROM messages").Scan(&newestStr)
 	if err != nil && err != sql.ErrNoRows {
 		logrus.Warnf("Failed to get newest message time: %v", err)
 	}
-	if newestTime.Valid {
-		newest = &newestTime.Time
+	if newestStr.Valid && newestStr.String != "" {
+		if parsed, parseErr := parseTimestamp(newestStr.String); parseErr == nil {
+			newest = &parsed
+		}
 	}
 
 	return oldest, newest, nil
+}
+
+// parseTimestamp attempts to parse a timestamp string in various formats
+func parseTimestamp(s string) (time.Time, error) {
+	// Try common SQLite timestamp formats
+	formats := []string{
+		time.RFC3339,
+		time.RFC3339Nano,
+		"2006-01-02 15:04:05.999999999-07:00",
+		"2006-01-02 15:04:05.999999999",
+		"2006-01-02 15:04:05",
+		"2006-01-02T15:04:05.999999999Z07:00",
+		"2006-01-02T15:04:05Z07:00",
+		"2006-01-02T15:04:05",
+	}
+
+	for _, format := range formats {
+		if t, err := time.Parse(format, s); err == nil {
+			return t, nil
+		}
+	}
+
+	return time.Time{}, fmt.Errorf("unable to parse timestamp: %s", s)
 }
 
 // CountEmptyChats counts chats that have no messages
