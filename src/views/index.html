@@ -160,6 +160,7 @@
 
     <div class="ui three column doubling grid cards">
         <admin-storage></admin-storage>
+        <whats-app-store-backup></whats-app-store-backup>
     </div>
 
 </div>
@@ -244,6 +245,7 @@
     import ChatMessages from "{{ .AppBasePath }}/components/ChatMessages.js";
     import ChatStorageBackup from "{{ .AppBasePath }}/components/ChatStorageBackup.js";
     import AdminStorage from "{{ .AppBasePath }}/components/AdminStorage.js";
+    import WhatsAppStoreBackup from "{{ .AppBasePath }}/components/WhatsAppStoreBackup.js";
 
     const showErrorInfo = (message) => {
         $('body').toast({
@@ -280,7 +282,7 @@
             NewsletterList,
             AccountAvatar, AccountUserInfo, AccountPrivacy, AccountChangeAvatar, AccountContact, AccountChangePushName, AccountUserCheck, AccountBusinessProfile,
             ChatPinManager, ChatDisappearingManager, ChatList, ChatMessages, ChatStorageBackup,
-            AdminStorage
+            AdminStorage, WhatsAppStoreBackup
         },
         delimiters: ['[[', ']]'],
         data() {
