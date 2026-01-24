@@ -6,7 +6,7 @@
 SHELL := /bin/bash
 export PATH := /usr/local/go/bin:$(PATH)
 
-.PHONY: help build run run-rest run-mcp run-debug run-rest-debug run-mcp-debug test clean install update-deps fmt vet lint lint-fix docker-build docker-up docker-down docker-logs docker-login-ghcr docker-build-image docker-push-ghcr docker-release docker-tag tidy check check-fix check-all dev-rest dev-mcp docker-build-backup docker-push-backup docker-release-backup
+.PHONY: help build run run-rest run-mcp run-debug run-rest-debug run-mcp-debug test clean install update-deps fmt vet lint lint-fix docker-build docker-up docker-down docker-logs docker-login-ghcr docker-build-image docker-push-ghcr docker-release docker-tag tidy check check-fix check-all dev-rest dev-mcp docker-build-backup docker-push-backup docker-release-backup version-up version-up-minor version-up-major
 
 # Variables
 BINARY_NAME=whatsapp
@@ -99,6 +99,11 @@ help:
 	@echo "  docker-build-backup   Build backup sidecar image"
 	@echo "  docker-push-backup    Push backup sidecar to GHCR"
 	@echo "  docker-release-backup Build and push backup sidecar"
+	@echo ""
+	@echo "Version Commands:"
+	@echo "  version-up       Increment patch version (e.g., v2.0.7 -> v2.0.8)"
+	@echo "  version-up-minor Increment minor version (e.g., v2.0.7 -> v2.1.0)"
+	@echo "  version-up-major Increment major version (e.g., v2.0.7 -> v3.0.0)"
 	@echo ""
 	@echo "Utility Commands:"
 	@echo "  clean          Remove build artifacts and cache"
@@ -416,6 +421,39 @@ docker-release-backup: docker-build-backup docker-push-backup
 	@echo "  - $(GHCR_BACKUP_IMAGE_VERSIONED)"
 	@echo "  - $(GHCR_BACKUP_IMAGE_LATEST)"
 	@echo "========================================="
+
+## version-up: Increment patch version (e.g., v2.0.7 -> v2.0.8)
+version-up:
+	@CURRENT=$$(grep 'AppVersion[[:space:]]*=' $(SRC_DIR)/config/settings.go | sed -n 's/.*"v\([0-9]*\)\.\([0-9]*\)\.\([0-9]*\)".*/\1.\2.\3/p'); \
+	MAJOR=$$(echo $$CURRENT | cut -d. -f1); \
+	MINOR=$$(echo $$CURRENT | cut -d. -f2); \
+	PATCH=$$(echo $$CURRENT | cut -d. -f3); \
+	NEW_PATCH=$$((PATCH + 1)); \
+	NEW_VERSION="v$$MAJOR.$$MINOR.$$NEW_PATCH"; \
+	echo "Bumping version: v$$CURRENT -> $$NEW_VERSION"; \
+	sed -i "s/AppVersion[[:space:]]*=.*/AppVersion             = \"$$NEW_VERSION\"/" $(SRC_DIR)/config/settings.go; \
+	echo "✅ Version updated to $$NEW_VERSION in $(SRC_DIR)/config/settings.go"
+
+## version-up-minor: Increment minor version (e.g., v2.0.7 -> v2.1.0)
+version-up-minor:
+	@CURRENT=$$(grep 'AppVersion[[:space:]]*=' $(SRC_DIR)/config/settings.go | sed -n 's/.*"v\([0-9]*\)\.\([0-9]*\)\.\([0-9]*\)".*/\1.\2.\3/p'); \
+	MAJOR=$$(echo $$CURRENT | cut -d. -f1); \
+	MINOR=$$(echo $$CURRENT | cut -d. -f2); \
+	NEW_MINOR=$$((MINOR + 1)); \
+	NEW_VERSION="v$$MAJOR.$$NEW_MINOR.0"; \
+	echo "Bumping version: v$$CURRENT -> $$NEW_VERSION"; \
+	sed -i "s/AppVersion[[:space:]]*=.*/AppVersion             = \"$$NEW_VERSION\"/" $(SRC_DIR)/config/settings.go; \
+	echo "✅ Version updated to $$NEW_VERSION in $(SRC_DIR)/config/settings.go"
+
+## version-up-major: Increment major version (e.g., v2.0.7 -> v3.0.0)
+version-up-major:
+	@CURRENT=$$(grep 'AppVersion[[:space:]]*=' $(SRC_DIR)/config/settings.go | sed -n 's/.*"v\([0-9]*\)\.\([0-9]*\)\.\([0-9]*\)".*/\1.\2.\3/p'); \
+	MAJOR=$$(echo $$CURRENT | cut -d. -f1); \
+	NEW_MAJOR=$$((MAJOR + 1)); \
+	NEW_VERSION="v$$NEW_MAJOR.0.0"; \
+	echo "Bumping version: v$$CURRENT -> $$NEW_VERSION"; \
+	sed -i "s/AppVersion[[:space:]]*=.*/AppVersion             = \"$$NEW_VERSION\"/" $(SRC_DIR)/config/settings.go; \
+	echo "✅ Version updated to $$NEW_VERSION in $(SRC_DIR)/config/settings.go"
 
 ## clean: Remove build artifacts and cache
 clean:
