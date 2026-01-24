@@ -16,3 +16,6 @@ bin
 .cursor/mcp.json
 .serena/
 build/
+
+# Claude Code MCP config (local)
+.mcp.json
