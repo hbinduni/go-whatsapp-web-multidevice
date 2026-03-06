@@ -42,6 +42,8 @@ func handler(ctx context.Context, rawEvt any, chatStorageRepo domainChatStorage.
 		handleReceipt(ctx, evt, chatStorageRepo)
 	case *events.Presence:
 		handlePresence(ctx, evt)
+	case *events.PrivacySettings:
+		handlePrivacySettings(ctx, evt)
 	case *events.HistorySync:
 		handleHistorySync(ctx, evt, chatStorageRepo)
 	case *events.AppState:
@@ -471,6 +473,22 @@ func handlePresence(ctx context.Context, evt *events.Presence) {
 	client := GetClient()
 	normalizedJID := NormalizeJIDFromLID(ctx, evt.From, client)
 	sse.BroadcastPresenceUpdate(normalizedJID.String(), !evt.Unavailable, evt.LastSeen)
+}
+
+func handlePrivacySettings(_ context.Context, evt *events.PrivacySettings) {
+	settings := evt.NewSettings
+	sse.BroadcastPrivacyUpdate(map[string]any{
+		"group_add":     string(settings.GroupAdd),
+		"last_seen":     string(settings.LastSeen),
+		"status":        string(settings.Status),
+		"profile":       string(settings.Profile),
+		"read_receipts": string(settings.ReadReceipts),
+		"call_add":      string(settings.CallAdd),
+		"online":        string(settings.Online),
+		"messages":      string(settings.Messages),
+		"defense":       string(settings.Defense),
+		"stickers":      string(settings.Stickers),
+	})
 }
 
 func handleAppState(_ context.Context, evt *events.AppState) {

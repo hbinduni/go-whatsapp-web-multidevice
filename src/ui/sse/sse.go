@@ -35,6 +35,7 @@ const (
 
 	// Presence events
 	EventPresenceUpdate EventType = "presence_update"
+	EventPrivacyUpdate  EventType = "privacy_update"
 
 	// Group events
 	EventGroupUpdated EventType = "group_updated"
@@ -232,6 +233,11 @@ func BroadcastPresenceUpdate(jid string, isOnline bool, lastSeen time.Time) {
 		"is_online": isOnline,
 		"last_seen": lastSeen,
 	})
+}
+
+// BroadcastPrivacyUpdate broadcasts privacy settings update events
+func BroadcastPrivacyUpdate(settings map[string]any) {
+	BroadcastMessage(EventPrivacyUpdate, "PRIVACY_UPDATE", "Privacy settings updated", settings)
 }
 
 // BroadcastReceipt broadcasts a receipt event (delivered, read, played)

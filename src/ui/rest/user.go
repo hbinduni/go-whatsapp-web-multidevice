@@ -18,6 +18,7 @@ func InitRestUser(app fiber.Router, service domainUser.IUserUsecase) User {
 	app.Post("/user/avatar", rest.UserChangeAvatar)
 	app.Post("/user/pushname", rest.UserChangePushName)
 	app.Get("/user/my/privacy", rest.UserMyPrivacySetting)
+	app.Post("/user/my/privacy", rest.UserUpdateMyPrivacySetting)
 	app.Get("/user/my/groups", rest.UserMyListGroups)
 	app.Get("/user/my/newsletters", rest.UserMyListNewsletter)
 	app.Get("/user/my/contacts", rest.UserMyListContacts)
@@ -86,6 +87,20 @@ func (controller *User) UserMyPrivacySetting(c *fiber.Ctx) error {
 	}
 
 	return helpers.HandleSuccess(c, "Success get privacy", response)
+}
+
+func (controller *User) UserUpdateMyPrivacySetting(c *fiber.Ctx) error {
+	var request domainUser.UpdatePrivacySettingRequest
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
+
+	response, err := controller.Service.UpdateMyPrivacySetting(c.UserContext(), request)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
+
+	return helpers.HandleSuccess(c, "Success update privacy setting", response)
 }
 
 func (controller *User) UserMyListGroups(c *fiber.Ctx) error {

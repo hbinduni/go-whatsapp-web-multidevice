@@ -140,11 +140,26 @@ func (service serviceUser) MyPrivacySetting(ctx context.Context) (response domai
 		return
 	}
 
-	response.GroupAdd = string(resp.GroupAdd)
-	response.Status = string(resp.Status)
-	response.ReadReceipts = string(resp.ReadReceipts)
-	response.Profile = string(resp.Profile)
-	return response, nil
+	return mapPrivacySettings(resp), nil
+}
+
+func (service serviceUser) UpdateMyPrivacySetting(ctx context.Context, request domainUser.UpdatePrivacySettingRequest) (response domainUser.MyPrivacySettingResponse, err error) {
+	utils.MustLogin(whatsapp.GetClient())
+
+	if err = validations.ValidateUpdatePrivacySetting(ctx, request); err != nil {
+		return response, err
+	}
+
+	settings, err := whatsapp.GetClient().SetPrivacySetting(
+		ctx,
+		types.PrivacySettingType(request.Name),
+		types.PrivacySetting(request.Value),
+	)
+	if err != nil {
+		return response, err
+	}
+
+	return mapPrivacySettings(&settings), nil
 }
 
 func (service serviceUser) MyListContacts(ctx context.Context) (response domainUser.MyListContactsResponse, err error) {
@@ -237,6 +252,25 @@ func (service serviceUser) IsOnWhatsApp(ctx context.Context, request domainUser.
 	response.IsOnWhatsApp = utils.IsOnWhatsapp(whatsapp.GetClient(), request.Phone)
 
 	return response, nil
+}
+
+func mapPrivacySettings(resp *types.PrivacySettings) (response domainUser.MyPrivacySettingResponse) {
+	if resp == nil {
+		return response
+	}
+
+	response.GroupAdd = string(resp.GroupAdd)
+	response.LastSeen = string(resp.LastSeen)
+	response.Status = string(resp.Status)
+	response.Profile = string(resp.Profile)
+	response.ReadReceipts = string(resp.ReadReceipts)
+	response.CallAdd = string(resp.CallAdd)
+	response.Online = string(resp.Online)
+	response.Messages = string(resp.Messages)
+	response.Defense = string(resp.Defense)
+	response.Stickers = string(resp.Stickers)
+
+	return response
 }
 
 func (service serviceUser) BusinessProfile(ctx context.Context, request domainUser.BusinessProfileRequest) (response domainUser.BusinessProfileResponse, err error) {

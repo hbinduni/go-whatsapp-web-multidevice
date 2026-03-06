@@ -47,6 +47,16 @@ type MyPrivacySettingResponse struct {
 	Status       string `json:"status"`
 	Profile      string `json:"profile"`
 	ReadReceipts string `json:"read_receipts"`
+	CallAdd      string `json:"call_add"`
+	Online       string `json:"online"`
+	Messages     string `json:"messages"`
+	Defense      string `json:"defense"`
+	Stickers     string `json:"stickers"`
+}
+
+type UpdatePrivacySettingRequest struct {
+	Name  string `json:"name" form:"name"`
+	Value string `json:"value" form:"value"`
 }
 
 type MyListGroupsResponse struct {

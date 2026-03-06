@@ -28,6 +28,7 @@ type IUserListing interface {
 // IUserPrivacy handles user privacy operations
 type IUserPrivacy interface {
 	MyPrivacySetting(ctx context.Context) (response MyPrivacySettingResponse, err error)
+	UpdateMyPrivacySetting(ctx context.Context, request UpdatePrivacySettingRequest) (response MyPrivacySettingResponse, err error)
 }
 
 // IUserUsecase combines all user interfaces for backward compatibility

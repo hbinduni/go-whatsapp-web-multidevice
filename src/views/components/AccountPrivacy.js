@@ -51,6 +51,11 @@ export default {
                 <li>Who can see my Status : <b>{{ data_privacy.status }}</b></li>
                 <li>Who can see my Profile : <b>{{ data_privacy.profile }}</b></li>
                 <li>Read Receipts : <b>{{ data_privacy.read_receipts }}</b></li>
+                <li>Who can call me : <b>{{ data_privacy.call_add }}</b></li>
+                <li>Who can see when I'm online : <b>{{ data_privacy.online }}</b></li>
+                <li>Who can message me : <b>{{ data_privacy.messages }}</b></li>
+                <li>Advanced chat protection : <b>{{ data_privacy.defense }}</b></li>
+                <li>Sticker privacy : <b>{{ data_privacy.stickers }}</b></li>
             </ol>
         </div>
     </div>

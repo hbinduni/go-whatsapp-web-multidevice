@@ -110,3 +110,46 @@ func TestValidateBusinessProfile(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateUpdatePrivacySetting(t *testing.T) {
+	type args struct {
+		request domainUser.UpdatePrivacySettingRequest
+	}
+	tests := []struct {
+		name string
+		args args
+		err  any
+	}{
+		{
+			name: "should success for read receipts none",
+			args: args{request: domainUser.UpdatePrivacySettingRequest{
+				Name:  "readreceipts",
+				Value: "none",
+			}},
+			err: nil,
+		},
+		{
+			name: "should error with unknown name",
+			args: args{request: domainUser.UpdatePrivacySettingRequest{
+				Name:  "unknown",
+				Value: "all",
+			}},
+			err: pkgError.ValidationError("name: invalid privacy setting type"),
+		},
+		{
+			name: "should error with invalid value",
+			args: args{request: domainUser.UpdatePrivacySettingRequest{
+				Name:  "online",
+				Value: "none",
+			}},
+			err: pkgError.ValidationError("value: invalid value for name 'online'"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateUpdatePrivacySetting(context.Background(), tt.args.request)
+			assert.Equal(t, tt.err, err)
+		})
+	}
+}
