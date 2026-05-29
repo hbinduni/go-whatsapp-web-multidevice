@@ -15,6 +15,9 @@ RUN go build -a -ldflags="-w -s" -o /app/whatsapp
 ## STEP 2 build a smaller image
 #############################
 FROM alpine:3.20
+# Link the GHCR package to its source repo so the repository's GITHUB_TOKEN
+# inherits push access (avoids manual "Manage Actions access" UI grants).
+LABEL org.opencontainers.image.source=https://github.com/hbinduni/go-whatsapp-web-multidevice
 RUN apk add --no-cache ffmpeg tzdata
 ENV TZ=UTC
 WORKDIR /app
