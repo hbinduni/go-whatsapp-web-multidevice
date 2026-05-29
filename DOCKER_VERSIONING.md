@@ -2,6 +2,13 @@
 
 This document explains how to use the improved Docker release system with automatic versioning.
 
+> **Releases are built manually** via `make docker-release` (below). The GitHub
+> Actions build workflow is `workflow_dispatch`-only and does **not** run on tag
+> push, because the GHCR package's "Manage Actions access" grant (UI-only) is not
+> configured, so the in-CI `GITHUB_TOKEN` cannot push. To re-enable CI builds:
+> grant the repo Write under the package's *Manage Actions access*, then re-add
+> the `push: tags` trigger in `.github/workflows/build-docker-image.yaml`.
+
 ## Quick Start
 
 ### 1. Release with Auto-Versioning (Recommended)
