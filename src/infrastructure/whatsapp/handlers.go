@@ -89,9 +89,23 @@ func handleAppStateSyncComplete(_ context.Context, evt *events.AppStateSyncCompl
 		return
 	}
 	if len(client.Store.PushName) > 0 && evt.Name == appstate.WAPatchCriticalBlock {
-		if err := client.SendPresence(context.Background(), types.PresenceAvailable); err != nil {
-			log.Warnf("Failed to send available presence: %v", err)
-		}
+		sendInitialPresence(client)
+	}
+}
+
+// sendInitialPresence registers the device presence after connect. We always
+// send presence so the server has our push name (otherwise contacts see "-"),
+// but default to PresenceUnavailable: marking the device PresenceAvailable sets
+// whatsmeow's sendActiveReceipts flag, makes this the "active" device, and
+// causes WhatsApp to suppress new-message notifications on the linked phone.
+// Set WHATSAPP_PRESENCE_AVAILABLE=true to opt into the online/available behavior.
+func sendInitialPresence(client *whatsmeow.Client) {
+	state := types.PresenceUnavailable
+	if config.WhatsappPresenceAvailable {
+		state = types.PresenceAvailable
+	}
+	if err := client.SendPresence(context.Background(), state); err != nil {
+		log.Warnf("Failed to send %s presence: %v", state, err)
 	}
 }
 
@@ -142,9 +156,7 @@ func handleConnectionEvents(_ context.Context) {
 		return
 	}
 
-	if err := client.SendPresence(context.Background(), types.PresenceAvailable); err != nil {
-		log.Warnf("Failed to send available presence: %v", err)
-	}
+	sendInitialPresence(client)
 }
 
 func handleStreamReplaced(ctx context.Context) {

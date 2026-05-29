@@ -37,6 +37,7 @@ var (
 
 	WhatsappAutoReplyMessage          string
 	WhatsappAutoMarkRead              = false // Auto-mark incoming messages as read
+	WhatsappPresenceAvailable         = false // Mark this device "available" (online) on connect; when true the linked phone stops showing message notifications
 	WhatsappAutoDownloadMedia         = true  // Auto-download media from incoming messages
 	WhatsappWebhook                   []string
 	WhatsappWebhookSecret                   = "secret"

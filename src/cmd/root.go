@@ -157,6 +157,9 @@ func initEnvConfig() {
 	if viper.IsSet("whatsapp_auto_mark_read") {
 		config.WhatsappAutoMarkRead = viper.GetBool("whatsapp_auto_mark_read")
 	}
+	if viper.IsSet("whatsapp_presence_available") {
+		config.WhatsappPresenceAvailable = viper.GetBool("whatsapp_presence_available")
+	}
 	if viper.IsSet("whatsapp_auto_download_media") {
 		config.WhatsappAutoDownloadMedia = viper.GetBool("whatsapp_auto_download_media")
 	}
@@ -324,6 +327,12 @@ func initFlags() {
 		"auto-mark-read", "",
 		config.WhatsappAutoMarkRead,
 		`auto mark incoming messages as read --auto-mark-read <true/false> | example: --auto-mark-read=true`,
+	)
+	rootCmd.PersistentFlags().BoolVarP(
+		&config.WhatsappPresenceAvailable,
+		"presence-available", "",
+		config.WhatsappPresenceAvailable,
+		`mark device as available/online on connect; true suppresses linked-phone notifications --presence-available <true/false> | example: --presence-available=true`,
 	)
 	rootCmd.PersistentFlags().BoolVarP(
 		&config.WhatsappAutoDownloadMedia,
