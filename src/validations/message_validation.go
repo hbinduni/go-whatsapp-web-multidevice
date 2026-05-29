@@ -63,6 +63,19 @@ func ValidateReactMessage(ctx context.Context, request domainMessage.ReactionReq
 	return nil
 }
 
+func ValidatePinMessage(ctx context.Context, request domainMessage.PinRequest) error {
+	err := validation.ValidateStructWithContext(ctx, &request,
+		validation.Field(&request.Phone, validation.Required),
+		validation.Field(&request.MessageID, validation.Required),
+	)
+
+	if err != nil {
+		return pkgError.ValidationError(err.Error())
+	}
+
+	return nil
+}
+
 func ValidateDeleteMessage(ctx context.Context, request domainMessage.DeleteRequest) error {
 	err := validation.ValidateStructWithContext(ctx, &request,
 		validation.Field(&request.Phone, validation.Required),

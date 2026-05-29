@@ -38,6 +38,12 @@ type StarRequest struct {
 	IsStarred bool   `json:"is_starred"`
 }
 
+type PinRequest struct {
+	MessageID string `json:"message_id" uri:"message_id"`
+	Phone     string `json:"phone" form:"phone"`
+	IsPinned  bool   `json:"is_pinned"`
+}
+
 type DownloadMediaRequest struct {
 	MessageID string `json:"message_id" uri:"message_id"`
 	Phone     string `json:"phone" form:"phone"`

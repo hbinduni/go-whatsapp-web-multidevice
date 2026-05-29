@@ -22,6 +22,8 @@ func InitRestMessage(app fiber.Router, service domainMessage.IMessageUsecase) Me
 	app.Post("/message/:message_id/read", rest.MarkAsRead)
 	app.Post("/message/:message_id/star", rest.StarMessage)
 	app.Post("/message/:message_id/unstar", rest.UnstarMessage)
+	app.Post("/message/:message_id/pin", rest.PinMessage)
+	app.Post("/message/:message_id/unpin", rest.UnpinMessage)
 	app.Get("/message/:message_id/download", rest.DownloadMedia)
 	return rest
 }
@@ -145,6 +147,32 @@ func (controller *Message) UnstarMessage(c *fiber.Ctx) error {
 	}
 
 	return helpers.HandleSuccess(c, "Unstarred message successfully", nil)
+}
+
+func (controller *Message) PinMessage(c *fiber.Ctx) error {
+	return controller.handlePin(c, true)
+}
+
+func (controller *Message) UnpinMessage(c *fiber.Ctx) error {
+	return controller.handlePin(c, false)
+}
+
+func (controller *Message) handlePin(c *fiber.Ctx, isPinned bool) error {
+	var request domainMessage.PinRequest
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
+
+	request.MessageID = c.Params("message_id")
+	utils.SanitizePhone(&request.Phone)
+	request.IsPinned = isPinned
+
+	response, err := controller.Service.PinMessage(c.UserContext(), request)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
+
+	return helpers.HandleSuccess(c, response.Status, response)
 }
 
 func (controller *Message) DownloadMedia(c *fiber.Ctx) error {

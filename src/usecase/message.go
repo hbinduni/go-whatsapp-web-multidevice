@@ -161,6 +161,60 @@ func (service serviceMessage) UpdateMessage(ctx context.Context, request domainM
 	return response, nil
 }
 
+func (service serviceMessage) PinMessage(ctx context.Context, request domainMessage.PinRequest) (response domainMessage.GenericResponse, err error) {
+	if err = validations.ValidatePinMessage(ctx, request); err != nil {
+		return response, err
+	}
+	dataWaRecipient, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.Phone)
+	if err != nil {
+		return response, err
+	}
+
+	key := &waCommon.MessageKey{
+		ID:        proto.String(request.MessageID),
+		RemoteJID: proto.String(dataWaRecipient.String()),
+	}
+
+	// Resolve the authoritative FromMe flag (and the group participant) from
+	// chat storage so we reference the target message's real key. Fall back to
+	// the message-ID length heuristic (used by Star/Delete) only when the
+	// message is not present in local storage.
+	if stored, lookupErr := service.chatStorageRepo.GetMessageByID(request.MessageID); lookupErr == nil && stored != nil {
+		key.FromMe = proto.Bool(stored.IsFromMe)
+		if dataWaRecipient.Server == types.GroupServer && stored.Sender != "" {
+			key.Participant = proto.String(stored.Sender)
+		}
+	} else {
+		key.FromMe = proto.Bool(len(request.MessageID) <= 22)
+	}
+
+	pinType := waE2E.PinInChatMessage_PIN_FOR_ALL
+	if !request.IsPinned {
+		pinType = waE2E.PinInChatMessage_UNPIN_FOR_ALL
+	}
+
+	msg := &waE2E.Message{
+		PinInChatMessage: &waE2E.PinInChatMessage{
+			Key:               key,
+			Type:              pinType.Enum(),
+			SenderTimestampMS: proto.Int64(time.Now().UnixMilli()),
+		},
+	}
+
+	ts, err := whatsapp.GetClient().SendMessage(ctx, dataWaRecipient, msg)
+	if err != nil {
+		return response, err
+	}
+
+	action := "Pin"
+	if !request.IsPinned {
+		action = "Unpin"
+	}
+	response.MessageID = ts.ID
+	response.Status = fmt.Sprintf("%s message success %s (server timestamp: %s)", action, request.Phone, ts.Timestamp)
+	return response, nil
+}
+
 // StarMessage implements message.IMessageService.
 func (service serviceMessage) StarMessage(ctx context.Context, request domainMessage.StarRequest) (err error) {
 	if err = validations.ValidateStarMessage(ctx, request); err != nil {

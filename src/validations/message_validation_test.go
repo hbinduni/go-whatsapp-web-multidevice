@@ -67,6 +67,66 @@ func TestValidateMarkAsRead(t *testing.T) {
 	}
 }
 
+func TestValidatePinMessage(t *testing.T) {
+	type args struct {
+		request domainMessage.PinRequest
+	}
+	tests := []struct {
+		name        string
+		args        args
+		errContains []string
+	}{
+		{
+			name: "should success when pinning with valid message id and phone",
+			args: args{request: domainMessage.PinRequest{
+				MessageID: "3EB0789ABC123456",
+				Phone:     "6281234567890@s.whatsapp.net",
+				IsPinned:  true,
+			}},
+			errContains: nil,
+		},
+		{
+			name: "should success when unpinning (is_pinned false is valid)",
+			args: args{request: domainMessage.PinRequest{
+				MessageID: "3EB0789ABC123456",
+				Phone:     "6281234567890@s.whatsapp.net",
+				IsPinned:  false,
+			}},
+			errContains: nil,
+		},
+		{
+			name: "should error with empty message id",
+			args: args{request: domainMessage.PinRequest{
+				MessageID: "",
+				Phone:     "6281234567890@s.whatsapp.net",
+			}},
+			errContains: []string{"message_id: cannot be blank"},
+		},
+		{
+			name: "should error with empty phone",
+			args: args{request: domainMessage.PinRequest{
+				MessageID: "3EB0789ABC123456",
+				Phone:     "",
+			}},
+			errContains: []string{"phone: cannot be blank"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidatePinMessage(context.Background(), tt.args.request)
+			if len(tt.errContains) == 0 {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+				for _, msg := range tt.errContains {
+					assert.ErrorContains(t, err, msg)
+				}
+			}
+		})
+	}
+}
+
 func TestValidateReactMessage(t *testing.T) {
 	type args struct {
 		request domainMessage.ReactionRequest
