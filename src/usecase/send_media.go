@@ -162,7 +162,7 @@ func (service serviceSend) SendImage(ctx context.Context, request domainSend.Ima
 	if request.Caption != "" {
 		caption = "🖼️ " + request.Caption
 	}
-	ts, err := service.wrapSendMessageWithMedia(ctx, dataWaRecipient, msg, caption, http.DetectContentType(dataWaImage), imageName, dataWaImage)
+	ts, err := service.wrapSendMessageWithMedia(ctx, dataWaRecipient, msg, caption, "image", imageName, dataWaImage)
 	go func() {
 		if errDelete := utils.RemoveFile(0, deletedItems...); errDelete != nil {
 			logrus.Warnf("error deleting temporary image files: %v", errDelete)
@@ -227,7 +227,7 @@ func (service serviceSend) SendFile(ctx context.Context, request domainSend.File
 	if request.Caption != "" {
 		caption = "📄 " + request.Caption
 	}
-	ts, err := service.wrapSendMessageWithMedia(ctx, dataWaRecipient, msg, caption, fileMimeType, request.File.Filename, fileBytes)
+	ts, err := service.wrapSendMessageWithMedia(ctx, dataWaRecipient, msg, caption, "document", request.File.Filename, fileBytes)
 	if err != nil {
 		return response, err
 	}
@@ -397,7 +397,7 @@ func (service serviceSend) SendVideo(ctx context.Context, request domainSend.Vid
 	if request.Caption != "" {
 		caption = "🎥 " + request.Caption
 	}
-	ts, err := service.wrapSendMessage(ctx, dataWaRecipient, msg, caption)
+	ts, err := service.wrapSendMessageWithMedia(ctx, dataWaRecipient, msg, caption, "video", "", dataWaVideo)
 	if err != nil {
 		return response, err
 	}
@@ -468,7 +468,7 @@ func (service serviceSend) SendAudio(ctx context.Context, request domainSend.Aud
 
 	content := "🎵 Audio"
 
-	ts, err := service.wrapSendMessage(ctx, dataWaRecipient, msg, content)
+	ts, err := service.wrapSendMessageWithMedia(ctx, dataWaRecipient, msg, content, "audio", "", audioBytes)
 	if err != nil {
 		return response, err
 	}
@@ -629,7 +629,7 @@ func (service serviceSend) SendSticker(ctx context.Context, request domainSend.S
 
 	content := "🎨 Sticker"
 
-	ts, err := service.wrapSendMessage(ctx, dataWaRecipient, msg, content)
+	ts, err := service.wrapSendMessageWithMedia(ctx, dataWaRecipient, msg, content, "sticker", "", stickerBytes)
 	if err != nil {
 		return response, err
 	}
