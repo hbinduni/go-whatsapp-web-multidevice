@@ -66,6 +66,33 @@ func (service serviceSend) wrapSendMessage(ctx context.Context, recipient types.
 	return ts, nil
 }
 
+// wrapSendMessageWithMedia behaves like wrapSendMessage but additionally persists the sent
+// media bytes (so the chat history can render them). The media is uploaded to S3 and recorded
+// synchronously - before returning - so the very next chat fetch already shows the media.
+// A generous timeout is used since uploads can be large (documents up to ~100MB). A storage
+// failure is logged but does not fail the send: the message was already delivered to WhatsApp.
+func (service serviceSend) wrapSendMessageWithMedia(ctx context.Context, recipient types.JID, msg *waE2E.Message, content, mediaType, filename string, mediaData []byte) (whatsmeow.SendResponse, error) {
+	ts, err := whatsapp.GetClient().SendMessage(ctx, recipient, msg)
+	if err != nil {
+		return whatsmeow.SendResponse{}, err
+	}
+
+	senderJID := ""
+	if whatsapp.GetClient().Store.ID != nil {
+		senderJID = whatsapp.GetClient().Store.ID.String()
+	}
+
+	// Store + upload synchronously. Decoupled from the request context so a client
+	// disconnect can't abort the upload mid-flight, but bounded by a generous timeout.
+	storeCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	if err := service.chatStorageRepo.StoreSentMediaMessageWithContext(storeCtx, ts.ID, senderJID, recipient.String(), content, mediaType, filename, mediaData, ts.Timestamp); err != nil {
+		logrus.Warnf("Failed to store sent media message: %v", err)
+	}
+
+	return ts, nil
+}
+
 func (service serviceSend) SendText(ctx context.Context, request domainSend.MessageRequest) (response domainSend.GenericResponse, err error) {
 	err = validations.ValidateSendMessage(ctx, request)
 	if err != nil {

@@ -53,6 +53,29 @@ func IsStorageInitialized() bool {
 	return globalStorage != nil
 }
 
+// BuildMediaObjectKey builds the S3 object key for a media message.
+// It is the single source of truth for the storage path so that uploads
+// (sent and received media) and ConstructMediaURL always agree.
+//
+// Key Pattern: {deviceID}/{chatJID_sanitized}/{messageID} (no extension -
+// S3 handles content-type via metadata). Returns "" if any segment is empty
+// after sanitization.
+func BuildMediaObjectKey(deviceID, chatJID, messageID string) string {
+	if deviceID == "" || chatJID == "" || messageID == "" {
+		return ""
+	}
+
+	dev := pathSegmentSanitizer.ReplaceAllString(deviceID, "_")
+	jid := pathSegmentSanitizer.ReplaceAllString(chatJID, "_")
+	msg := pathSegmentSanitizer.ReplaceAllString(messageID, "_")
+
+	if dev == "" || jid == "" || msg == "" {
+		return ""
+	}
+
+	return fmt.Sprintf("%s/%s/%s", dev, jid, msg)
+}
+
 // ConstructMediaURL constructs a direct media URL for S3 storage
 // This allows clients to access media directly without calling the download endpoint
 // Returns empty string if required parameters are missing
@@ -66,27 +89,16 @@ func IsStorageInitialized() bool {
 // URL Pattern: {S3PublicURL or S3Endpoint}/{S3Bucket}/{deviceID}/{chatJID_sanitized}/{messageID}
 // Note: No file extension - S3 handles content-type via metadata
 func ConstructMediaURL(deviceID, chatJID, messageID, mediaType string) string {
-	// Validate required parameters
-	if deviceID == "" || chatJID == "" || messageID == "" {
-		return ""
-	}
-
 	// Validate S3 configuration
 	if config.S3Bucket == "" || config.S3Endpoint == "" {
 		return ""
 	}
 
-	// Sanitize path segments (same logic as used when saving media)
-	dev := pathSegmentSanitizer.ReplaceAllString(deviceID, "_")
-	jid := pathSegmentSanitizer.ReplaceAllString(chatJID, "_")
-	msg := pathSegmentSanitizer.ReplaceAllString(messageID, "_")
-
-	if dev == "" || jid == "" || msg == "" {
+	// Build the (sanitized) object key; empty if any segment is missing
+	path := BuildMediaObjectKey(deviceID, chatJID, messageID)
+	if path == "" {
 		return ""
 	}
-
-	// Construct path: deviceID/chatJID/messageID (no extension)
-	path := fmt.Sprintf("%s/%s/%s", dev, jid, msg)
 
 	// Determine base URL (prefer PublicURL, fallback to Endpoint)
 	baseURL := config.S3PublicURL

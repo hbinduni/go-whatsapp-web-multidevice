@@ -162,7 +162,7 @@ func (service serviceSend) SendImage(ctx context.Context, request domainSend.Ima
 	if request.Caption != "" {
 		caption = "🖼️ " + request.Caption
 	}
-	ts, err := service.wrapSendMessage(ctx, dataWaRecipient, msg, caption)
+	ts, err := service.wrapSendMessageWithMedia(ctx, dataWaRecipient, msg, caption, http.DetectContentType(dataWaImage), imageName, dataWaImage)
 	go func() {
 		if errDelete := utils.RemoveFile(0, deletedItems...); errDelete != nil {
 			logrus.Warnf("error deleting temporary image files: %v", errDelete)
@@ -227,7 +227,7 @@ func (service serviceSend) SendFile(ctx context.Context, request domainSend.File
 	if request.Caption != "" {
 		caption = "📄 " + request.Caption
 	}
-	ts, err := service.wrapSendMessage(ctx, dataWaRecipient, msg, caption)
+	ts, err := service.wrapSendMessageWithMedia(ctx, dataWaRecipient, msg, caption, fileMimeType, request.File.Filename, fileBytes)
 	if err != nil {
 		return response, err
 	}

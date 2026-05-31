@@ -6,8 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
 	domainChatStorage "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/chatstorage"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/whatsapp"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/storage"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/utils"
 	"github.com/sirupsen/logrus"
 	"go.mau.fi/whatsmeow/types"
@@ -588,6 +590,92 @@ func (r *SQLiteRepository) StoreSentMessageWithContext(ctx context.Context, mess
 		Content:   content,
 		Timestamp: timestamp,
 		IsFromMe:  true,
+	}
+
+	return r.StoreMessage(message)
+}
+
+// StoreSentMediaMessageWithContext stores a media message sent by the user. It uploads the
+// media bytes to S3 using the same object key scheme as received media (deviceID/chatJID/messageID)
+// so the chat-messages endpoint can reconstruct the URL via ConstructMediaURL, and records the
+// media metadata. If the upload fails (or storage/auto-download is disabled) it degrades to
+// storing the message without media metadata - never a broken media reference.
+func (r *SQLiteRepository) StoreSentMediaMessageWithContext(ctx context.Context, messageID string, senderJID string, recipientJID string, content string, mediaType string, filename string, mediaData []byte, timestamp time.Time) error {
+	// Check if context is already cancelled before starting
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	// Ensure JID is properly formatted
+	jid, err := types.ParseJID(recipientJID)
+	if err != nil {
+		return fmt.Errorf("invalid JID format: %w", err)
+	}
+
+	// Get WhatsApp client for LID resolution
+	client := whatsapp.GetClient()
+
+	// Normalize recipient JID (convert @lid to @s.whatsapp.net). This MUST match the chatJID
+	// used for the S3 key so ConstructMediaURL (which reads message.ChatJID) resolves correctly.
+	normalizedJID := whatsapp.NormalizeJIDFromLID(ctx, jid, client)
+	chatJID := normalizedJID.String()
+
+	// Get chat name (no pushname available for sent messages)
+	chatName := r.GetChatNameWithPushName(normalizedJID, chatJID, normalizedJID.User, "")
+
+	// Get existing chat to preserve ephemeral_expiration
+	existingChat, err := r.GetChat(chatJID)
+	if err != nil {
+		return fmt.Errorf("failed to get existing chat: %w", err)
+	}
+
+	chat := &domainChatStorage.Chat{
+		JID:             chatJID,
+		Name:            chatName,
+		LastMessageTime: timestamp,
+	}
+	if existingChat != nil {
+		chat.EphemeralExpiration = existingChat.EphemeralExpiration
+	}
+	if err := r.StoreChat(chat); err != nil {
+		return fmt.Errorf("failed to store chat: %w", err)
+	}
+
+	// Upload media bytes to S3 with the same key scheme used for received media. Only set the
+	// media metadata on the stored message when the upload succeeds, so a failed upload degrades
+	// gracefully to the text indicator instead of a dead media link.
+	storedMediaType := ""
+	storedFilename := ""
+	if config.WhatsappAutoDownloadMedia && storage.IsStorageInitialized() && len(mediaData) > 0 {
+		var deviceID string
+		if client != nil && client.Store != nil && client.Store.ID != nil {
+			deviceID = client.Store.ID.User
+		}
+		key := storage.BuildMediaObjectKey(deviceID, chatJID, messageID)
+		if key == "" {
+			logrus.Warnf("Skipping sent media upload for %s: could not build object key", messageID)
+		} else if mediaStorage := storage.GetStorage(); mediaStorage != nil {
+			if _, saveErr := mediaStorage.Save(ctx, mediaData, key); saveErr != nil {
+				logrus.Warnf("Failed to upload sent media to storage for %s: %v", messageID, saveErr)
+			} else {
+				storedMediaType = mediaType
+				storedFilename = filename
+			}
+		}
+	}
+
+	// Store the sent message
+	message := &domainChatStorage.Message{
+		ID:        messageID,
+		ChatJID:   chatJID,
+		Sender:    senderJID,
+		Content:   content,
+		Timestamp: timestamp,
+		IsFromMe:  true,
+		MediaType: storedMediaType,
+		Filename:  storedFilename,
 	}
 
 	return r.StoreMessage(message)

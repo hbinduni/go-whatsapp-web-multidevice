@@ -26,7 +26,8 @@ type IChatStorageRepository interface {
 	SearchMessages(chatJID, searchText string, limit int) ([]*Message, error) // Database-level search
 	DeleteMessage(id, chatJID string) error
 	StoreSentMessageWithContext(ctx context.Context, messageID string, senderJID string, recipientJID string, content string, timestamp time.Time) error
-	UpdateMessageStatus(ctx context.Context, messageID string, status string, statusTime time.Time) error // Update message delivery/read status
+	StoreSentMediaMessageWithContext(ctx context.Context, messageID string, senderJID string, recipientJID string, content string, mediaType string, filename string, mediaData []byte, timestamp time.Time) error // Store a sent media message and upload its bytes to S3
+	UpdateMessageStatus(ctx context.Context, messageID string, status string, statusTime time.Time) error                                                                                                          // Update message delivery/read status
 
 	// Reaction operations
 	StoreReaction(ctx context.Context, reaction *MessageReaction) error                                // Upsert a reaction (empty emoji = delete)
