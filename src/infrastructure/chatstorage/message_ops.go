@@ -441,8 +441,17 @@ func (r *SQLiteRepository) CreateMessage(ctx context.Context, evt *events.Messag
 	// Store the full sender JID (user@server) to ensure consistency between received and sent messages
 	sender := normalizedSender.String()
 
-	// Get appropriate chat name using pushname if available
-	chatName := r.GetChatNameWithPushName(normalizedChatJID, chatJID, normalizedSender.User, evt.Info.PushName)
+	// Get appropriate chat name using pushname if available.
+	// For outgoing messages the sender/pushname belong to the device owner,
+	// not the contact, so using them would mislabel the contact's chat with
+	// the owner's own name. Fall back to the chat (recipient) identity instead.
+	nameSenderUser := normalizedSender.User
+	namePushName := evt.Info.PushName
+	if evt.Info.IsFromMe {
+		nameSenderUser = normalizedChatJID.User
+		namePushName = ""
+	}
+	chatName := r.GetChatNameWithPushName(normalizedChatJID, chatJID, nameSenderUser, namePushName)
 
 	// Get existing chat to preserve ephemeral_expiration if needed
 	existingChat, err := r.GetChat(chatJID)
