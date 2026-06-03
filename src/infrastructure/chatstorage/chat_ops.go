@@ -303,6 +303,31 @@ func (r *SQLiteRepository) GetChatNameWithPushName(jid types.JID, chatJID string
 	return name
 }
 
+// CleanupOwnerNamePollution repairs individual chats whose name was mistakenly
+// set to the device owner's own WhatsApp name. This was caused by a historical
+// bug: outgoing messages carry the owner's pushname, which was then stored as
+// the contact's chat name. Such names are reset to the contact's JID user
+// (phone number) so the UI shows a sensible value; a later inbound message from
+// the contact upgrades it back to their real pushname. Idempotent.
+func (r *SQLiteRepository) CleanupOwnerNamePollution(ownerName string) (int64, error) {
+	ownerName = strings.TrimSpace(ownerName)
+	if ownerName == "" {
+		return 0, nil
+	}
+
+	res, err := r.db.Exec(
+		`UPDATE chats
+		 SET name = substr(jid, 1, instr(jid, '@') - 1), updated_at = ?
+		 WHERE name = ? AND jid LIKE '%@s.whatsapp.net'`,
+		time.Now(), ownerName,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("failed to clean owner-name pollution: %w", err)
+	}
+
+	return res.RowsAffected()
+}
+
 // TruncateAllDataWithLogging performs truncation with detailed logging
 func (r *SQLiteRepository) TruncateAllDataWithLogging(logPrefix string) error {
 	// Get statistics before truncation

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
@@ -21,6 +22,9 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// cleanupOwnerNameOnce guards the one-time repair of owner-name-polluted chats.
+var cleanupOwnerNameOnce sync.Once
+
 // handler is the main event handler for WhatsApp events
 func handler(ctx context.Context, rawEvt any, chatStorageRepo domainChatStorage.IChatStorageRepository) {
 	switch evt := rawEvt.(type) {
@@ -33,7 +37,7 @@ func handler(ctx context.Context, rawEvt any, chatStorageRepo domainChatStorage.
 	case *events.LoggedOut:
 		handleLoggedOut(ctx, chatStorageRepo)
 	case *events.Connected, *events.PushNameSetting:
-		handleConnectionEvents(ctx)
+		handleConnectionEvents(ctx, chatStorageRepo)
 	case *events.StreamReplaced:
 		handleStreamReplaced(ctx)
 	case *events.Message:
@@ -147,7 +151,7 @@ func handleLoggedOut(ctx context.Context, chatStorageRepo domainChatStorage.ICha
 		"Remote logout cleanup completed - ready for new login", nil)
 }
 
-func handleConnectionEvents(_ context.Context) {
+func handleConnectionEvents(_ context.Context, chatStorageRepo domainChatStorage.IChatStorageRepository) {
 	client := GetClient()
 	if client == nil {
 		return
@@ -155,6 +159,21 @@ func handleConnectionEvents(_ context.Context) {
 	if len(client.Store.PushName) == 0 {
 		return
 	}
+
+	// One-time repair of chats whose name was polluted with the owner's own
+	// WhatsApp name by the historical outgoing-message bug. The owner's pushname
+	// is only known once connected, so this runs here (guarded to run once).
+	cleanupOwnerNameOnce.Do(func() {
+		if chatStorageRepo == nil {
+			return
+		}
+		affected, err := chatStorageRepo.CleanupOwnerNamePollution(client.Store.PushName)
+		if err != nil {
+			logrus.Warnf("Owner-name chat cleanup failed: %v", err)
+		} else if affected > 0 {
+			logrus.Infof("Owner-name chat cleanup: repaired %d chat(s)", affected)
+		}
+	})
 
 	sendInitialPresence(client)
 }

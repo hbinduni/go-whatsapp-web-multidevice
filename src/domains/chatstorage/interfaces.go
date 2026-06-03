@@ -44,6 +44,7 @@ type IChatStorageRepository interface {
 	// Cleanup operations
 	TruncateAllChats() error
 	TruncateAllDataWithLogging(logPrefix string) error
+	CleanupOwnerNamePollution(ownerName string) (int64, error)
 
 	// Admin operations
 	DeleteChatsByPattern(pattern string) (chatsDeleted, messagesDeleted int64, deletedJIDs []string, err error)
