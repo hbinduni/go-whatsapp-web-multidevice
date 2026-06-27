@@ -1,10 +1,11 @@
 name: Release
 
+# Manual-only: GoReleaser binary/archive build (publishes a GitHub Release under
+# owner `aldinokemal`). Tag-triggered CI/CD for this fork lives in release-k3s.yml;
+# the tag-push trigger was removed here so a release tag doesn't fire two workflows
+# (and so this one, which targets the upstream owner, can't fail on every release).
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
 
 jobs:
   build-linux-windows:

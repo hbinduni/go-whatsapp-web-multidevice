@@ -6,7 +6,7 @@
 SHELL := /bin/bash
 export PATH := /usr/local/go/bin:$(PATH)
 
-.PHONY: help build run run-rest run-mcp run-debug run-rest-debug run-mcp-debug test clean install update-deps fmt vet lint lint-fix docker-build docker-up docker-down docker-logs docker-login-ghcr docker-build-image docker-push-ghcr docker-release docker-tag tidy check check-fix check-all dev-rest dev-mcp docker-build-backup docker-push-backup docker-release-backup version-up version-up-minor version-up-major
+.PHONY: help build run run-rest run-mcp run-debug run-rest-debug run-mcp-debug test clean install update-deps fmt vet lint lint-fix docker-build docker-up docker-down docker-logs docker-login-ghcr docker-build-image docker-push-ghcr docker-release docker-tag tidy check check-fix check-all dev-rest dev-mcp docker-build-backup docker-push-backup docker-release-backup version-up version-up-minor version-up-major deploy
 
 # Variables
 BINARY_NAME=whatsapp
@@ -431,7 +431,7 @@ version-up:
 	NEW_PATCH=$$((PATCH + 1)); \
 	NEW_VERSION="v$$MAJOR.$$MINOR.$$NEW_PATCH"; \
 	echo "Bumping version: v$$CURRENT -> $$NEW_VERSION"; \
-	sed -i "s/AppVersion[[:space:]]*=.*/AppVersion             = \"$$NEW_VERSION\"/" $(SRC_DIR)/config/settings.go; \
+	tmp=$$(mktemp); sed "s/AppVersion[[:space:]]*=.*/AppVersion             = \"$$NEW_VERSION\"/" $(SRC_DIR)/config/settings.go > "$$tmp" && mv "$$tmp" $(SRC_DIR)/config/settings.go; \
 	echo "✅ Version updated to $$NEW_VERSION in $(SRC_DIR)/config/settings.go"
 
 ## version-up-minor: Increment minor version (e.g., v2.0.7 -> v2.1.0)
@@ -442,7 +442,7 @@ version-up-minor:
 	NEW_MINOR=$$((MINOR + 1)); \
 	NEW_VERSION="v$$MAJOR.$$NEW_MINOR.0"; \
 	echo "Bumping version: v$$CURRENT -> $$NEW_VERSION"; \
-	sed -i "s/AppVersion[[:space:]]*=.*/AppVersion             = \"$$NEW_VERSION\"/" $(SRC_DIR)/config/settings.go; \
+	tmp=$$(mktemp); sed "s/AppVersion[[:space:]]*=.*/AppVersion             = \"$$NEW_VERSION\"/" $(SRC_DIR)/config/settings.go > "$$tmp" && mv "$$tmp" $(SRC_DIR)/config/settings.go; \
 	echo "✅ Version updated to $$NEW_VERSION in $(SRC_DIR)/config/settings.go"
 
 ## version-up-major: Increment major version (e.g., v2.0.7 -> v3.0.0)
@@ -452,8 +452,21 @@ version-up-major:
 	NEW_MAJOR=$$((MAJOR + 1)); \
 	NEW_VERSION="v$$NEW_MAJOR.0.0"; \
 	echo "Bumping version: v$$CURRENT -> $$NEW_VERSION"; \
-	sed -i "s/AppVersion[[:space:]]*=.*/AppVersion             = \"$$NEW_VERSION\"/" $(SRC_DIR)/config/settings.go; \
+	tmp=$$(mktemp); sed "s/AppVersion[[:space:]]*=.*/AppVersion             = \"$$NEW_VERSION\"/" $(SRC_DIR)/config/settings.go > "$$tmp" && mv "$$tmp" $(SRC_DIR)/config/settings.go; \
 	echo "✅ Version updated to $$NEW_VERSION in $(SRC_DIR)/config/settings.go"
+
+## deploy: Cut a release - bump patch, commit, tag & push; GitHub Actions (release-k3s.yml) builds the amd64 image and rolls it out to k3s
+deploy: version-up
+	@NEW_VERSION="$(VERSION)"; \
+	echo "🚀 Releasing $$NEW_VERSION (CI builds amd64 image -> deploys to k3s on duni1)..."; \
+	git add $(SRC_DIR)/config/settings.go; \
+	git commit -m "chore(release): $$NEW_VERSION"; \
+	git push; \
+	git tag "$$NEW_VERSION"; \
+	git push origin "$$NEW_VERSION"; \
+	echo ""; \
+	echo "✅ Tag $$NEW_VERSION pushed. Watch the pipeline:"; \
+	echo "   gh run watch  |  https://github.com/$(GITHUB_USER)/$(IMAGE_NAME)/actions"
 
 ## clean: Remove build artifacts and cache
 clean:

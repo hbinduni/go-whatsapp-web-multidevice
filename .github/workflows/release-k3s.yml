@@ -1,0 +1,184 @@
+name: release-k3s
+
+# Tag-triggered CI/CD to the self-hosted k3s cluster (box: duni1, amd64).
+#   push tag vX.Y.Z -> build amd64 image on GitHub -> deploy to k3s via a
+#   self-hosted runner that lives on the cluster box.
+# workflow_dispatch (version input) = deploy-only re-pin / rollback of an
+# already-built tag. See ~/playbooks/github-actions-k3s-cicd.md.
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Existing version to (re)deploy, e.g. v2.0.14 or 2.0.14. Must already exist in ghcr.'
+        required: true
+        type: string
+      batch_size:
+        description: 'Deployments to roll per batch (caps transient pod surge on the single node).'
+        required: false
+        default: '10'
+        type: string
+      canary:
+        description: "Instance to roll first as a canary (default c1; 'none' to skip)."
+        required: false
+        default: 'c1'
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_BASE: ghcr.io/hbinduni/go-whatsapp-web-multidevice
+  NAMESPACE: bnis
+  CONTAINER: whatsapp
+
+jobs:
+  build:
+    if: github.event_name == 'push'          # workflow_dispatch is deploy-only
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Resolve and validate version
+        id: ver
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          printf '%s' "$REF_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            || { echo "::error::bad tag $REF_NAME"; exit 1; }
+          echo "version=$REF_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Version guard (tag must match src/config/settings.go AppVersion)
+        env:
+          TAG_VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          APP_VERSION="$(grep 'AppVersion[[:space:]]*=' src/config/settings.go \
+            | head -1 | sed -n 's/.*"\(v[0-9]*\.[0-9]*\.[0-9]*\)".*/\1/p')"
+          [ -n "$APP_VERSION" ] || { echo "::error::could not read AppVersion from src/config/settings.go"; exit 1; }
+          [ "$APP_VERSION" = "$TAG_VERSION" ] \
+            || { echo "::error::tag $TAG_VERSION != AppVersion $APP_VERSION"; exit 1; }
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build & push image (linux/amd64)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/golang.Dockerfile
+          platforms: linux/amd64
+          push: true
+          # Single-arch image consumed directly by k8s; skip provenance so the
+          # tag is a plain image manifest (not an OCI index) -> simple to inspect
+          # and to prune safely later.
+          provenance: false
+          tags: |
+            ${{ env.IMAGE_BASE }}:${{ steps.ver.outputs.version }}
+            ${{ env.IMAGE_BASE }}:latest
+          cache-from: type=gha,scope=gowa
+          cache-to: type=gha,mode=max,scope=gowa
+
+  deploy:
+    needs: build
+    # Runs after a successful build (tag push) or directly on workflow_dispatch.
+    if: ${{ always() && (github.event_name == 'workflow_dispatch' || needs.build.result == 'success') }}
+    runs-on: [self-hosted, k3s]              # the runner registered on duni1
+    steps:
+      - name: Resolve version + params
+        id: ver
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_VERSION: ${{ github.event.inputs.version }}
+          DISPATCH_BATCH: ${{ github.event.inputs.batch_size }}
+          DISPATCH_CANARY: ${{ github.event.inputs.canary }}
+        shell: bash
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="$DISPATCH_VERSION"; BATCH="${DISPATCH_BATCH:-10}"; CANARY="${DISPATCH_CANARY:-c1}"
+          else
+            VERSION="$REF_NAME"; BATCH=10; CANARY=c1
+          fi
+          VERSION="v${VERSION#v}"                                   # normalize single leading 'v'
+          printf '%s' "$VERSION" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            || { echo "::error::bad version $VERSION"; exit 1; }
+          printf '%s' "$BATCH" | grep -Eq '^[1-9][0-9]*$' || BATCH=10
+          [ "$CANARY" = "none" ] && CANARY=""
+          if [ -n "$CANARY" ]; then
+            printf '%s' "$CANARY" | grep -Eq '^[a-z0-9][a-z0-9-]*$' \
+              || { echo "::error::bad canary $CANARY"; exit 1; }
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "batch=$BATCH"     >> "$GITHUB_OUTPUT"
+          echo "canary=$CANARY"   >> "$GITHUB_OUTPUT"
+
+      - name: Canary, then batched rollout
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          BATCH: ${{ steps.ver.outputs.batch }}
+          CANARY: ${{ steps.ver.outputs.canary }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          export KUBECONFIG="$HOME/.kube/config"   # runner svc env may point at the root-only k3s.yaml
+          NS="$NAMESPACE"; C="$CONTAINER"; IMG="${IMAGE_BASE}:${VERSION}"
+
+          kubectl get ns "$NS" >/dev/null         # fail loud if kube access is broken
+
+          # Select every deployment whose container runs this image base (covers b* and c* families).
+          mapfile -t ALL < <(kubectl get deploy -n "$NS" \
+            -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.spec.template.spec.containers[*].image}{"\n"}{end}')
+          TARGETS=()
+          for line in "${ALL[@]}"; do
+            [ -n "$line" ] || continue
+            name="${line%% *}"
+            if printf '%s' "$line" | grep -qF "${IMAGE_BASE}:"; then TARGETS+=("$name"); fi
+          done
+          [ "${#TARGETS[@]}" -gt 0 ] || { echo "::error::no deployments in $NS use $IMAGE_BASE"; exit 1; }
+          echo "Targets (${#TARGETS[@]}): ${TARGETS[*]}"
+
+          set_and_wait() {            # set image on the batch, then wait each Ready
+            local names=("$@") n
+            for n in "${names[@]}"; do kubectl set image "deployment/$n" "${C}=${IMG}" -n "$NS"; done
+            for n in "${names[@]}"; do kubectl rollout status "deployment/$n" -n "$NS" --timeout=180s; done
+          }
+
+          # --- Canary first ---
+          REST=()
+          for t in "${TARGETS[@]}"; do
+            if [ -n "$CANARY" ] && [ "$t" = "$CANARY" ]; then continue; fi
+            REST+=("$t")
+          done
+          if [ -n "$CANARY" ]; then
+            if printf '%s\n' "${TARGETS[@]}" | grep -qx "$CANARY"; then
+              echo "::group::Canary $CANARY -> $IMG"
+              set_and_wait "$CANARY"
+              got="$(kubectl get deploy "$CANARY" -n "$NS" \
+                -o jsonpath='{.spec.template.spec.containers[*].image}')"
+              [ "$got" = "$IMG" ] || { echo "::error::canary image mismatch: $got != $IMG"; exit 1; }
+              echo "Canary $CANARY healthy on $IMG"; echo "::endgroup::"
+            else
+              echo "::warning::canary $CANARY not among targets; skipping canary"
+            fi
+          fi
+
+          # --- Rest in batches of $BATCH ---
+          total="${#REST[@]}"; i=0; b=1
+          while [ "$i" -lt "$total" ]; do
+            batch=( "${REST[@]:$i:$BATCH}" )
+            echo "::group::Batch $b (${batch[*]})"
+            set_and_wait "${batch[@]}"
+            echo "::endgroup::"
+            i=$((i+BATCH)); b=$((b+1))
+          done
+
+          echo "✅ Rolled ${#TARGETS[@]} deployment(s) in $NS to $IMG"
