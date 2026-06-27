@@ -458,15 +458,16 @@ version-up-major:
 ## deploy: Cut a release - bump patch, commit, tag & push; GitHub Actions (release-k3s.yml) builds the amd64 image and rolls it out to k3s
 deploy: version-up
 	@NEW_VERSION="$(VERSION)"; \
-	echo "🚀 Releasing $$NEW_VERSION (CI builds amd64 image -> deploys to k3s on duni1)..."; \
+	echo "🚀 Releasing $$NEW_VERSION (GitHub Actions builds + pushes the amd64 image)..."; \
 	git add $(SRC_DIR)/config/settings.go; \
 	git commit -m "chore(release): $$NEW_VERSION"; \
 	git push; \
 	git tag "$$NEW_VERSION"; \
 	git push origin "$$NEW_VERSION"; \
 	echo ""; \
-	echo "✅ Tag $$NEW_VERSION pushed. Watch the pipeline:"; \
-	echo "   gh run watch  |  https://github.com/$(GITHUB_USER)/$(IMAGE_NAME)/actions"
+	echo "✅ Tag $$NEW_VERSION pushed — image build: https://github.com/$(GITHUB_USER)/$(IMAGE_NAME)/actions"; \
+	echo "   Once built, roll it onto the k3s fleet from the deploy repo:"; \
+	echo "     cd ~/projects-go/gowa-deploy && make deploy TAG=$$NEW_VERSION"
 
 ## clean: Remove build artifacts and cache
 clean:

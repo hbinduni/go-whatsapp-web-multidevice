@@ -1,8 +1,9 @@
 name: release-k3s
 
 # Tag-triggered amd64 image build -> ghcr. Deployment to the k3s cluster is owned by
-# the PRIVATE gowa-deploy repo (Helm reconcile on its own self-hosted runner); this
-# workflow only builds the image and notifies it via repository_dispatch.
+# the PRIVATE gowa-deploy repo (Helm reconcile on its own self-hosted runner).
+# Roll a built image onto the fleet from gowa-deploy: `make deploy TAG=vX.Y.Z`
+# (an SSH-authed push that triggers its reconcile workflow). No cross-repo token here.
 
 on:
   push:
@@ -62,11 +63,3 @@ jobs:
             ${{ env.IMAGE_BASE }}:latest
           cache-from: type=gha,scope=gowa
           cache-to: type=gha,mode=max,scope=gowa
-
-      - name: Notify gowa-deploy to roll out
-        env:
-          GH_TOKEN: ${{ secrets.DEPLOY_DISPATCH_TOKEN }}
-          TAG: ${{ steps.ver.outputs.version }}
-        run: |
-          gh api repos/hbinduni/gowa-deploy/dispatches \
-            -f event_type=deploy -f "client_payload[tag]=$TAG"
