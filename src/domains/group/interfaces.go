@@ -29,6 +29,8 @@ type IGroupSettings interface {
 	SetGroupLocked(ctx context.Context, request SetGroupLockedRequest) (err error)
 	SetGroupAnnounce(ctx context.Context, request SetGroupAnnounceRequest) (err error)
 	SetGroupTopic(ctx context.Context, request SetGroupTopicRequest) (err error)
+	SetGroupJoinApprovalMode(ctx context.Context, request SetGroupJoinApprovalModeRequest) (err error)
+	SetGroupMemberAddMode(ctx context.Context, request SetGroupMemberAddModeRequest) (err error)
 }
 
 // IGroupUsecase combines all group interfaces for backward compatibility

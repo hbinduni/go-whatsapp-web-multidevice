@@ -216,3 +216,24 @@ func ValidateGetGroupInviteLink(ctx context.Context, request domainGroup.GetGrou
 
 	return nil
 }
+
+func ValidateSetGroupJoinApprovalMode(ctx context.Context, request domainGroup.SetGroupJoinApprovalModeRequest) error {
+	err := validation.ValidateStructWithContext(ctx, &request,
+		validation.Field(&request.GroupID, validation.Required),
+	)
+	if err != nil {
+		return pkgError.ValidationError(err.Error())
+	}
+	return nil
+}
+
+func ValidateSetGroupMemberAddMode(ctx context.Context, request domainGroup.SetGroupMemberAddModeRequest) error {
+	err := validation.ValidateStructWithContext(ctx, &request,
+		validation.Field(&request.GroupID, validation.Required),
+		validation.Field(&request.Mode, validation.Required, validation.In("admin_add", "all_member_add")),
+	)
+	if err != nil {
+		return pkgError.ValidationError(err.Error())
+	}
+	return nil
+}

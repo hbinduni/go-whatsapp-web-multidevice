@@ -423,3 +423,25 @@ func (service serviceGroup) GetGroupInviteLink(ctx context.Context, request doma
 
 	return response, nil
 }
+
+func (service serviceGroup) SetGroupJoinApprovalMode(ctx context.Context, request domainGroup.SetGroupJoinApprovalModeRequest) (err error) {
+	if err = validations.ValidateSetGroupJoinApprovalMode(ctx, request); err != nil {
+		return err
+	}
+	groupJID, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.GroupID)
+	if err != nil {
+		return err
+	}
+	return whatsapp.GetClient().SetGroupJoinApprovalMode(ctx, groupJID, request.Enabled)
+}
+
+func (service serviceGroup) SetGroupMemberAddMode(ctx context.Context, request domainGroup.SetGroupMemberAddModeRequest) (err error) {
+	if err = validations.ValidateSetGroupMemberAddMode(ctx, request); err != nil {
+		return err
+	}
+	groupJID, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.GroupID)
+	if err != nil {
+		return err
+	}
+	return whatsapp.GetClient().SetGroupMemberAddMode(ctx, groupJID, types.GroupMemberAddMode(request.Mode))
+}

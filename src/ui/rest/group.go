@@ -41,6 +41,8 @@ func InitRestGroup(app fiber.Router, service domainGroup.IGroupUsecase) Group {
 	app.Post("/group/announce", rest.SetGroupAnnounce)
 	app.Post("/group/topic", rest.SetGroupTopic)
 	app.Get("/group/invite-link", rest.GetGroupInviteLink)
+	app.Post("/group/join-approval", rest.SetGroupJoinApprovalMode)
+	app.Post("/group/member-add-mode", rest.SetGroupMemberAddMode)
 	return rest
 }
 
@@ -430,4 +432,32 @@ func (controller *Group) GetGroupInviteLink(c *fiber.Ctx) error {
 	}
 
 	return helpers.HandleSuccess(c, "Success get group invite link", response)
+}
+
+func (controller *Group) SetGroupJoinApprovalMode(c *fiber.Ctx) error {
+	var request domainGroup.SetGroupJoinApprovalModeRequest
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
+
+	utils.SanitizePhone(&request.GroupID)
+
+	if err := controller.Service.SetGroupJoinApprovalMode(c.UserContext(), request); err != nil {
+		return helpers.HandleError(c, err)
+	}
+	return helpers.HandleSuccess(c, "Success set group join approval mode", nil)
+}
+
+func (controller *Group) SetGroupMemberAddMode(c *fiber.Ctx) error {
+	var request domainGroup.SetGroupMemberAddModeRequest
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
+
+	utils.SanitizePhone(&request.GroupID)
+
+	if err := controller.Service.SetGroupMemberAddMode(c.UserContext(), request); err != nil {
+		return helpers.HandleError(c, err)
+	}
+	return helpers.HandleSuccess(c, "Success set group member add mode", nil)
 }
