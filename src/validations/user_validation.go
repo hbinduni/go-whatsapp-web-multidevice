@@ -97,3 +97,23 @@ func ValidateUpdatePrivacySetting(_ context.Context, request domainUser.UpdatePr
 
 	return nil
 }
+
+func ValidateBlockUser(ctx context.Context, request domainUser.BlockRequest) error {
+	err := validation.ValidateStructWithContext(ctx, &request,
+		validation.Field(&request.Phone, validation.Required),
+	)
+	if err != nil {
+		return pkgError.ValidationError(err.Error())
+	}
+	return nil
+}
+
+func ValidateSetAbout(ctx context.Context, request domainUser.SetAboutRequest) error {
+	err := validation.ValidateStructWithContext(ctx, &request,
+		validation.Field(&request.Status, validation.Required),
+	)
+	if err != nil {
+		return pkgError.ValidationError(err.Error())
+	}
+	return nil
+}

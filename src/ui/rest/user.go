@@ -24,6 +24,10 @@ func InitRestUser(app fiber.Router, service domainUser.IUserUsecase) User {
 	app.Get("/user/my/contacts", rest.UserMyListContacts)
 	app.Get("/user/check", rest.UserCheck)
 	app.Get("/user/business-profile", rest.UserBusinessProfile)
+	app.Get("/user/blocklist", rest.UserGetBlocklist)
+	app.Post("/user/block", rest.UserBlock)
+	app.Post("/user/unblock", rest.UserUnblock)
+	app.Post("/user/about", rest.UserSetAbout)
 
 	return rest
 }
@@ -172,4 +176,49 @@ func (controller *User) UserBusinessProfile(c *fiber.Ctx) error {
 	}
 
 	return helpers.HandleSuccess(c, "Success get business profile", response)
+}
+
+func (controller *User) UserGetBlocklist(c *fiber.Ctx) error {
+	response, err := controller.Service.GetBlocklist(c.UserContext())
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
+	return helpers.HandleSuccess(c, "Success get blocklist", response)
+}
+
+func (controller *User) UserBlock(c *fiber.Ctx) error {
+	var request domainUser.BlockRequest
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
+	utils.SanitizePhone(&request.Phone)
+	response, err := controller.Service.Block(c.UserContext(), request)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
+	return helpers.HandleSuccess(c, "Success block user", response)
+}
+
+func (controller *User) UserUnblock(c *fiber.Ctx) error {
+	var request domainUser.BlockRequest
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
+	utils.SanitizePhone(&request.Phone)
+	response, err := controller.Service.Unblock(c.UserContext(), request)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
+	return helpers.HandleSuccess(c, "Success unblock user", response)
+}
+
+func (controller *User) UserSetAbout(c *fiber.Ctx) error {
+	var request domainUser.SetAboutRequest
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
+	if err := controller.Service.SetAbout(c.UserContext(), request); err != nil {
+		return helpers.HandleError(c, err)
+	}
+	return helpers.HandleSuccess(c, "Success set about", nil)
 }

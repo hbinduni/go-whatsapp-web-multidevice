@@ -31,10 +31,19 @@ type IUserPrivacy interface {
 	UpdateMyPrivacySetting(ctx context.Context, request UpdatePrivacySettingRequest) (response MyPrivacySettingResponse, err error)
 }
 
+// IUserBlocklist handles block/unblock and about operations
+type IUserBlocklist interface {
+	GetBlocklist(ctx context.Context) (response BlocklistResponse, err error)
+	Block(ctx context.Context, request BlockRequest) (response BlocklistResponse, err error)
+	Unblock(ctx context.Context, request BlockRequest) (response BlocklistResponse, err error)
+	SetAbout(ctx context.Context, request SetAboutRequest) (err error)
+}
+
 // IUserUsecase combines all user interfaces for backward compatibility
 type IUserUsecase interface {
 	IUserInfo
 	IUserProfile
 	IUserListing
 	IUserPrivacy
+	IUserBlocklist
 }

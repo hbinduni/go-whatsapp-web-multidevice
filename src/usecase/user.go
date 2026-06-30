@@ -17,6 +17,7 @@ import (
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/appstate"
 	"go.mau.fi/whatsmeow/types"
+	"go.mau.fi/whatsmeow/types/events"
 )
 
 type serviceUser struct {
@@ -323,4 +324,54 @@ func (service serviceUser) BusinessProfile(ctx context.Context, request domainUs
 	}
 
 	return response, nil
+}
+
+func (service serviceUser) GetBlocklist(ctx context.Context) (response domainUser.BlocklistResponse, err error) {
+	utils.MustLogin(whatsapp.GetClient())
+	blocklist, err := whatsapp.GetClient().GetBlocklist(ctx)
+	if err != nil {
+		return response, err
+	}
+	response.Data = blocklist
+	return response, nil
+}
+
+func (service serviceUser) Block(ctx context.Context, request domainUser.BlockRequest) (response domainUser.BlocklistResponse, err error) {
+	if err = validations.ValidateBlockUser(ctx, request); err != nil {
+		return response, err
+	}
+	JID, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.Phone)
+	if err != nil {
+		return response, err
+	}
+	blocklist, err := whatsapp.GetClient().UpdateBlocklist(ctx, JID, events.BlocklistChangeActionBlock)
+	if err != nil {
+		return response, err
+	}
+	response.Data = blocklist
+	return response, nil
+}
+
+func (service serviceUser) Unblock(ctx context.Context, request domainUser.BlockRequest) (response domainUser.BlocklistResponse, err error) {
+	if err = validations.ValidateBlockUser(ctx, request); err != nil {
+		return response, err
+	}
+	JID, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.Phone)
+	if err != nil {
+		return response, err
+	}
+	blocklist, err := whatsapp.GetClient().UpdateBlocklist(ctx, JID, events.BlocklistChangeActionUnblock)
+	if err != nil {
+		return response, err
+	}
+	response.Data = blocklist
+	return response, nil
+}
+
+func (service serviceUser) SetAbout(ctx context.Context, request domainUser.SetAboutRequest) (err error) {
+	if err = validations.ValidateSetAbout(ctx, request); err != nil {
+		return err
+	}
+	utils.MustLogin(whatsapp.GetClient())
+	return whatsapp.GetClient().SetStatusMessage(ctx, request.Status)
 }
