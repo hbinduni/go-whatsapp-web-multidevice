@@ -48,3 +48,30 @@ func TestValidateUnfollowNewsletter(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateFollowNewsletter(t *testing.T) {
+	if err := ValidateFollowNewsletter(context.Background(), domainNewsletter.FollowRequest{}); err == nil {
+		t.Error("expected error for empty newsletter_id, got nil")
+	}
+	if err := ValidateFollowNewsletter(context.Background(), domainNewsletter.FollowRequest{NewsletterID: "123@newsletter"}); err != nil {
+		t.Errorf("expected no error for valid newsletter_id, got %v", err)
+	}
+}
+
+func TestValidateGetNewsletterInfo(t *testing.T) {
+	if err := ValidateGetNewsletterInfo(context.Background(), domainNewsletter.GetInfoRequest{}); err == nil {
+		t.Error("expected error for empty newsletter_id, got nil")
+	}
+}
+
+func TestValidateGetNewsletterInfoWithInvite(t *testing.T) {
+	if err := ValidateGetNewsletterInfoWithInvite(context.Background(), domainNewsletter.GetInfoWithInviteRequest{}); err == nil {
+		t.Error("expected error for empty key, got nil")
+	}
+}
+
+func TestValidateNewsletterMute(t *testing.T) {
+	if err := ValidateNewsletterMute(context.Background(), domainNewsletter.ToggleMuteRequest{}); err == nil {
+		t.Error("expected error for empty newsletter_id, got nil")
+	}
+}

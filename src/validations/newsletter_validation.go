@@ -18,3 +18,43 @@ func ValidateUnfollowNewsletter(ctx context.Context, request domainNewsletter.Un
 
 	return nil
 }
+
+func ValidateFollowNewsletter(ctx context.Context, request domainNewsletter.FollowRequest) error {
+	err := validation.ValidateStructWithContext(ctx, &request,
+		validation.Field(&request.NewsletterID, validation.Required),
+	)
+	if err != nil {
+		return pkgError.ValidationError(err.Error())
+	}
+	return nil
+}
+
+func ValidateGetNewsletterInfo(ctx context.Context, request domainNewsletter.GetInfoRequest) error {
+	err := validation.ValidateStructWithContext(ctx, &request,
+		validation.Field(&request.NewsletterID, validation.Required),
+	)
+	if err != nil {
+		return pkgError.ValidationError(err.Error())
+	}
+	return nil
+}
+
+func ValidateGetNewsletterInfoWithInvite(ctx context.Context, request domainNewsletter.GetInfoWithInviteRequest) error {
+	err := validation.ValidateStructWithContext(ctx, &request,
+		validation.Field(&request.Key, validation.Required),
+	)
+	if err != nil {
+		return pkgError.ValidationError(err.Error())
+	}
+	return nil
+}
+
+func ValidateNewsletterMute(ctx context.Context, request domainNewsletter.ToggleMuteRequest) error {
+	err := validation.ValidateStructWithContext(ctx, &request,
+		validation.Field(&request.NewsletterID, validation.Required),
+	)
+	if err != nil {
+		return pkgError.ValidationError(err.Error())
+	}
+	return nil
+}
