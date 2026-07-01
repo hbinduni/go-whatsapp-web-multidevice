@@ -445,3 +445,68 @@ func (service serviceGroup) SetGroupMemberAddMode(ctx context.Context, request d
 	}
 	return whatsapp.GetClient().SetGroupMemberAddMode(ctx, groupJID, types.GroupMemberAddMode(request.Mode))
 }
+
+func (service serviceGroup) GetSubGroups(ctx context.Context, request domainGroup.CommunityRequest) (response domainGroup.SubGroupsResponse, err error) {
+	if err = validations.ValidateCommunity(ctx, request); err != nil {
+		return response, err
+	}
+	communityJID, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.CommunityID)
+	if err != nil {
+		return response, err
+	}
+	subGroups, err := whatsapp.GetClient().GetSubGroups(ctx, communityJID)
+	if err != nil {
+		return response, err
+	}
+	response.Data = subGroups
+	return response, nil
+}
+
+func (service serviceGroup) LinkGroup(ctx context.Context, request domainGroup.LinkGroupRequest) (err error) {
+	if err = validations.ValidateLinkGroup(ctx, request); err != nil {
+		return err
+	}
+	parentJID, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.CommunityID)
+	if err != nil {
+		return err
+	}
+	childJID, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.GroupID)
+	if err != nil {
+		return err
+	}
+	return whatsapp.GetClient().LinkGroup(ctx, parentJID, childJID)
+}
+
+func (service serviceGroup) UnlinkGroup(ctx context.Context, request domainGroup.LinkGroupRequest) (err error) {
+	if err = validations.ValidateLinkGroup(ctx, request); err != nil {
+		return err
+	}
+	parentJID, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.CommunityID)
+	if err != nil {
+		return err
+	}
+	childJID, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.GroupID)
+	if err != nil {
+		return err
+	}
+	return whatsapp.GetClient().UnlinkGroup(ctx, parentJID, childJID)
+}
+
+func (service serviceGroup) GetLinkedParticipants(ctx context.Context, request domainGroup.CommunityRequest) (response domainGroup.LinkedParticipantsResponse, err error) {
+	if err = validations.ValidateCommunity(ctx, request); err != nil {
+		return response, err
+	}
+	communityJID, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.CommunityID)
+	if err != nil {
+		return response, err
+	}
+	participants, err := whatsapp.GetClient().GetLinkedGroupsParticipants(ctx, communityJID)
+	if err != nil {
+		return response, err
+	}
+	response.Participants = make([]string, 0, len(participants))
+	for _, p := range participants {
+		response.Participants = append(response.Participants, p.String())
+	}
+	return response, nil
+}

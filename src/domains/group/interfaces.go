@@ -33,9 +33,18 @@ type IGroupSettings interface {
 	SetGroupMemberAddMode(ctx context.Context, request SetGroupMemberAddModeRequest) (err error)
 }
 
+// IGroupCommunity handles community (linked group) operations
+type IGroupCommunity interface {
+	GetSubGroups(ctx context.Context, request CommunityRequest) (response SubGroupsResponse, err error)
+	LinkGroup(ctx context.Context, request LinkGroupRequest) (err error)
+	UnlinkGroup(ctx context.Context, request LinkGroupRequest) (err error)
+	GetLinkedParticipants(ctx context.Context, request CommunityRequest) (response LinkedParticipantsResponse, err error)
+}
+
 // IGroupUsecase combines all group interfaces for backward compatibility
 type IGroupUsecase interface {
 	IGroupManagement
 	IGroupParticipants
 	IGroupSettings
+	IGroupCommunity
 }

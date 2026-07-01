@@ -43,6 +43,10 @@ func InitRestGroup(app fiber.Router, service domainGroup.IGroupUsecase) Group {
 	app.Get("/group/invite-link", rest.GetGroupInviteLink)
 	app.Post("/group/join-approval", rest.SetGroupJoinApprovalMode)
 	app.Post("/group/member-add-mode", rest.SetGroupMemberAddMode)
+	app.Get("/group/sub-groups", rest.GetSubGroups)
+	app.Post("/group/link", rest.LinkGroup)
+	app.Post("/group/unlink", rest.UnlinkGroup)
+	app.Get("/group/linked-participants", rest.GetLinkedParticipants)
 	return rest
 }
 
@@ -460,4 +464,56 @@ func (controller *Group) SetGroupMemberAddMode(c *fiber.Ctx) error {
 		return helpers.HandleError(c, err)
 	}
 	return helpers.HandleSuccess(c, "Success set group member add mode", nil)
+}
+
+func (controller *Group) GetSubGroups(c *fiber.Ctx) error {
+	var request domainGroup.CommunityRequest
+	if err := c.QueryParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid query parameters: "+err.Error())
+	}
+	utils.SanitizePhone(&request.CommunityID)
+	response, err := controller.Service.GetSubGroups(c.UserContext(), request)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
+	return helpers.HandleSuccess(c, "Success get sub groups", response)
+}
+
+func (controller *Group) LinkGroup(c *fiber.Ctx) error {
+	var request domainGroup.LinkGroupRequest
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
+	utils.SanitizePhone(&request.CommunityID)
+	utils.SanitizePhone(&request.GroupID)
+	if err := controller.Service.LinkGroup(c.UserContext(), request); err != nil {
+		return helpers.HandleError(c, err)
+	}
+	return helpers.HandleSuccess(c, "Success link group", nil)
+}
+
+func (controller *Group) UnlinkGroup(c *fiber.Ctx) error {
+	var request domainGroup.LinkGroupRequest
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
+	utils.SanitizePhone(&request.CommunityID)
+	utils.SanitizePhone(&request.GroupID)
+	if err := controller.Service.UnlinkGroup(c.UserContext(), request); err != nil {
+		return helpers.HandleError(c, err)
+	}
+	return helpers.HandleSuccess(c, "Success unlink group", nil)
+}
+
+func (controller *Group) GetLinkedParticipants(c *fiber.Ctx) error {
+	var request domainGroup.CommunityRequest
+	if err := c.QueryParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid query parameters: "+err.Error())
+	}
+	utils.SanitizePhone(&request.CommunityID)
+	response, err := controller.Service.GetLinkedParticipants(c.UserContext(), request)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
+	return helpers.HandleSuccess(c, "Success get linked participants", response)
 }

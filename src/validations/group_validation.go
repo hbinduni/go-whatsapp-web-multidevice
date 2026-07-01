@@ -237,3 +237,24 @@ func ValidateSetGroupMemberAddMode(ctx context.Context, request domainGroup.SetG
 	}
 	return nil
 }
+
+func ValidateCommunity(ctx context.Context, request domainGroup.CommunityRequest) error {
+	err := validation.ValidateStructWithContext(ctx, &request,
+		validation.Field(&request.CommunityID, validation.Required),
+	)
+	if err != nil {
+		return pkgError.ValidationError(err.Error())
+	}
+	return nil
+}
+
+func ValidateLinkGroup(ctx context.Context, request domainGroup.LinkGroupRequest) error {
+	err := validation.ValidateStructWithContext(ctx, &request,
+		validation.Field(&request.CommunityID, validation.Required),
+		validation.Field(&request.GroupID, validation.Required),
+	)
+	if err != nil {
+		return pkgError.ValidationError(err.Error())
+	}
+	return nil
+}
