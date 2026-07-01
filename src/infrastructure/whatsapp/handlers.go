@@ -207,6 +207,12 @@ func handleMessage(ctx context.Context, evt *events.Message, chatStorageRepo dom
 		return
 	}
 
+	// Check if this is a poll vote (PollUpdateMessage)
+	if pollUpdate := evt.Message.GetPollUpdateMessage(); pollUpdate != nil {
+		handlePollUpdateMessage(ctx, evt)
+		return
+	}
+
 	// Download media if configured
 	mediaPath, mediaMimeType, mediaFilename, mediaFileSize := downloadMediaIfEnabled(ctx, evt, client, normalizedChatJID)
 

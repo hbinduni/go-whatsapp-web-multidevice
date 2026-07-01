@@ -21,6 +21,7 @@ const (
 	EventMessageDeleted      EventType = "message_deleted"
 	EventMessageRevoked      EventType = "message_revoked"
 	EventReactionReceived    EventType = "reaction_received"
+	EventPollVote            EventType = "poll_vote"
 
 	// Chat events
 	EventChatUpdated EventType = "chat_updated"
