@@ -20,4 +20,7 @@ func TestValidateSetAbout(t *testing.T) {
 	if err := ValidateSetAbout(context.Background(), domainUser.SetAboutRequest{}); err == nil {
 		t.Error("expected error for empty status, got nil")
 	}
+	if err := ValidateSetAbout(context.Background(), domainUser.SetAboutRequest{Status: "hello world"}); err != nil {
+		t.Errorf("expected no error for valid status, got %v", err)
+	}
 }

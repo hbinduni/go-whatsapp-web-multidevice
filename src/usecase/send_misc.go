@@ -230,7 +230,8 @@ func (service serviceSend) SendPollVote(ctx context.Context, request domainSend.
 	if err != nil {
 		return response, pkgError.ValidationError("stored poll has an invalid sender JID")
 	}
-	if recipient.String() != chatJID.String() {
+	client := whatsapp.GetClient()
+	if whatsapp.NormalizeJIDFromLID(ctx, recipient, client).String() != whatsapp.NormalizeJIDFromLID(ctx, chatJID, client).String() {
 		return response, pkgError.ValidationError("phone does not match the poll's chat; the vote must target the chat where the poll was created")
 	}
 	pollInfo := &types.MessageInfo{
