@@ -406,6 +406,17 @@ func ValidateSendPoll(ctx context.Context, request domainSend.PollRequest) error
 	return nil
 }
 
+func ValidateSendPollVote(ctx context.Context, request domainSend.PollVoteRequest) error {
+	err := validation.ValidateStructWithContext(ctx, &request,
+		validation.Field(&request.Phone, validation.Required),
+		validation.Field(&request.PollMessageID, validation.Required),
+	)
+	if err != nil {
+		return pkgError.ValidationError(err.Error())
+	}
+	return nil
+}
+
 func ValidateSendPresence(ctx context.Context, request domainSend.PresenceRequest) error {
 	err := validation.ValidateStructWithContext(ctx, &request,
 		validation.Field(&request.Type, validation.In("available", "unavailable")),

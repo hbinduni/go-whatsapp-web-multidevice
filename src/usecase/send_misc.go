@@ -6,6 +6,7 @@ import (
 
 	domainSend "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/send"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/whatsapp"
+	pkgError "github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/error"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/utils"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/validations"
 	"github.com/sirupsen/logrus"
@@ -200,6 +201,60 @@ func (service serviceSend) SendPoll(ctx context.Context, request domainSend.Poll
 
 	response.MessageID = ts.ID
 	response.Status = fmt.Sprintf("Send poll success %s (server timestamp: %s)", request.BaseRequest.Phone, ts.Timestamp.String())
+	return response, nil
+}
+
+func (service serviceSend) SendPollVote(ctx context.Context, request domainSend.PollVoteRequest) (response domainSend.GenericResponse, err error) {
+	if err = validations.ValidateSendPollVote(ctx, request); err != nil {
+		return response, err
+	}
+	recipient, err := utils.ValidateJidWithLogin(whatsapp.GetClient(), request.BaseRequest.Phone)
+	if err != nil {
+		return response, err
+	}
+
+	// Reconstruct the original poll's MessageInfo from chat storage.
+	stored, err := service.chatStorageRepo.GetMessageByID(request.PollMessageID)
+	if err != nil {
+		logrus.Errorf("Failed to look up poll message %s: %v", request.PollMessageID, err)
+		return response, fmt.Errorf("failed to look up poll message %s", request.PollMessageID)
+	}
+	if stored == nil {
+		return response, pkgError.ValidationError("poll message not found in storage; cannot vote on an unknown poll")
+	}
+	chatJID, err := types.ParseJID(stored.ChatJID)
+	if err != nil {
+		return response, pkgError.ValidationError("stored poll has an invalid chat JID")
+	}
+	senderJID, err := types.ParseJID(stored.Sender)
+	if err != nil {
+		return response, pkgError.ValidationError("stored poll has an invalid sender JID")
+	}
+	if recipient.String() != chatJID.String() {
+		return response, pkgError.ValidationError("phone does not match the poll's chat; the vote must target the chat where the poll was created")
+	}
+	pollInfo := &types.MessageInfo{
+		ID: request.PollMessageID,
+		MessageSource: types.MessageSource{
+			Chat:     chatJID,
+			Sender:   senderJID,
+			IsFromMe: stored.IsFromMe,
+			IsGroup:  utils.IsGroupJID(stored.ChatJID),
+		},
+		Timestamp: stored.Timestamp,
+	}
+
+	msg, err := whatsapp.GetClient().BuildPollVote(ctx, pollInfo, request.OptionNames)
+	if err != nil {
+		return response, err
+	}
+
+	ts, err := service.wrapSendMessage(ctx, recipient, msg, "🗳️ poll vote")
+	if err != nil {
+		return response, err
+	}
+	response.MessageID = ts.ID
+	response.Status = fmt.Sprintf("Send poll vote success %s (server timestamp: %s)", request.BaseRequest.Phone, ts.Timestamp.String())
 	return response, nil
 }
 

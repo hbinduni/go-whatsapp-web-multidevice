@@ -23,6 +23,7 @@ func InitRestSend(app fiber.Router, service domainSend.ISendUsecase) Send {
 	app.Post("/send/location", rest.SendLocation)
 	app.Post("/send/audio", rest.SendAudio)
 	app.Post("/send/poll", rest.SendPoll)
+	app.Post("/send/poll/vote", rest.SendPollVote)
 	app.Post("/send/presence", rest.SendPresence)
 	app.Post("/send/chat-presence", rest.SendChatPresence)
 	return rest
@@ -208,6 +209,22 @@ func (controller *Send) SendPoll(c *fiber.Ctx) error {
 	utils.SanitizePhone(&request.Phone)
 
 	response, err := controller.Service.SendPoll(c.UserContext(), request)
+	if err != nil {
+		return helpers.HandleError(c, err)
+	}
+
+	return helpers.HandleSuccess(c, response.Status, response)
+}
+
+func (controller *Send) SendPollVote(c *fiber.Ctx) error {
+	var request domainSend.PollVoteRequest
+	if err := c.BodyParser(&request); err != nil {
+		return helpers.HandleBadRequest(c, "Invalid request body: "+err.Error())
+	}
+
+	utils.SanitizePhone(&request.Phone)
+
+	response, err := controller.Service.SendPollVote(c.UserContext(), request)
 	if err != nil {
 		return helpers.HandleError(c, err)
 	}
