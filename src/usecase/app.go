@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
@@ -65,11 +66,16 @@ func (service *serviceApp) Login(ctx context.Context) (response domainApp.LoginR
 	} else {
 		go func() {
 			for evt := range ch {
-				response.Code = evt.Code
+				// whatsmeow wraps the pairing ref in a wa.me deep-link URL
+				// (https://wa.me/settings/linked_devices#<ref>,...). WhatsApp's
+				// in-app "Link a Device" scanner only recognizes the bare ref, so
+				// strip the wrapper before rendering/returning the QR.
+				code := strings.TrimPrefix(evt.Code, "https://wa.me/settings/linked_devices#")
+				response.Code = code
 				response.Duration = evt.Timeout / time.Second / 2
 				if evt.Event == "code" {
 					qrPath := fmt.Sprintf("%s/scan-qr-%s.png", config.PathQrCode, fiberUtils.UUIDv4())
-					err = qrcode.WriteFile(evt.Code, qrcode.Medium, 512, qrPath)
+					err = qrcode.WriteFile(code, qrcode.Medium, 512, qrPath)
 					if err != nil {
 						logrus.Errorf("Error writing QR code to file: %v", err)
 					}
