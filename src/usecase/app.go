@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
@@ -31,6 +32,28 @@ func NewAppService(chatStorageRepo domainChatStorage.IChatStorageRepository) dom
 	}
 }
 
+// qrPairing tracks the context of an in-flight QR pairing session so it can be
+// torn down explicitly. whatsmeow allows only one pairing method per client: if a
+// QR pairing is left active, a subsequent code pairing (PairPhone) never completes
+// its companion_finish handshake because the QR channel keeps consuming pairing
+// events. Cancelling this context clears whatsmeow's QR pairing state and closes
+// the channel, freeing the client for code pairing.
+var (
+	qrPairingMu     sync.Mutex
+	qrPairingCancel context.CancelFunc
+)
+
+// stopQRPairing cancels any in-flight QR pairing session. Safe to call when none
+// is active. Called before starting a new pairing (QR or code) and on logout.
+func stopQRPairing() {
+	qrPairingMu.Lock()
+	defer qrPairingMu.Unlock()
+	if qrPairingCancel != nil {
+		qrPairingCancel()
+		qrPairingCancel = nil
+	}
+}
+
 func (service *serviceApp) Login(ctx context.Context) (response domainApp.LoginResponse, err error) {
 	client := whatsapp.GetClient()
 	if client == nil {
@@ -45,13 +68,26 @@ func (service *serviceApp) Login(ctx context.Context) (response domainApp.LoginR
 		logrus.Debugf("Devices before login: %d found", len(devices))
 	}
 
+	// Cancel any in-flight QR pairing before starting a new one so two pairing
+	// sessions never run on a single client.
+	stopQRPairing()
+
 	// Disconnect for reconnecting
 	client.Disconnect()
 
 	chImage := make(chan string)
 
-	ch, err := client.GetQRChannel(ctx)
+	// Own the QR pairing lifecycle with a cancellable context (not the request
+	// ctx) so it survives the HTTP response yet can be torn down explicitly when
+	// the user switches to code pairing (see stopQRPairing).
+	qrCtx, qrCancel := context.WithCancel(context.Background())
+	qrPairingMu.Lock()
+	qrPairingCancel = qrCancel
+	qrPairingMu.Unlock()
+
+	ch, err := client.GetQRChannel(qrCtx)
 	if err != nil {
+		stopQRPairing()
 		logrus.Debugf("GetQRChannel failed: %v", err)
 		// This error means that we're already logged in, so ignore it.
 		if errors.Is(err, whatsmeow.ErrQRStoreContainsID) {
@@ -120,6 +156,11 @@ func (service *serviceApp) LoginWithCode(ctx context.Context, phoneNumber string
 		return loginCode, pkgError.ErrAlreadyLoggedIn
 	}
 
+	// Tear down any in-flight QR pairing first — otherwise its session competes
+	// with PairPhone and the code handshake never completes (companion_finish is
+	// never processed, so the device is never registered).
+	stopQRPairing()
+
 	// reconnect first
 	if err = service.Reconnect(ctx); err != nil {
 		return loginCode, err
@@ -149,6 +190,9 @@ func (service *serviceApp) LoginWithCode(ctx context.Context, phoneNumber string
 
 func (service *serviceApp) Logout(ctx context.Context) (err error) {
 	logrus.Debug("Starting logout process...")
+
+	// Cancel any in-flight QR pairing session.
+	stopQRPairing()
 
 	client := whatsapp.GetClient()
 	if client == nil {
