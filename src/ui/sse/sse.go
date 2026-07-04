@@ -198,12 +198,14 @@ func BroadcastMessageReceived(messageID, chatJID, sender, content string, timest
 }
 
 // BroadcastMessageSent broadcasts a sent message confirmation event
-func BroadcastMessageSent(messageID, chatJID, content string, timestamp time.Time) {
+func BroadcastMessageSent(messageID, chatJID, sender, content string, timestamp time.Time) {
 	BroadcastMessage(EventMessageSent, "MESSAGE_SENT", "Message sent successfully", map[string]any{
 		"message_id": messageID,
 		"chat_jid":   chatJID,
+		"sender":     sender,
 		"content":    content,
 		"timestamp":  timestamp,
+		"is_from_me": true,
 	})
 }
 

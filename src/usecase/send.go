@@ -16,6 +16,7 @@ import (
 	domainSend "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/send"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/whatsapp"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/utils"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/ui/sse"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/validations"
 	"github.com/sirupsen/logrus"
 	"go.mau.fi/whatsmeow"
@@ -63,6 +64,10 @@ func (service serviceSend) wrapSendMessage(ctx context.Context, recipient types.
 		}
 	}()
 
+	// Emit a live SSE event so connected clients render the sent message
+	// immediately (delivery + storage happen regardless; this only drives the UI).
+	sse.BroadcastMessageSent(ts.ID, recipient.String(), senderJID, content, ts.Timestamp)
+
 	return ts, nil
 }
 
@@ -89,6 +94,9 @@ func (service serviceSend) wrapSendMessageWithMedia(ctx context.Context, recipie
 	if err := service.chatStorageRepo.StoreSentMediaMessageWithContext(storeCtx, ts.ID, senderJID, recipient.String(), content, mediaType, filename, mediaData, ts.Timestamp); err != nil {
 		logrus.Warnf("Failed to store sent media message: %v", err)
 	}
+
+	// Emit a live SSE event so connected clients render the sent message immediately.
+	sse.BroadcastMessageSent(ts.ID, recipient.String(), senderJID, content, ts.Timestamp)
 
 	return ts, nil
 }
