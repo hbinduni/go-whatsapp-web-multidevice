@@ -20,7 +20,7 @@ require (
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
 	github.com/valyala/fasthttp v1.71.0
-	go.mau.fi/whatsmeow v0.0.0-20260622185415-5f04eac6dbbb
+	go.mau.fi/whatsmeow v0.0.0-20260630180629-b572e5bcb92b
 	golang.org/x/image v0.41.0
 	google.golang.org/protobuf v1.36.11
 )

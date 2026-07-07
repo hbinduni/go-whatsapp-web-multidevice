@@ -102,14 +102,15 @@ func (service *serviceApp) Login(ctx context.Context) (response domainApp.LoginR
 	} else {
 		go func() {
 			for evt := range ch {
-				// whatsmeow wraps the pairing ref in a wa.me deep-link URL
-				// (https://wa.me/settings/linked_devices#<ref>,...). WhatsApp's
-				// in-app "Link a Device" scanner only recognizes the bare ref, so
-				// strip the wrapper before rendering/returning the QR.
-				code := strings.TrimPrefix(evt.Code, "https://wa.me/settings/linked_devices#")
-				response.Code = code
-				response.Duration = evt.Timeout / time.Second / 2
-				if evt.Event == "code" {
+				switch evt.Event {
+				case "code":
+					// whatsmeow wraps the pairing ref in a wa.me deep-link URL
+					// (https://wa.me/settings/linked_devices#<ref>,...). WhatsApp's
+					// in-app "Link a Device" scanner only recognizes the bare ref, so
+					// strip the wrapper before rendering/returning the QR.
+					code := strings.TrimPrefix(evt.Code, "https://wa.me/settings/linked_devices#")
+					response.Code = code
+					response.Duration = evt.Timeout / time.Second / 2
 					qrPath := fmt.Sprintf("%s/scan-qr-%s.png", config.PathQrCode, fiberUtils.UUIDv4())
 					err = qrcode.WriteFile(code, qrcode.Medium, 512, qrPath)
 					if err != nil {
@@ -122,7 +123,26 @@ func (service *serviceApp) Login(ctx context.Context) (response domainApp.LoginR
 						}
 					}()
 					chImage <- qrPath
-				} else {
+				case whatsmeow.QRChannelEventPasskeyRequest:
+					// WhatsApp asked this device to authenticate the link with a
+					// passkey (WebAuthn; whatsmeow PR #1186). Completing it needs an
+					// authenticator holding a credential registered to the user's
+					// account under WhatsApp's rpId — which a headless gateway cannot
+					// hold or proxy, since WebAuthn binds the credential to the
+					// WhatsApp origin. Log it clearly instead of silently dropping it;
+					// the user should link via the QR code or a phone pairing code.
+					rpID := ""
+					if evt.PasskeyRequest != nil && evt.PasskeyRequest.PublicKey != nil {
+						rpID = evt.PasskeyRequest.PublicKey.RelyingPartID
+					}
+					logrus.Warnf("Passkey linking requested (rpId=%q) but this gateway cannot perform a WebAuthn ceremony; ask the user to link via the QR code or a phone pairing code", rpID)
+				case whatsmeow.QRChannelEventPasskeyResponse:
+					// Only reachable after SendPasskeyResponse, which this gateway
+					// never calls; surface the code if it somehow arrives.
+					if evt.PasskeyConfirmation != nil {
+						logrus.Warnf("Unexpected passkey confirmation (code %s); this gateway cannot complete passkey pairing", evt.PasskeyConfirmation.Code)
+					}
+				default:
 					logrus.Debugf("QR event: %s, error: %v", evt.Event, evt.Error)
 				}
 			}
