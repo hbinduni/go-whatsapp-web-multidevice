@@ -456,17 +456,24 @@ version-up-major:
 	echo "✅ Version updated to $$NEW_VERSION in $(SRC_DIR)/config/settings.go"
 
 ## deploy: Cut a release - bump patch, commit, tag & push; GitHub Actions (release-k3s.yml) builds the amd64 image and rolls it out to k3s
+# The steps are chained with && so a failure stops before the success banner.
+# With ';' a failed `git tag` printed "Tag ... pushed" over a release that was
+# only committed, never tagged — CI never fired and nothing said so.
+#
+# The tag is annotated (-a -m): tag.gpgsign is true in ~/.gitconfig, which makes
+# every tag signed and therefore annotated, and an annotated tag with no message
+# aborts non-interactively with "fatal: no tag message?".
 deploy: version-up
 	@NEW_VERSION="$(VERSION)"; \
-	echo "🚀 Releasing $$NEW_VERSION (GitHub Actions builds + pushes the amd64 image)..."; \
-	git add $(SRC_DIR)/config/settings.go; \
-	git commit -m "chore(release): $$NEW_VERSION"; \
-	git push; \
-	git tag "$$NEW_VERSION"; \
-	git push origin "$$NEW_VERSION"; \
-	echo ""; \
-	echo "✅ Tag $$NEW_VERSION pushed — image build: https://github.com/$(GITHUB_USER)/$(IMAGE_NAME)/actions"; \
-	echo "   Once built, roll it onto the k3s fleet from the deploy repo:"; \
+	echo "🚀 Releasing $$NEW_VERSION (GitHub Actions builds + pushes the amd64 image)..." && \
+	git add $(SRC_DIR)/config/settings.go && \
+	git commit -m "chore(release): $$NEW_VERSION" && \
+	git push && \
+	git tag -a "$$NEW_VERSION" -m "$$NEW_VERSION" && \
+	git push origin "$$NEW_VERSION" && \
+	echo "" && \
+	echo "✅ Tag $$NEW_VERSION pushed — image build: https://github.com/$(GITHUB_USER)/$(IMAGE_NAME)/actions" && \
+	echo "   Once built, roll it onto the k3s fleet from the deploy repo:" && \
 	echo "     cd ~/projects-go/gowa-deploy && make deploy TAG=$$NEW_VERSION"
 
 ## clean: Remove build artifacts and cache
