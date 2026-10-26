@@ -1,8 +1,8 @@
 ############################
 # STEP 1 build executable binary
 ############################
-FROM golang:1.25-alpine AS builder
-RUN apk update && apk add --no-cache gcc musl-dev gcompat
+FROM golang:1.27.3-alpine3.24 AS builder
+RUN apk upgrade --no-cache && apk add --no-cache gcc musl-dev gcompat
 WORKDIR /whatsapp
 COPY ./src .
 
@@ -14,11 +14,11 @@ RUN go build -a -ldflags="-w -s" -o /app/whatsapp
 #############################
 ## STEP 2 build a smaller image
 #############################
-FROM alpine:3.20
+FROM alpine:3.24.3
 # Link the GHCR package to its source repo so the repository's GITHUB_TOKEN
 # inherits push access (avoids manual "Manage Actions access" UI grants).
 LABEL org.opencontainers.image.source=https://github.com/hbinduni/go-whatsapp-web-multidevice
-RUN apk add --no-cache ffmpeg tzdata
+RUN apk upgrade --no-cache && apk add --no-cache ca-certificates ffmpeg tzdata
 ENV TZ=UTC
 WORKDIR /app
 # Copy compiled from builder.

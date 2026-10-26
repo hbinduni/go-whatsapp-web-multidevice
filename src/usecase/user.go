@@ -328,7 +328,7 @@ func (service serviceUser) BusinessProfile(ctx context.Context, request domainUs
 
 func (service serviceUser) GetBlocklist(ctx context.Context) (response domainUser.BlocklistResponse, err error) {
 	utils.MustLogin(whatsapp.GetClient())
-	blocklist, err := whatsapp.GetClient().GetBlocklist(ctx)
+	blocklist, err := whatsapp.GetClient().GetBlocklist(ctx, "")
 	if err != nil {
 		return response, err
 	}
@@ -344,7 +344,7 @@ func (service serviceUser) Block(ctx context.Context, request domainUser.BlockRe
 	if err != nil {
 		return response, err
 	}
-	blocklist, err := whatsapp.GetClient().UpdateBlocklist(ctx, JID, events.BlocklistChangeActionBlock)
+	blocklist, err := whatsapp.GetClient().UpdateBlocklist(ctx, JID, events.BlocklistChangeActionBlock, "")
 	if err != nil {
 		return response, err
 	}
@@ -360,7 +360,7 @@ func (service serviceUser) Unblock(ctx context.Context, request domainUser.Block
 	if err != nil {
 		return response, err
 	}
-	blocklist, err := whatsapp.GetClient().UpdateBlocklist(ctx, JID, events.BlocklistChangeActionUnblock)
+	blocklist, err := whatsapp.GetClient().UpdateBlocklist(ctx, JID, events.BlocklistChangeActionUnblock, "")
 	if err != nil {
 		return response, err
 	}
@@ -373,5 +373,5 @@ func (service serviceUser) SetAbout(ctx context.Context, request domainUser.SetA
 		return err
 	}
 	utils.MustLogin(whatsapp.GetClient())
-	return whatsapp.GetClient().SetStatusMessage(ctx, request.Status)
+	return whatsapp.GetClient().SetStatusMessage(ctx, types.SetStatusInput{Text: &request.Status})
 }
