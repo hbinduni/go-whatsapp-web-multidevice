@@ -3,22 +3,15 @@ package usecase
 import (
 	"context"
 	"errors"
-	"fmt"
-	"os"
-	"strings"
-	"sync"
 	"time"
 
-	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
 	domainApp "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/app"
 	domainChatStorage "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/chatstorage"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/whatsapp"
 	pkgError "github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/error"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/validations"
-	fiberUtils "github.com/gofiber/fiber/v2/utils"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/sirupsen/logrus"
-	"github.com/skip2/go-qrcode"
 	"go.mau.fi/whatsmeow"
 )
 
@@ -32,145 +25,27 @@ func NewAppService(chatStorageRepo domainChatStorage.IChatStorageRepository) dom
 	}
 }
 
-// qrPairing tracks the context of an in-flight QR pairing session so it can be
-// torn down explicitly. whatsmeow allows only one pairing method per client: if a
-// QR pairing is left active, a subsequent code pairing (PairPhone) never completes
-// its companion_finish handshake because the QR channel keeps consuming pairing
-// events. Cancelling this context clears whatsmeow's QR pairing state and closes
-// the channel, freeing the client for code pairing.
-var (
-	qrPairingMu     sync.Mutex
-	qrPairingCancel context.CancelFunc
-)
-
-// stopQRPairing cancels any in-flight QR pairing session. Safe to call when none
-// is active. Called before starting a new pairing (QR or code) and on logout.
-func stopQRPairing() {
-	qrPairingMu.Lock()
-	defer qrPairingMu.Unlock()
-	if qrPairingCancel != nil {
-		qrPairingCancel()
-		qrPairingCancel = nil
-	}
-}
-
-func (service *serviceApp) Login(ctx context.Context) (response domainApp.LoginResponse, err error) {
-	client := whatsapp.GetClient()
-	if client == nil {
-		return response, pkgError.ErrWaCLI
-	}
-
-	logrus.Debug("Starting login process...")
-	devices, dbErr := whatsapp.GetDB().GetAllDevices(ctx)
-	if dbErr != nil {
-		logrus.Debugf("Error getting devices before login: %v", dbErr)
-	} else {
-		logrus.Debugf("Devices before login: %d found", len(devices))
-	}
-
-	// Cancel any in-flight QR pairing before starting a new one so two pairing
-	// sessions never run on a single client.
-	stopQRPairing()
-
-	// Disconnect for reconnecting
-	client.Disconnect()
-
-	chImage := make(chan string)
-
-	// Own the QR pairing lifecycle with a cancellable context (not the request
-	// ctx) so it survives the HTTP response yet can be torn down explicitly when
-	// the user switches to code pairing (see stopQRPairing).
-	qrCtx, qrCancel := context.WithCancel(context.Background())
-	qrPairingMu.Lock()
-	qrPairingCancel = qrCancel
-	qrPairingMu.Unlock()
-
-	ch, err := client.GetQRChannel(qrCtx)
-	if err != nil {
-		stopQRPairing()
-		logrus.Debugf("GetQRChannel failed: %v", err)
-		// This error means that we're already logged in, so ignore it.
-		if errors.Is(err, whatsmeow.ErrQRStoreContainsID) {
-			_ = client.Connect() // just connect to websocket
-			if client.IsLoggedIn() {
-				return response, pkgError.ErrAlreadyLoggedIn
-			}
-			return response, pkgError.ErrSessionSaved
-		} else {
-			return response, pkgError.ErrQrChannel
+func (service *serviceApp) Login(ctx context.Context) (domainApp.LoginResponse, error) {
+	return pairings.login(ctx, func() pairingClient {
+		client := whatsapp.GetClient()
+		if client == nil {
+			return nil
 		}
-	} else {
-		go func() {
-			for evt := range ch {
-				switch evt.Event {
-				case "code":
-					// whatsmeow wraps the pairing ref in a wa.me deep-link URL
-					// (https://wa.me/settings/linked_devices#<ref>,...). WhatsApp's
-					// in-app "Link a Device" scanner only recognizes the bare ref, so
-					// strip the wrapper before rendering/returning the QR.
-					code := strings.TrimPrefix(evt.Code, "https://wa.me/settings/linked_devices#")
-					response.Code = code
-					response.Duration = evt.Timeout / time.Second / 2
-					qrPath := fmt.Sprintf("%s/scan-qr-%s.png", config.PathQrCode, fiberUtils.UUIDv4())
-					err = qrcode.WriteFile(code, qrcode.Medium, 512, qrPath)
-					if err != nil {
-						logrus.Errorf("Error writing QR code to file: %v", err)
-					}
-					go func() {
-						time.Sleep(response.Duration * time.Second)
-						if err := os.Remove(qrPath); err != nil && !os.IsNotExist(err) {
-							logrus.Debugf("Error removing QR image file: %v", err)
-						}
-					}()
-					chImage <- qrPath
-				case whatsmeow.QRChannelEventPasskeyRequest:
-					// WhatsApp asked this device to authenticate the link with a
-					// passkey (WebAuthn; whatsmeow PR #1186). Completing it needs an
-					// authenticator holding a credential registered to the user's
-					// account under WhatsApp's rpId — which a headless gateway cannot
-					// hold or proxy, since WebAuthn binds the credential to the
-					// WhatsApp origin. Log it clearly instead of silently dropping it;
-					// the user should link via the QR code or a phone pairing code.
-					rpID := ""
-					if evt.PasskeyRequest != nil && evt.PasskeyRequest.PublicKey != nil {
-						rpID = evt.PasskeyRequest.PublicKey.RelyingPartID
-					}
-					logrus.Warnf("Passkey linking requested (rpId=%q) but this gateway cannot perform a WebAuthn ceremony; ask the user to link via the QR code or a phone pairing code", rpID)
-				case whatsmeow.QRChannelEventPasskeyResponse:
-					// Only reachable after SendPasskeyResponse, which this gateway
-					// never calls; surface the code if it somehow arrives.
-					if evt.PasskeyConfirmation != nil {
-						logrus.Warnf("Unexpected passkey confirmation (code %s); this gateway cannot complete passkey pairing", evt.PasskeyConfirmation.Code)
-					}
-				default:
-					logrus.Debugf("QR event: %s, error: %v", evt.Event, evt.Error)
-				}
-			}
-		}()
-	}
-
-	err = client.Connect()
-	if err != nil {
-		logrus.Errorf("Error connecting to WhatsApp: %v", err)
-		return response, pkgError.ErrReconnect
-	}
-	response.ImagePath = <-chImage
-
-	logrus.Debugf("Login connection established - IsConnected: %v, IsLoggedIn: %v",
-		client.IsConnected(), client.IsLoggedIn())
-
-	// Ensure global client is synchronized with service client
-	whatsapp.UpdateGlobalClient(client, whatsapp.GetDB())
-
-	return response, nil
+		return whatsappPairingClient{client}
+	})
 }
 
 func (service *serviceApp) LoginWithCode(ctx context.Context, phoneNumber string) (loginCode string, err error) {
+	pairings.mu.Lock()
+	defer pairings.mu.Unlock()
 	if err = validations.ValidateLoginWithCode(ctx, phoneNumber); err != nil {
 		return loginCode, err
 	}
 
 	client := whatsapp.GetClient()
+	if client == nil {
+		return "", pkgError.ErrWaCLI
+	}
 	// detect is already logged in
 	if client.Store.ID != nil || client.IsLoggedIn() {
 		return loginCode, pkgError.ErrAlreadyLoggedIn
@@ -179,10 +54,10 @@ func (service *serviceApp) LoginWithCode(ctx context.Context, phoneNumber string
 	// Tear down any in-flight QR pairing first — otherwise its session competes
 	// with PairPhone and the code handshake never completes (companion_finish is
 	// never processed, so the device is never registered).
-	stopQRPairing()
+	pairings.stopLocked()
 
 	// reconnect first
-	if err = service.Reconnect(ctx); err != nil {
+	if err = service.reconnect(); err != nil {
 		return loginCode, err
 	}
 
@@ -204,15 +79,17 @@ func (service *serviceApp) LoginWithCode(ctx context.Context, phoneNumber string
 	// Ensure global client is synchronized with service client
 	whatsapp.UpdateGlobalClient(client, whatsapp.GetDB())
 
-	logrus.Infof("Successfully paired phone with code: %s", loginCode)
+	logrus.Info("Phone pairing code generated; waiting for phone confirmation")
 	return loginCode, nil
 }
 
 func (service *serviceApp) Logout(ctx context.Context) (err error) {
+	pairings.mu.Lock()
+	defer pairings.mu.Unlock()
 	logrus.Debug("Starting logout process...")
 
 	// Cancel any in-flight QR pairing session.
-	stopQRPairing()
+	pairings.stopLocked()
 
 	client := whatsapp.GetClient()
 	if client == nil {
@@ -253,10 +130,36 @@ func (service *serviceApp) Logout(ctx context.Context) (err error) {
 	return nil
 }
 
-func (service *serviceApp) Reconnect(_ context.Context) (err error) {
+func (service *serviceApp) Reconnect(_ context.Context) error {
+	pairings.mu.Lock()
+	defer pairings.mu.Unlock()
+	pairings.stopLocked()
+	return service.reconnect()
+}
+
+// ReconnectIfPaired is shared by startup and health checks. Resolve and recheck
+// the client under the same lock used by pairing, logout and explicit stop.
+func (service *serviceApp) ReconnectIfPaired(_ context.Context) error {
+	pairings.mu.Lock()
+	defer pairings.mu.Unlock()
+	client := whatsapp.GetClient()
+	if client == nil || client.Store.ID == nil || whatsapp.IsClientStopped() || client.IsConnected() {
+		return nil
+	}
+	err := client.Connect()
+	if errors.Is(err, whatsmeow.ErrAlreadyConnected) {
+		return nil
+	}
+	return err
+}
+
+func (service *serviceApp) reconnect() (err error) {
 	logrus.Debug("Starting reconnect process...")
 
 	client := whatsapp.GetClient()
+	if client == nil {
+		return pkgError.ErrWaCLI
+	}
 	client.Disconnect()
 	err = client.Connect()
 
@@ -321,7 +224,10 @@ func (service *serviceApp) FetchDevices(ctx context.Context) (response []domainA
 
 // StopClient disconnects from WhatsApp without logging out
 func (service *serviceApp) StopClient(_ context.Context) (response domainApp.ClientStatusResponse, err error) {
+	pairings.mu.Lock()
+	defer pairings.mu.Unlock()
 	logrus.Debug("Stopping WhatsApp client...")
+	pairings.stopLocked()
 
 	err = whatsapp.StopClient()
 	if err != nil {
@@ -342,7 +248,10 @@ func (service *serviceApp) StopClient(_ context.Context) (response domainApp.Cli
 
 // StartClient reconnects to WhatsApp after being stopped
 func (service *serviceApp) StartClient(_ context.Context) (response domainApp.ClientStatusResponse, err error) {
+	pairings.mu.Lock()
+	defer pairings.mu.Unlock()
 	logrus.Debug("Starting WhatsApp client...")
+	pairings.stopLocked()
 
 	err = whatsapp.StartClient()
 	if err != nil {

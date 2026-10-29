@@ -18,7 +18,23 @@ env:
   IMAGE_BASE: ghcr.io/hbinduni/go-whatsapp-web-multidevice
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: src/go.mod
+          cache-dependency-path: src/go.sum
+      - name: Test with race detector
+        working-directory: src
+        run: go test -race ./...
+      - name: Vet
+        working-directory: src
+        run: go vet ./...
+
   build:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

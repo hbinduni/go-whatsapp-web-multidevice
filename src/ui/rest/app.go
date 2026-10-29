@@ -41,8 +41,10 @@ func (handler *App) Login(c *fiber.Ctx) error {
 		Code:    "SUCCESS",
 		Message: "Login success",
 		Results: map[string]any{
-			"qr_link":     fmt.Sprintf("%s://%s%s/%s", c.Protocol(), c.Hostname(), config.AppBasePath, response.ImagePath),
-			"qr_duration": response.Duration,
+			"qr_link":       fmt.Sprintf("%s://%s%s/%s", c.Protocol(), c.Hostname(), config.AppBasePath, response.ImagePath),
+			"qr_duration":   response.Duration,
+			"qr_session_id": response.SessionID,
+			"qr_expires_at": response.ExpiresAt,
 		},
 	})
 }

@@ -10,6 +10,7 @@ type IAppUsecase interface {
 	LoginWithCode(ctx context.Context, phoneNumber string) (loginCode string, err error)
 	Logout(ctx context.Context) (err error)
 	Reconnect(ctx context.Context) (err error)
+	ReconnectIfPaired(ctx context.Context) error
 	FirstDevice(ctx context.Context) (response DevicesResponse, err error)
 	FetchDevices(ctx context.Context) (response []DevicesResponse, err error)
 
@@ -30,6 +31,8 @@ type DevicesResponse struct {
 }
 
 type LoginResponse struct {
+	SessionID string        `json:"qr_session_id"`
+	ExpiresAt int64         `json:"qr_expires_at"`
 	ImagePath string        `json:"image_path"`
 	Duration  time.Duration `json:"duration"`
 	Code      string        `json:"code"`
