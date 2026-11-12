@@ -18,7 +18,8 @@ FROM alpine:3.24.3
 # Link the GHCR package to its source repo so the repository's GITHUB_TOKEN
 # inherits push access (avoids manual "Manage Actions access" UI grants).
 LABEL org.opencontainers.image.source=https://github.com/hbinduni/go-whatsapp-web-multidevice
-RUN apk upgrade --no-cache && apk add --no-cache ca-certificates ffmpeg tzdata
+# Minimum patched versions also invalidate older cached package-install layers.
+RUN apk upgrade --no-cache && apk add --no-cache ca-certificates ffmpeg tzdata 'libexpat>=2.10.0-r0' 'zlib>=1.4-r0'
 ENV TZ=UTC
 WORKDIR /app
 # Copy compiled from builder.

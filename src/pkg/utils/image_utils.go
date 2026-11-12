@@ -9,7 +9,7 @@ import (
 	"mime/multipart"
 
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/constants"
-	"github.com/disintegration/imaging"
+	"github.com/kovidgoyal/imaging"
 )
 
 const (

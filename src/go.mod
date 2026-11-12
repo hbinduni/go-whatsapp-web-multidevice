@@ -4,13 +4,14 @@ go 1.27.4
 
 require (
 	github.com/PuerkitoBio/goquery v1.13.0
-	github.com/disintegration/imaging v1.6.2
 	github.com/dustin/go-humanize v1.1.0
 	github.com/go-ozzo/ozzo-validation/v4 v4.4.1
 	github.com/gofiber/fiber/v2 v2.52.16
 	github.com/gofiber/template/html/v2 v2.1.3
 	github.com/gofiber/websocket/v2 v2.2.1
 	github.com/google/uuid v1.6.0
+	// CVE-2023-36308 fix; return upstream when it passes TestImageProcessingPaletteBounds.
+	github.com/kovidgoyal/imaging v0.0.0-20240322044915-7175a8158983
 	github.com/lib/pq v1.12.3
 	github.com/mattn/go-sqlite3 v1.14.52
 	github.com/minio/minio-go/v7 v7.4.1

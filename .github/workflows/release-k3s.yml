@@ -85,3 +85,34 @@ jobs:
             ${{ env.IMAGE_BASE }}:latest
           cache-from: type=gha,scope=gowa
           cache-to: type=gha,mode=max,scope=gowa
+
+  image-audit:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Audit the release image
+        uses: aquasecurity/trivy-action@v0.36.0
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          TRIVY_PLATFORM: linux/amd64
+        with:
+          version: 'v0.76.1'
+          image-ref: ${{ env.IMAGE_BASE }}:${{ github.ref_name }}
+          scanners: vuln
+          exit-code: '1'
+          ignore-unfixed: false
+          format: json
+          output: trivy-report.json
+          list-all-pkgs: true
+      - name: Save image audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-audit
+          path: trivy-report.json
+          if-no-files-found: error
