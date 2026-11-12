@@ -32,6 +32,11 @@ jobs:
       - name: Vet
         working-directory: src
         run: go vet ./...
+      - name: Audit dependencies
+        working-directory: src
+        run: |
+          go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -show verbose ./...
+          go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -scan module
 
   build:
     needs: test
